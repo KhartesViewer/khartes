@@ -1,0 +1,10 @@
+khartes requires a few external modules.  Below are the Anaconda commands I used in Windows to import the needed modules.  Although khartes does not actually use matlib, I installed it because doing so automatically installs PyQt5 and numpy.
+
+The only possibly unfamiliar package is pynrrd, which implements (in pure python) the NRRD format (Nearly Raw Raster Data).  This format consists of an ascii header followed by binary raster data. 
+
+
+conda create -n vch python=3.11
+conda install matplotlib
+conda install opencv
+conda install scipy
+conda install -c conda-forge pynrrd
