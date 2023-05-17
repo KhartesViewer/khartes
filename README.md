@@ -17,6 +17,10 @@ After the intro, the video follows a more traditional format.
 The entire video
 is about 30 minutes long.
 
+(If you click on the image below, you will be taken to vimeo.com to watch the video)
+
+[![Watch the video](https:\/\/i.vimeocdn.com\/video\/1670955201-81a75343b71db9c84b6b4275e3447c943d2128ab8b921a822051046e83db0c96-d_640)](https://vimeo.com/827515595)
+
 ## Installation
 
 In theory, you should be able to run simply by
