@@ -1,0 +1,143 @@
+A month ago I began working on a program that would allow users to interactively explore, and then segment, the data volumes created by high-resolution X-ray tomography of the Herculaneum scrolls.
+I named the program "khartes", which is an Ancient Greek word for "scroll".
+There are still some features missing, but at this point khartes is complete enough for demo-ing, and for alpha testing.  
+So in this demo, I will show how khartes can be used to explore the data volume, how it can be used to segment the data, and at the end, I will show how you can set up your own project in khartes.
+I'll begin by loading some data.
+
+A significant problem for interactive programs is the fact that the scroll data volumes tend to be one to two terabytes in size, but in order to provide interactivity, the data must fit in the physical memory of a computer, which is typically from 8 to 32 gigabytes in size.
+One approach is to window the data, another is to sub-sample it.
+In the example that I am showing here, the data has been windowed; out of the 14,000 TIFF files for this half of scroll one, I am only using data in a range of about 1200 TIFFs.  Furthermore, I have sub-sampled the data by a factor of 5 in each direction.
+This means that of the 1200 TIFF files in my range, I am using only about 250.
+Likewise, even though each TIFF file is about 8000 by 8000 pixels, my data volume contains images that are about 1600 by 1600 pixels.
+This level of sub-sampling is not ideal for work that requires high resolution, such as segmenting, but it is sufficient for the purposes of this demo.
+Though there is no escaping the memory restrictions, I will show later how khartes works with multiple sub-volumes; the user can, from within the program, switch from  one sub-volume to the next and continue segmenting the data, uninterrupted. 
+
+So, to begin.
+
+Ignore the big black area on the right side of the screen; it will come into play during the segmentation.  One the left side you see 3 mutually perpendicular slices through the data.
+
+Let's start with the slice on the upper left.
+
+This slice is made up of a single TIFF image.  Which image?  If you look in the upper left corner, you'll see that it is image 6615.
+One thing to notice is the green frame around the slice; I'll soon explain how the color coding helps the user stay oriented.
+Another aid to staying oriented is the status bar in the bottom left corner.  As I move the cursor around the slice, the position of the cursor is updated in the status bar.
+
+Notice that the status bar shows coordinates in the global scroll reference frame, rather than in the reference frame of the windowed, sub-sampled data volume.  This helps the user keep track of location, even when switching from one volume to another.
+
+This top window shows the z slice, or image slice.  All pixels in the slice have the same z value, even as x and y varies, as you might notice by watching the coordinates in the status bar as I move the cursor.
+
+Now I'll move the cursor to the next slice down, the x slice.  The label in the upper left tells us that the slice is positioned at x = 3805.  I should point out that the frame surrounding the slice window is red. 
+
+Finally, the bottom slice, the y slice, is positioned at y = 3940.  Notice the blue frame.
+
+So far, this demo has been very static, considering that it is supposed to be a demo of interactive software.  Here comes a bit of interactivity: I'm using the mouse wheel to zoom into the image.  Because of the 5-to-1 subsampling, there is no use zooming very far in; the coarsely sampled data won't reveal much detail.
+
+Notice, by the way, that when I zoom in or out, the x, y, and image values in the upper left of each slice window don't change; we are still looking at the same slices as before.
+
+So I've pointed out the colors of the frames around the slice windows, and you have probably noticed the colored horizontal and vertical crosshair lines that interesect in the middle of each slice window.  
+
+These crosshair lines show where the three mutually perpendicular slices, the x-slice, the y-slice, and the z-slice, intersect each other.
+
+For instance, in the middle window, which displays the x slice, the vertical green line shows where the x slice and the z or image slice intersect.  Green, just like the frame around the z-slice window.  So the color of the crosshair line corresponds with the color of the frame around the intersecting slice.
+
+Let's see what this mean.  I'm moving my cursor to the top window, the z-slice window, and I'm about to move through the data.  One of the many ways to traverse the data is to use the page-up and page-down keys to move from one slice to the next.  So if you watch the image in the top window, and especially the label in the upper left corner, you'll see that as I press the page-up key, the image changes and the number increases.  As I press the page-down key, the number decreases.
+
+Let's pause and think a minute about what we would expect to see in the other windows as we traverse through the different images in the top window.
+
+For instance, in the middle window, you see the green crosshair line that represents the intersection of the middle slice, the x slice, with the top slice, the z slice.  So you would expect that when I move to a different z slice, the green crosshair line in the middle window should move correspondingly.  When I put the cursor in the top window and use page-down to move to a lower slice, the crosshair should move to the left.  When I use page-up, it should move to the right.
+
+Let's try this.  I've moved the cursor to the top window, and now I'll push page-up a bunch of times.  Watch the middle window, and see what the green crosshair line does.
+
+Well, this may not be what you were expecting.  Instead of the crosshair moving over the stationary data, the data moved under the crosshair.
+
+This may seem counter-intuitive at first, but it actually gives you a convenient way of navigating through the data.
+
+To show this, let's do another experiment.  Now I will put the cursor in the middle window, the x-slice window.  This time, in this window, instead of using the page-up and page-down keys, I will use the regular left-arrow and right-arrow keys to move the data view right and left.  These keys won't change which image we are looking at in the center window, they will just change the position of the image, shifting it from left to right and back.
+
+So I'm pushing the arrow keys, moving the data back and forth.  Now, as I continue to do this, look at the top window.  As I move the data in the middle window, the images change in the top window, as you can see by looking at the label in the upper left corner of the top window.
+
+This actually is what you should expect.  In the middle window, the green crosshair line has moved to a different z slice; albeit the slice has moved under the crosshair rather than vice versa.
+
+So this shows how khartes is used to navigate through the data volume.  Instead of moving the crosshairs within the data, simply drag the data under the crosshairs.  The nice thing about this approach, in contrast to moving crosshairs over a stationary data image, is that with the stationary crosshairs, the area you are interested in, the area under the crosshairs, is always in the center of the window.
+
+So let's do a little bit of navigation.  I discovered while preparing this demo that at y=4030, there is an interesting pattern.  So I'm going to drag the data in the middle window until the y-slice window, the bottom window, shows the y=4030 image.
+
+Oh, I forgot to mention that besides using the arrow keys, you can simply hold down the left mouse button to drag the data around, though in this case, once I get close, I'm using the arrow keys for fine control.
+
+So that's interesting, there's a pattern of papyrus fibers visible here, even despite the 5-to-1 subsampling.  Why is the pattern so obvious:? Let's drag the data in the bottom window, the y-slice data, until the fibers are centered in the crosshairs.
+
+Now when you look at the other two windows, you can see the horizontal blue crosshair, which corresponds to the position of the y slice in the two windows.  And on both the x slice and the z slice, the papyrus layers are parallel to the blue line.  No surprise, then, that the bottom window shows the papyrus fibers so well.
+
+One more example: I at one point ran across something interesting on image 6795.  Let's take a look.
+
+Hmm, that's interesting, some kind of blob.  Move it to the center and zoom in...  I still don't know what it is, but the point here is that we can easily bring it into the center, and view it in the three perpendicular slices, in a way that I believe users will find intuitive.
+
+So that was the part of the demo dedicated to navigating the data volume, now I'll move on to segmentation.  But I'm not going to use the term segmentation, because to me the term suggests the use of a computer-vision or machine-learning algorithm.  Khartes doesn't use any edge-detection or machine learning; it's all based on the human hand, the human eye, and the human brain.  Perhaps something more automated will be added, but the philosphy for now is to make the process as easy and smooth as possible for the human in the loop, to leverage the human's pattern-recognition abilities.
+
+So I'm going to borrow some terminology from a branch of geophysics called reflection seismology.  When geophysicists look at a seismic data volume, which you might think of as something like a volume from a medical ultrasound, but on a scale of kilometers instead of centimeters, the geophysicists are said to be "interpreting" the data by "picking" events that correspond to a given geologic horizon.
+
+In the same way, khartes allows the user to "interpret" the scroll data volume by selecting, that is, "picking", the coherent areas that correspond to a given fragment.
+
+Now in order to interperet the volume, we need to move to a higher resolution.  I'm zooming the current low-resolution data volume out, and I'm finally going to start using the control panel in the lower right-hand corner.  You can see there the list of available volumes.  We are currently using the one I named "all5", where the 5 is to remind me of the subsampling.  Let's see where the other volumes are relative to this one, by clicking on the show-boundaries button.
+
+We will be looking at the volume I named "middle".  It is full resolution, so even though it is smaller in extent than all5, it is about 3 times bigger: 3.9 Gb instead of 1.2 Gb.
+
+I'll turn off the boundaries again so they don't confuse us later, and I'll select "middle".  This will unload the all5 dataset, so as to preserve precious memory space, and load the middle volume.
+
+While it's loading, I'll mention that khartes is written in python.  It uses PyQt for the user interface, and the internal computations are done in numpy, with some additional help from scipy for the Delaunay triangulation and interpolation of the fragments.
+
+For this demo, I am running khartes on what I would call a mid-range laptop, with 8 Gb of physical memory.  The volume data is stored on an external SSD drive attached through a USB port.
+
+So in preparation for this demo, I made sure that this next volume was already centered on the area where I want to interpret a fragment.  I've chosen a fairly easy case as you can see, where the sheet I'm interested in is distinct from its neighbors.  Khartes can handle more difficult cases, but proving that is not the purpose of this demo.
+
+First thing is, I need to create a new fragment.  I do this in the fragment panel, pressing the New Fragment button.  There's already a fragment there, which we'll look at later.
+
+Then to start picking, I simply use the shift key plus the left mouse button.  I've found that it is convenient to place the initial pick right in the crosshairs, so the new node, as I call it, is visible in all 3 slices.  Oops, it looks like I was a little bit off, so I need to move the node.  I will use the arrow keys.  Normally the arrow keys are used to pan through the data, but when the cursor is close enough to a node that it turns cyan, the arrow keys move the node instead of the data.
+
+Which reminds me: I use the arrow keys out of habit, but khartes will also respond to the a-s-w-d keys, supplemented by the e and c keys, which are equivalent to the page up and page down buttons.
+
+So now I have the first node placed, and I'll add a few more to the z slice window, on the left of the crosshairs.  Then I'll add some to the right.  Nothing too exciting, but notice that the order that the points are added in doesn't really matter.
+
+So far I've been placing nodes in what geophysicists would call the in-line cross section.  Now let's make it more interesting by looking at the cross line, the x slice.  The papyrus sheet is clearly visible there, so let's start picking it.  A few nodes to the left, and a few nodes to the right.
+
+You might have noticed that the large window on the right, the fragment window, has come to life.  By picking nodes in both directions, the inline and the crossline, or the z and y slices if you prefer, I've given khartes enough points where it can create a triangulated surface representing the fragment.  And using this information, khartes is able to extract data from the data volume and display it in the fragment window.
+
+Now I will do another set of picks on a different cross line.  Again, it is convenient to align things so that the initial node is visible in both windows.
+
+Now I'll move the cursor to the fragment window.  Probably the most interesting thing you can do here is move the picked nodes around, not in map view, but moving them vertically into and out of the viewing plane.  Simply put the cursor close enough to the node of interest that it turns cyan, and then use the page-up and page-down keys to move it into and out of the plane.  This way you can tweak your interpretation, while seeing how your tweaks affect the overall appearance of the fragment.  
+
+You can even use the shift-plus-left-mouse button combination to create a new node in this window, and then adjust it as needed.  I recommend using this technique sparingly, however; it's easier to see what you are doing by picking data on the slice views instead of on the map.
+
+Don't forget that in the lowest slice window, the y slice, you can also pick points to specify contours, so to speak.
+
+We could continue picking, of course, but I don't want to prolong the demo.  Now I'll go back to the fragment panel, and turn on a fragment that I interpreted while preparing the demo.  You can see how the old fragment overlays the new, and now I'll show the full map of this older fragment.  Not bad.
+
+So that was the main part of the demo, but there are two additional things I want to show before concluding: first, where the fragment model used by khartes breaks down, and second, how to start a new khartes project from scratch.
+
+To show the problem with how khartes represents fragments, I'll hide the current fragments, and move to a different part of the data volume.
+
+Let's say that we want to create a fragment from this complicated, overturned surface.  We create a new fragment, and then start picking,  first the top, then around the end, then the bottom...  Oops!  The problem is that khartes assumes that all fragments are single-valued.  In this particular orientation, it assumes that at every x point, there is only one possible y value.  Obviously that is not the case here.
+
+There is a workaround, though it is a bit awkward.  Let's hide the bad fragment and start over.  Create and pick a new top surface.  Then create and pick a new bottom surface.
+
+What about the nose, where the surface overturns?  As it happens, Khartes allows you to turn the volume sideways, like so.   Then we can create a new fragment, with a different orientation.    And then we can switch our volume back to its regular orientation.
+
+In the fragment panel, notice that all our previous fragments have a direction Y, meaning they are single-valued in the y direction, while our new fragment has an X, meaning it is single-valued in the x direction. 
+
+So instead of creating a single fragment to represent this complex surface, I had to create three.  This is somewhat awkward.  However, by restricting surfaces to be single-valued, khartes is able to disply fragment maps at interactive speed, as you have already seen in this demo.  It's a trade-off, but worth it, I think.
+
+Finally, I will show how to create a new project from scratch.  First, go to the File menu and select New Project.  When you create a new project, you need to immediately specify a file name, so that there will be a place to store windowed data volumes as you create them.
+
+Once you have created a project, there is some information on the right telling you what you can do next.  I'll ignore that, and simply select Import TIFFs from the file menu.  In this dialog box, you first need to specify the directory where the TIFF files are located.  Khartes then analyzes the TIFF files that it finds in that directory, and shows the corresponding valid x, y, and z ranges.  Also, in the lower left corner, it shows how many Gb the volume will require.
+
+Just to demo this, I'll select that I want only 50 TIFF files, with a window of about 1000 by 1000 for each.  I'll give it some name, and press Create.
+
+You can see in the status window which files it is reading.  The Cancel button will let you quit, if you realize partway through the process that this isn't what you wanted to do.
+
+Once the new volume is loaded, you can go to the Fragment panel and start interpreting.
+
+Once you have done a bit of work, you should go to the File menu to save it.  Or easier still, simply press ctrl-S and your latest changes will be saved.  This is a very fast process because only your fragments are saved.  The data volume was automatically created and saved during the Import-TIFF process; it doesn't need to be saved every time.
+
+Well, that concludes this demo of khartes.  As you have seen, khartes is a program that is well-suited to for exploring the scroll data volumes, and for segmenting, or as I prefer to say, interpreting, the data volume.  I hope it will prove useful.
+
+Thank you for watching.

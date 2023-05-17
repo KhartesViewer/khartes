@@ -1,0 +1,25 @@
+khartes is written in Python; it requires a few 
+external modules.  Below are the Anaconda commands 
+I used in Windows to import the needed modules.  
+Probably the pip commands and module names are 
+similar, but I haven't tested them.  Although khartes 
+does not actually use matlib, I installed it because 
+doing so automatically installs PyQt5 and numpy.
+
+The only possibly unfamiliar package is pynrrd, 
+which implements (in pure python) the NRRD format 
+(Nearly Raw Raster Data).  This format consists 
+of an ascii header followed by binary raster data;
+khartes uses this format for storing data volumes.
+
+I tested khartes in Python 3.11, but it probably works 
+on slightly older versions of Python 3 as well.
+
+I may have read somewhere that the pip equivalent 
+of opencv is opencv-python.
+
+conda create -n vch python=3.11
+conda install matplotlib
+conda install opencv
+conda install scipy
+conda install -c conda-forge pynrrd

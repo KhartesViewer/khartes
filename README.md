@@ -28,7 +28,7 @@ is about 30 minutes long.
 
 In theory, you should be able to run simply by
 cloning the repository, making sure you have the proper dependencies 
-(see "anaconda installation.txt" for a list), and then typing "python khartes.py".  
+(see "anaconda_installation.txt" for a list), and then typing "python khartes.py".  
 
 When khartes starts, you will see some explanatory text on the right-hand side of the interface 
 to help you get started.  This text is fairly limited; you might want to watch the video above to get a better
