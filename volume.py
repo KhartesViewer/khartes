@@ -834,7 +834,7 @@ class Volume():
             else:
                 fname = pattern%z
             imgf = tdir / fname
-            # print(fname, imgf)
+            print(fname, imgf)
             if callback is not None and not callback("Reading %s"%fname):
                 ofilefull.unlink(True)
                 return Volume.createErrorVolume("Cancelled by user")

@@ -498,7 +498,7 @@ class TiffLoader(QMainWindow):
 
     # Callback as specified in Volume.createFromTiffs
     def readerCallback(self, text):
-        # print("rc", text)
+        print("rc", text)
         self.status_bar.showMessage(text)
         self.main_window.app.processEvents()
         # True to continue, False to cancel
