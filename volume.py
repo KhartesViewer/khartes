@@ -737,6 +737,16 @@ class Volume():
         vol.error = err
         return vol
 
+    # class function
+    def sliceSize(start, stop, step):
+        jmi = stop-start
+        q = jmi // step
+        r = jmi % step
+        size = q
+        if r != 0:
+            size += 1
+        return size
+
     # project is the project that the nrrd file will be added to
     # tiff_directory is the name of the directory containing the
     # tiff files
@@ -756,6 +766,7 @@ class Volume():
     # callback, if specified, should take a string as argument, and return 
     # True to continue, False to stop
     # 
+    # class function
     def createFromTiffs(project, tiff_directory, name, ranges, pattern, filenamedict=None, callback=None):
         # TODO: make sure 'name' is a valid file name
         # (lower case a-z, numbers, underscore, hyphen, space, dot 
@@ -808,7 +819,11 @@ class Volume():
             ofilefull.unlink(True)
             return Volume.createErrorVolume(err)
         wins = []
-        for z in range(zrange[0], zrange[1]+1, zrange[2]):
+        xsize = Volume.sliceSize(xrange[0], xrange[1]+1, xrange[2])
+        ysize = Volume.sliceSize(yrange[0], yrange[1]+1, yrange[2])
+        zsize = Volume.sliceSize(zrange[0], zrange[1]+1, zrange[2])
+        ocube = np.zeros((zsize, ysize, xsize), dtype=np.uint16)
+        for i,z in enumerate(range(zrange[0], zrange[1]+1, zrange[2])):
             if pattern == "":
                 if z not in filenamedict:
                     err = "file for image %d is missing"%z
@@ -819,7 +834,7 @@ class Volume():
             else:
                 fname = pattern%z
             imgf = tdir / fname
-            print(fname, imgf)
+            # print(fname, imgf)
             if callback is not None and not callback("Reading %s"%fname):
                 ofilefull.unlink(True)
                 return Volume.createErrorVolume("Cancelled by user")
@@ -849,16 +864,18 @@ class Volume():
                 err = "requested y range %d to %d is outside y range %d of image %s"%(yrange[1], iarr.shape[0]-1, fname)
                 ofilefull.unlink(True)
                 return Volume.createErrorVolume(err)
-            oarr = np.copy(
+            ocube[i] = np.copy(
                     iarr[yrange[0]:yrange[1]+1:yrange[2], 
                         xrange[0]:xrange[1]+1:xrange[2]])
-            wins.append(oarr)
+            # ocube[i] = iarr[yrange[0]:yrange[1]+1:yrange[2], 
+            #             xrange[0]:xrange[1]+1:xrange[2]]
+            # wins.append(oarr)
 
         print("beginning stack")
         if callback is not None and not callback("Stacking images"):
             ofilefull.unlink(True)
             return Volume.createErrorVolume("Cancelled by user")
-        ocube = np.stack(wins)
+        # ocube = np.stack(wins)
         timestamp = Utils.timestamp()
         header = {
                 "khartes_xyz_starts": "%d %d %d"%(xrange[0], yrange[0], zrange[0]),
