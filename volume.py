@@ -818,7 +818,6 @@ class Volume():
             print(err)
             ofilefull.unlink(True)
             return Volume.createErrorVolume(err)
-        wins = []
         xsize = Volume.sliceSize(xrange[0], xrange[1]+1, xrange[2])
         ysize = Volume.sliceSize(yrange[0], yrange[1]+1, yrange[2])
         zsize = Volume.sliceSize(zrange[0], zrange[1]+1, zrange[2])
@@ -867,15 +866,11 @@ class Volume():
             ocube[i] = np.copy(
                     iarr[yrange[0]:yrange[1]+1:yrange[2], 
                         xrange[0]:xrange[1]+1:xrange[2]])
-            # ocube[i] = iarr[yrange[0]:yrange[1]+1:yrange[2], 
-            #             xrange[0]:xrange[1]+1:xrange[2]]
-            # wins.append(oarr)
 
         print("beginning stack")
         if callback is not None and not callback("Stacking images"):
             ofilefull.unlink(True)
             return Volume.createErrorVolume("Cancelled by user")
-        # ocube = np.stack(wins)
         timestamp = Utils.timestamp()
         header = {
                 "khartes_xyz_starts": "%d %d %d"%(xrange[0], yrange[0], zrange[0]),
@@ -889,6 +884,9 @@ class Volume():
                 "encoding": "raw",
                 }
         print("beginning transpose")
+        if callback is not None and not callback("Beginning transpose"):
+            ofilefull.unlink(True)
+            return Volume.createErrorVolume("Cancelled by user")
         tocube = np.transpose(ocube)
         print("beginning write to %s"%ofilefull)
         if callback is not None and not callback("Beginning write to %s"%ofilefull):
