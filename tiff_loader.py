@@ -218,7 +218,10 @@ class TiffLoader(QMainWindow):
         # note that the following globs are enclosed in list()
         # calls because the globs are generators.
         # "*/" returns list of all directories in pdir
-        dirs = list(pdir.glob("*/"))
+        # but it only works on python 3.11 and above
+        # dirs = list(pdir.glob("*/"))
+        # this determines if there are any non-empty sub directories:
+        dirs = list(pdir.glob("*/*"))
         tifs = list(pdir.glob("*.tif"))
         if len(dirs) == 0 and len(tifs) > 0:
             # print("match", sdir)
