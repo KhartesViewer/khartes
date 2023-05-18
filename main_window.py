@@ -461,7 +461,9 @@ class MainWindow(QMainWindow):
         if sdir is not None:
             print("setting directory to", sdir)
             dialog.setDirectory(sdir)
-        dialog.setOptions(QFileDialog.ShowDirsOnly)
+        # dialog.setOptions(QFileDialog.ShowDirsOnly)
+        dialog.setOptions(QFileDialog.ShowDirsOnly|QFileDialog.DontUseNativeDialog)
+        # dialog.setOptions(QFileDialog.DontUseNativeDialog)
         dialog.setFileMode(QFileDialog.AnyFile)
         dialog.setNameFilter("Khartes project directories (*.khprj)")
         dialog.setLabelText(QFileDialog.Accept, "Create new project")
