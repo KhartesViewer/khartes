@@ -821,6 +821,11 @@ class Volume():
         xsize = Volume.sliceSize(xrange[0], xrange[1]+1, xrange[2])
         ysize = Volume.sliceSize(yrange[0], yrange[1]+1, yrange[2])
         zsize = Volume.sliceSize(zrange[0], zrange[1]+1, zrange[2])
+        gb = 1.*xsize*ysize*zsize*2/1000000000
+        print("allocating numpy cube, size %.3f Gb"%gb)
+        if callback is not None and not callback("Allocating %.1f Gb of memory"%gb):
+            ofilefull.unlink(True)
+            return Volume.createErrorVolume("Cancelled by user")
         ocube = np.zeros((zsize, ysize, xsize), dtype=np.uint16)
         for i,z in enumerate(range(zrange[0], zrange[1]+1, zrange[2])):
             if pattern == "":

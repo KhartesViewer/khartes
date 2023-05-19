@@ -527,9 +527,20 @@ required to specify a name and a storage location.
 <p>
 After you have created an empty project, 
 you can use <code>File/Import TIFF files...</code> to create
-data volumes from TIFF files, 
-or <code>File/Import NRRD files...</code> to import 
-an existing data volume that is in NRRD format.
+data volumes from existing TIFF files. 
+Note that the "Import TIFF Files" command creates a khartes
+data volume from existing TIFF files that you alread have
+on disk; it will not import TIFF files from elsewhere.
+<p>
+If you have an existing data volume that is in NRRD format,
+you can use
+<code>File/Import NRRD files...</code> to import it.
+<p>
+<b>Please be aware of memory limitations</b>.  The import-TIFF
+function is currently not memory-efficient; to be safe,
+you probably should limit yourself to creating data volumes that
+are no more than half the size of your computer's physical memory.
+The import-TIFF dialog box will inform you of the data-volume size.
 <p>
 To create a new fragment, go to the control panel in the lower right,
 select the <code>Fragments</code> tab, and press the 
@@ -548,9 +559,24 @@ Now that you have accomplished that,
 you need to go to the menu bar and 
 select <code>File/Import TIFF files...</code> or 
 <code>File/Import NRRD</code> to import a data volume.
+
+Note that the "Import TIFF Files" command creates a khartes
+data volume from existing TIFF files that you already have
+on disk; it will not import TIFF files from elsewhere.
 <p>
-After you import a volume, 
-this help message will disappear, 
+If you have an existing data volume that is in NRRD format,
+you can use
+<code>File/Import NRRD files...</code> to import it.
+<p>
+<b>Please be aware of memory limitations</b>.  The import-TIFF
+function is currently not memory-efficient; to be safe,
+you probably should limit yourself to creating data volumes that
+are no more than half the size of your computer's physical memory.
+The import-TIFF dialog box will inform you of the data-volume size.
+
+<p>
+<b>After you import a volume, 
+this help message will disappear,</b>
 so here are some next steps for you to keep in mind.
 <p>
 After you view the data volume, 

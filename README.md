@@ -33,3 +33,67 @@ cloning the repository, making sure you have the proper dependencies
 When khartes starts, you will see some explanatory text on the right-hand side of the interface 
 to help you get started.  This text is fairly limited; you might want to watch the video above to get a better
 idea how to proceed.
+
+A couple of notes based on early user testing (you might
+want to review these again after using khartes for the first
+time):
+
+The "File / Import TIFF Files..." creates a khartes data volume
+by reading TIFF files that you already have somewhere on disk.
+You simply need to point the import-TIFF dialog to the folder
+that contains these files.
+
+The import-TIFF function uses more memory than it should 
+(it unnecessarily duplicates the data volume in memory during
+the import process).  This means that at the current time you
+should be sparing of memory, creating data volumes that are no
+larger than half the size of your physical memory,
+if you want to avoid "memory swapping".
+
+When you create fragments, pay attention to the triangulation
+that is shown in the fragment window on the right.  Khartes'
+interpolation algorithm can become erratic in areas of long,
+skinny triangles, so it is a good idea to distribute enough
+fragment nodes throughout the fragment, to keep the triangles
+more regular.  
+
+So when segmenting, start in the center of a fragment
+and work your way out, keeping a fairly regular mesh, instead
+of trying to create a huge surface first thing.  This practice
+will also make it less likely that you stray onto the wrong
+sheet of the scroll in difficult areas.
+
+## Major limitation
+
+At the moment, the fragments created in khartes are not
+exportable to volume-cartographer.  The intention is to make
+them exportable, but the details need to be worked out.
+
+In the meantime, the fragments you create now in khartes can be
+saved now, and viewed in khartes, and the plan is that you will
+be able to export them once the export functionality is
+added.
+
+## Other things to fix
+
+At the moment, khartes does not warn the user if there is 
+unsaved data, when the user exits khartes
+or reads another project.
+
+There is no way for the user to delete nodes (my usual practice
+at the moment is to move them out of the way to somewhere harmless).
+
+There is no undo function.
+
+Memory usage during import-TIFFs (and perhaps other operations)
+needs to be optimized, to allow bigger data volumes.
+
+Allow the user to change fragment and volume names.
+
+Allow the user to change display settings such as node size and
+crosshair thickness.
+
+The scale bar is based on a voxel spacing of 7.9 um; allow the user to 
+change this.
+
+(Many others too uninteresting to list here)
