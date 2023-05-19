@@ -1,3 +1,5 @@
+This is the script I used for the "Demo 1" video.  It may not match exactly the audio track of that video.
+
 A month ago I began working on a program that would allow users to interactively explore, and then segment, the data volumes created by high-resolution X-ray tomography of the Herculaneum scrolls.
 I named the program "khartes", which is an Ancient Greek word for "scroll".
 There are still some features missing, but at this point khartes is complete enough for demo-ing, and for alpha testing.  
