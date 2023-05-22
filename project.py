@@ -166,6 +166,9 @@ class ProjectView:
     def updateFragmentViews(self):
         for fv in self.fragments.values():
             fv.setVolumeView(self.cur_volume_view)
+        # make sure echo fragments are updated
+        for fv in self.fragments.values():
+            fv.setLocalPoints(True)
 
 
     '''

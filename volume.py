@@ -1,9 +1,14 @@
 import pathlib
 import json
+import math
 import numpy as np
 from scipy.spatial import Delaunay
 from scipy.spatial.qhull import QhullError
-from scipy.interpolate import LinearNDInterpolator, CloughTocher2DInterpolator
+from scipy.interpolate import (
+        LinearNDInterpolator, 
+        NearestNDInterpolator, 
+        CloughTocher2DInterpolator,
+        )
 from scipy.interpolate import CubicSpline
 from utils import Utils
 from PyQt5.QtGui import QColor
@@ -1019,6 +1024,10 @@ class Volume():
             # return (k,i,j)
             return (i,k,j)
 
+    def transposedGIjkSteps(self, direction):
+        gijk = self.gijk_steps
+        return self.ijkToTransposedIjk(gijk, direction)
+
     def transposedIjkToIjk(self, ijkt, direction):
         it,jt,kt = ijkt
         if direction == 0:
@@ -1050,6 +1059,32 @@ class Volume():
         else:
             tijks = ijks[:,(0,2,1)]
         return tijks
+
+    # class function
+    def globalIjksToTransposedGlobalIjks(gijks, direction):
+        if direction == 0:
+            tijks = gijks[:,(1,2,0)]
+        else:
+            tijks = gijks[:,(0,2,1)]
+        return tijks
+
+    # class function
+    def transposedGlobalIjksToGlobalIjks(tijks, direction):
+        if direction == 0:
+            gijks = tijks[:,(2,0,1)]
+        else:
+            gijks = tijks[:,(0,2,1)]
+        return gijks
+
+    def transposedIjksToGlobalPositions(self, ijkts, direction):
+        if direction == 0:
+            ijks = ijkts[:,(2,0,1)]
+        else:
+            ijks = ijkts[:,(0,2,1)]
+        g0 = np.array(self.gijk_starts)
+        dg = np.array(self.gijk_steps)
+        gijks = dg*ijks + g0
+        return gijks
 
     # returns range as [[imin,imax], [jmin,jmax], [kmin,kmax]]
     def getGlobalRanges(self):
@@ -1124,6 +1159,7 @@ class Fragment:
         self.color = QColor()
         self.cvcolor = (0,0,0,0)
         self.name = name
+        self.params = {}
         # fragment points in global coordinates
         self.gpoints = np.zeros((0,3), dtype=np.int32)
         self.valid = False
@@ -1137,6 +1173,9 @@ class Fragment:
         info['direction'] = self.direction
         info['color'] = self.color.name()
         info['gpoints'] = self.gpoints.tolist()
+        if self.params.get('echo', '') != '':
+            info['gpoints'] = []
+        info['params'] = self.params
         # print(info)
         info_txt = json.dumps(info, indent=4)
         file = path / (self.name + ".json")
@@ -1182,12 +1221,153 @@ class Fragment:
         frag.valid = True
         if len(gpoints) > 0:
             frag.gpoints = np.array(gpoints, dtype=np.int32)
+        if 'params' in info:
+            frag.params = info['params']
+        else:
+            frag.params = {}
         return frag
 
     def setColor(self, qcolor):
         self.color = qcolor
         rgba = qcolor.getRgbF()
         self.cvcolor = [int(65535*c) for c in rgba] 
+
+    # Using self.gpoints, create new points in the
+    # global coordinate system to infill the grid at the given
+    # spacing.  Infill points will be omitted wherever there
+    # is an existing grid point nearby.  Returns the new gpoints.
+    def createInfillPoints(self, infill):
+        direction = self.direction
+        gijks = self.gpoints
+        ngijks = np.zeros((0,3), dtype=np.int32)
+        if infill <= 0:
+            return ngijks
+        tgijks = Volume.globalIjksToTransposedGlobalIjks(gijks, direction)
+
+        print("tgijks", tgijks.shape, tgijks.dtype)
+        mini = np.amin(tgijks[:,0])
+        maxi = np.amax(tgijks[:,0])
+        minj = np.amin(tgijks[:,1])
+        maxj = np.amax(tgijks[:,1])
+        print("minmax", mini, maxi, minj, maxj)
+        minid = mini/infill
+        maxid = maxi/infill
+        minjd = minj/infill
+        maxjd = maxj/infill
+        
+        id0 = math.floor(minid)
+        idm = math.floor(maxid)
+        if idm != maxid:
+            idm += 1
+        idn = idm-id0+1
+
+        jd0 = math.floor(minjd)
+        jdm = math.floor(maxjd)
+        if jdm != maxjd:
+            jdm += 1
+        jdn = jdm-jd0+1
+        print("id,jd", id0, idn, jd0, jdn)
+
+        # create an array to hold the coordinates of the infill points
+        sid = np.indices((jdn, idn))
+        print("sid", idn, jdn, sid.shape, sid.dtype)
+        # add a flag layer to indicate whether an existing gpoint
+        # is close to one of the proposed infill points
+        si = np.append(sid, np.zeros((1, jdn, idn), dtype=sid.dtype), axis=0)
+        # set the coordinates (in the transposed global frame) of
+        # the infill points
+        # notice si[0] corresponds to j and si[0] to i
+        si[1] = np.rint((si[1]+id0)*infill+infill/2).astype(si.dtype)
+        si[0] = np.rint((si[0]+jd0)*infill+infill/2).astype(si.dtype)
+        # calculate the position, in the si array, of the
+        # existing transposed gpoints
+        itgijks0 = np.int32(np.floor(tgijks[:,0]/infill - id0))
+        itgijks1 = np.int32(np.floor(tgijks[:,1]/infill - jd0))
+        # set the flag wherever there is an existing point
+        si[2,itgijks1,itgijks0] = 1
+
+        # print("si corners", si[:,0,0], si[:,-1,-1])
+        # sum should equal the number of gpoints (but may be
+        # smaller if more than one gpoint near a single infill point)
+        # print("sum", np.sum(si[2]))
+        # sib is a boolean of all the infill points that are not near an
+        # existing gpoint
+        sib = si[2,:,:] == 0
+        # print("si sib",si.shape, sib.shape)
+
+        # filter si by sib
+        si = si[:2, sib]
+        # print("si",si.shape)
+        # don't need the infill point in an array any more; flatten them
+        # notice si[0] corresponds to j and si[0] to i
+        newtis = si[1].flatten()
+        newtjs = si[0].flatten()
+
+        newtijs = np.array((newtis, newtjs)).transpose()
+        # print("newtijs", newtijs.shape)
+
+        try:
+            # triangulate the original gpoints
+            tri = Delaunay(tgijks[:,0:2])
+        except QhullError as err:
+            err = str(err).splitlines()[0]
+            print("createInfillPoints triangulation error: %s"%err)
+            return ngijks
+
+        interp = CloughTocher2DInterpolator(tri, tgijks[:,2])
+        newtks = interp(newtijs)
+        newtks = np.reshape(newtks, (newtks.shape[0],1))
+        # print("newtks", newtks.shape)
+        # the list of infill points, in transposed global
+        # ijk coordinates
+        newtijks = np.append(newtijs, newtks, axis=1)
+        print("newtijks with nans", newtijks.shape)
+        # eliminate infill points where k is nan
+        newtijks = newtijks[~np.isnan(newtijks[:,2])]
+        print("newtijks", newtijks.shape)
+        ngijks = Volume.transposedGlobalIjksToGlobalIjks(newtijks, direction)
+        return ngijks
+
+    # return empty string for success, non-empty error string on error
+    def saveAsObjMesh(self, filename, infill):
+        print("saom", filename, infill)
+        err = ""
+
+        gpoints = np.copy(self.gpoints)
+        print("saom gpoints before", len(gpoints))
+        newgps = self.createInfillPoints(infill)
+        gpoints = np.append(gpoints, newgps, axis=0)
+        print("saom gpoints after", len(gpoints))
+        tgps = Volume.globalIjksToTransposedGlobalIjks(gpoints, self.direction)
+        try:
+            # triangulate the new gpoints
+            tri = Delaunay(tgps[:,0:2])
+        except QhullError as err:
+            err = "saom: triangulation error: %s"%err
+            err = err.splitlines()[0]
+            print(err)
+            return err
+
+        try:
+            of = filename.open("w")
+        except Exception as e:
+            err = "Could not open %s: %s"%(str(filename), e)
+            print(err)
+            return err
+
+        print("# khartes .obj file", file=of)
+        print("#", file=of)
+
+        # for gpt in tgps:
+        for gpt in gpoints:
+            print("v %d %d %d"%(gpt[0],gpt[1],gpt[2]), file=of)
+        for trg in tri.simplices:
+            # print("f %d %d %d"%(trg[0]+1,trg[1]+1,trg[2]+1), file=of)
+            # try reversing index order:
+            print("f %d %d %d"%(trg[1]+1,trg[0]+1,trg[2]+1), file=of)
+
+        return err
+
 
 class FragmentView:
 
@@ -1216,16 +1396,17 @@ class FragmentView:
     def setVolumeView(self, vol_view):
         self.cur_volume_view = vol_view
         if vol_view is not None:
-            self.setLocalPoints()
-            self.createZsurf()
+            self.setLocalPoints(False)
 
     # direction is not used here, but this notifies fragment view
     # to recompute things
     def setVolumeViewDirection(self, direction):
-        self.setLocalPoints()
-        self.createZsurf()
+        self.setLocalPoints(False)
 
-    def setLocalPoints(self):
+    # recursion_ok determines whether to call setLocalPoints in
+    # "echo" fragments.  But this is safe to call only if all
+    # fragment views have had their current volume view set.
+    def setLocalPoints(self, recursion_ok):
         # print("set local points", self.cur_volume_view.volume.name)
         self.fpoints = self.cur_volume_view.volume.globalPositionsToTransposedIjks(self.fragment.gpoints, self.fragment.direction)
         npts = self.fpoints.shape[0]
@@ -1242,6 +1423,34 @@ class FragmentView:
                 # print(self.vpoints.shape, indices.shape)
                 self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
                 # print(self.vpoints[0])
+        self.createZsurf()
+        if not recursion_ok:
+            return
+        for fv in self.project_view.fragments.values():
+            echo = fv.fragment.params.get('echo', '')
+            if echo == self.fragment.name:
+                fv.echoPointsFrom(self)
+                fv.setLocalPoints(True)
+
+
+    def echoPointsFrom(self, orig):
+        # print("echo from",orig.fragment.name,"to",self.fragment.name)
+        print("echo from %s (%d) to %s (%d)"%(
+            orig.fragment.name, len(orig.fragment.gpoints),
+            self.fragment.name, len(self.fragment.gpoints),))
+        params = self.fragment.params
+        self.fragment.gpoints = np.copy(orig.fragment.gpoints)
+        infill = params.get("infill", 0)
+        if self.cur_volume_view is None:
+            self.cur_volume_view = orig.cur_volume_view
+        if infill > 0 and self.cur_volume_view is not None:
+            print("infill",infill)
+            vol = self.cur_volume_view.volume
+            print("vol", vol.name)
+            newgijks = self.fragment.createInfillPoints(infill)
+            self.fragment.gpoints = np.append(self.fragment.gpoints, newgijks, axis=0)
+            self.setLocalPoints(True)
+
 
 
     def createZsurf(self):
@@ -1252,11 +1461,86 @@ class FragmentView:
         ns = (ni,nj,nk)
         self.zsurf = np.zeros((nj,ni), dtype=np.float32)
         self.zsurf.fill(np.nan)
+        self.osurf = None
         if self.tri is not None:
             # interp = LinearNDInterpolator(self.tri, self.lpoints[:,2])
-            interp = CloughTocher2DInterpolator(self.tri, self.fpoints[:,2])
+            inttype = ""
+            inttype = self.fragment.params.get('interpolation', '')
+            if inttype == "linear":
+                interp = LinearNDInterpolator(self.tri, self.fpoints[:,2])
+            elif inttype == "nearest":
+                interp = NearestNDInterpolator(self.tri, self.fpoints[:,2])
+            else:
+                interp = CloughTocher2DInterpolator(self.tri, self.fpoints[:,2])
             pts = np.indices((ni, nj)).transpose()
             self.zsurf = interp(pts)
+            overlay = self.fragment.params.get('overlay', '')
+            if overlay == "diff":
+                # ct = CloughTocher2DInterpolator(self.tri, self.fpoints[:,2])
+                lin = LinearNDInterpolator(self.tri, self.fpoints[:,2])
+                self.osurf = self.zsurf - lin(pts)
+                amin = np.nanmin(self.osurf)
+                amax = np.nanmax(self.osurf)
+                print(amin, amax)
+                # self.osurf[amax-self.osurf<5] *= 2.
+                # self.osurf[self.osurf-amin<5] *= 2.
+
+            elif overlay == "zsurf":
+                zmin = np.nanmin(self.zsurf)
+                zmax = np.nanmax(self.zsurf)
+                self.osurf = -(self.zsurf - .5*(zmin+zmax))
+            elif overlay == "triangle":
+                simps = self.tri.simplices
+                verts = self.tri.points
+                v0 = verts[simps[:,0]]
+                v1 = verts[simps[:,1]]
+                v2 = verts[simps[:,2]]
+                v01 = v1-v0
+                v02 = v2-v0
+                v12 = v2-v1
+                l01 = np.sqrt((v01*v01).sum(1))
+                l02 = np.sqrt((v02*v02).sum(1))
+                l12 = np.sqrt((v12*v12).sum(1))
+                d12 = (v01*v02).sum(1)/(l01*l02)
+                d01 = (v02*v12).sum(1)/(l02*l12)
+                d02 = -(v01*v12).sum(1)/(l01*l12)
+                ds = np.array((d01,d02,d12)).transpose()
+                # print("ds shape", ds.shape)
+                dmax = np.amax(ds, axis=1)
+                # print("dmax shape", dmax.shape)
+                dmax = np.insert(dmax, 0, 0.)
+                # print("dmax shape", dmax.shape)
+                # d01 = (v0*v1).sum(1)
+                # d02 = (v0*v2).sum(1)
+                # d12 = (v1*v2).sum(1)
+                simpar = self.tri.find_simplex(pts)
+                # print("simpar shape", simpar.shape)
+                maxes = dmax[simpar+1]
+                # print("maxes shape", maxes.shape)
+
+                # self.osurf = 1.0*self.tri.find_simplex(pts)
+                # self.osurf = 1.0*simpar
+                # self.osurf[self.osurf==-1] = np.nan
+                maxes[maxes == -1] = np.nan
+                self.osurf = maxes*maxes*maxes*maxes
+                self.osurf -= .5
+                # amin = np.nanmin(self.osurf)
+                # amax = np.nanmax(self.osurf)
+                # print(amin, amax)
+                # self.osurf[amax-self.osurf<5] *= 2.
+                # self.osurf[self.osurf-amin<5] *= 2.
+            if self.osurf is not None:
+                mn = np.nanmin(self.osurf)
+                mx = np.nanmax(self.osurf)
+                amax = max(abs(mn),abs(mx))
+                if amax > 0:
+                    self.osurf /= amax
+                self.gt0 = self.osurf > 0
+                self.lt0 = self.osurf < 0
+                self.ogt0 = (65536*self.osurf[self.gt0]).astype(np.uint16)
+                self.olt0 = (-65536*self.osurf[self.lt0]).astype(np.uint16)
+
+
         if self.line is not None and self.lineAxis > -1:
             # print("createZsurf from line")
             spline = CubicSpline(
@@ -1266,15 +1550,23 @@ class FragmentView:
             # print(self.zsurf.shape)
             # print(xs.shape)
             # print(self.lineAxis, self.lineAxisPosition)
-            if self.lineAxis == 0:
-                self.zsurf[:,self.lineAxisPosition] = ys
-            else:
-                self.zsurf[self.lineAxisPosition,:] = ys
+            # print("line", self.fragment.name, self.fragment.direction, self.cur_volume_view.direction, self.lineAxis, self.lineAxisPosition, self.zsurf.shape)
+            zshape = self.zsurf.shape
+            lap = self.lineAxisPosition
+            if self.lineAxis == 0 and lap >=0 and lap < zshape[1]:
+                self.zsurf[:,lap] = ys
+            elif self.lineAxis == 1 and lap >= 0 and lap < zshape[0]:
+                self.zsurf[lap,:] = ys
             # print(ys)
 
         if self.fragment.direction != self.cur_volume_view.direction:
             self.ssurf = None
             return
+
+        # can happen when initializing an "echo" fragment
+        # while switching to a different volume
+        # if self.cur_volume_view.volume.trdatas is None:
+        #     return
         
         ssi = np.indices((ni, nj))
         # print("ssi shape",ssi.shape, ssi.dtype)
@@ -1296,6 +1588,7 @@ class FragmentView:
             return
         ixyzs = np.rint(xyzsn).astype(np.int32)
         # print ("ixyzs shape", ixyzs.shape, ixyzs.dtype)
+        # print("cvv", self.cur_volume_view, self.cur_volume_view.volume, self.cur_volume_view.volume.trdatas, self.fragment, self.fragment.direction)
         ftrdata = self.cur_volume_view.volume.trdatas[self.fragment.direction]
         ## print("ixyzs max", ixyzs.max(axis=1))
         ## print("trdata", trdata.shape)
@@ -1445,8 +1738,7 @@ class FragmentView:
         gijk = self.cur_volume_view.transposedIjkToGlobalPosition(tijk)
         self.fragment.gpoints = np.append(self.fragment.gpoints, np.reshape(gijk, (1,3)), axis=0)
         # print(self.lpoints)
-        self.setLocalPoints()
-        self.createZsurf()
+        self.setLocalPoints(True)
 
     # return True if succeeds, False if fails
     def movePoint(self, index, new_vijk):
@@ -1461,6 +1753,5 @@ class FragmentView:
         # print(match, new_gijk)
         self.fragment.gpoints[index, :] = new_gijk
         # print(self.fragment.gpoints)
-        self.setLocalPoints()
-        self.createZsurf()
+        self.setLocalPoints(True)
         return True

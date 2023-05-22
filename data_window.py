@@ -227,6 +227,9 @@ class DataWindow(QLabel):
     def getZoom(self):
         return self.volume_view.zoom * self.zoomMult
 
+    def allowMouseToDragNode(self):
+        return True
+
     def mousePressEvent(self, e):
         if self.volume_view is None:
             return
@@ -252,7 +255,7 @@ class DataWindow(QLabel):
                 # print("left mouse button down")
                 self.mouseStartPoint = e.localPos()
                 nearbyNode = self.findNearbyNode(wxy)
-                if nearbyNode < 0:
+                if nearbyNode < 0 or not self.allowMouseToDragNode():
                     self.tfStartPoint = self.volume_view.ijktf
                     self.isPanning = True
                     self.isMovingNode = False
@@ -853,6 +856,9 @@ class SurfaceWindow(DataWindow):
     def nodeMovementAllowedInK(self):
         return True
 
+    def allowMouseToDragNode(self):
+        return False
+
     # slice ij position to tijk
     def ijToTijk(self, ij):
         if self.axis != 2:
@@ -896,23 +902,32 @@ class SurfaceWindow(DataWindow):
         whw = ww//2
         whh = wh//2
         out = np.zeros((wh,ww), dtype=np.uint16)
-        # slc = volume.getSlice(self.axis, volume.ijktf)
+        # convert 16-bit (uint16) gray scale to 16-bit RGBX (X is like
+        # alpha, but always has the value 65535)
+        outrgbx = np.zeros((wh,ww,4), dtype=np.uint16)
         if curfv is not None and curfv.zsurf is not None:
-            '''
-            slc = np.array(self.cur_frag.zsurf)
-            mn = 0
-            mx = self.volume_view.trdata.shape[0]
-            base = 4000
-            slc *= (65536-base)/mx
-            slc += base
-            slc = np.clip(slc, 0, 65535)
-            slc[np.isnan(slc)] = 0
-            '''
             if self.currentFragmentView().ssurf is not None:
                 slc = self.currentFragmentView().ssurf
-                # slice width, height
-                sw = slc.shape[1]
-                sh = slc.shape[0]
+                slcrgbx = np.stack(((slc,)*4), axis=-1)
+                # print(outrgbx.shape)
+                slcrgbx[:,:,3] = 65535
+                ogrid = None
+                if hasattr(curfv, 'osurf'):
+                    ogrid = curfv.osurf
+                if ogrid is not None:
+                    slcrgbx[:,:,0:3] //= 4
+                    slcrgbx[:,:,0:3] *= 3
+                    gt0 = curfv.gt0
+                    lt0 = curfv.lt0
+                    ogt0 = curfv.ogt0 // 4
+                    olt0 = curfv.olt0 // 4
+
+                    slcrgbx[gt0,0] += ogt0
+                    slcrgbx[gt0,2] += ogt0
+                    slcrgbx[lt0,1] += olt0
+
+                sw = slcrgbx.shape[1]
+                sh = slcrgbx.shape[0]
                 # zoomed slice width, height
                 zsw = max(int(z*sw), 1)
                 zsh = max(int(z*sh), 1)
@@ -926,7 +941,7 @@ class SurfaceWindow(DataWindow):
                 # npo = np.array(out)
         
                 # zoomed data slice
-                zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
+                zslc = cv2.resize(slcrgbx, (zsw, zsh), interpolation=cv2.INTER_AREA)
                 # viewing window
         
                 # Pasting zoomed data slice into viewing-area array, taking
@@ -945,13 +960,8 @@ class SurfaceWindow(DataWindow):
                 ri = self.rectIntersection((ax1,ay1,ax2,ay2), (bx1,by1,bx2,by2))
                 if ri is not None:
                     (x1,y1,x2,y2) = ri
-                    out[y1:y2, x1:x2] = zslc[(y1-ay1):(y2-ay1),(x1-ax1):(x2-ax1)]
+                    outrgbx[y1:y2, x1:x2] = zslc[(y1-ay1):(y2-ay1),(x1-ax1):(x2-ax1)]
 
-        # convert 16-bit (uint16) gray scale to 16-bit RGBX (X is like
-        # alpha, but always has the value 65535)
-        outrgbx = np.stack(((out,)*4), axis=-1)
-        # print(outrgbx.shape)
-        outrgbx[:,:,3] = 65535
         fij = self.tijkToIj(volume.ijktf)
         fx,fy = self.ijToXy(fij)
 

@@ -150,22 +150,33 @@ class MainWindow(QMainWindow):
         self.load_hardwired_project_action.triggered.connect(self.onLoadHardwiredProjectButtonClick)
         self.new_project_action = QAction("New project...", self)
         self.new_project_action.triggered.connect(self.onNewProjectButtonClick)
+
         self.open_project_action = QAction("Open project...", self)
         self.open_project_action.triggered.connect(self.onOpenProjectButtonClick)
+
         self.save_project_action = QAction("Save project", self)
         self.save_project_action.triggered.connect(self.onSaveProjectButtonClick)
         self.save_project_action.setEnabled(False)
+
         self.save_project_as_action = QAction("Save project as...", self)
         self.save_project_as_action.triggered.connect(self.onSaveProjectAsButtonClick)
         self.save_project_as_action.setEnabled(False)
+
         self.import_nrrd_action = QAction("Import NRRD files...", self)
         self.import_nrrd_action.triggered.connect(self.onImportNRRDButtonClick)
         self.import_nrrd_action.setEnabled(False)
+
         self.import_tiffs_action = QAction("Import TIFF files...", self)
         self.import_tiffs_action.triggered.connect(self.onImportTiffsButtonClick)
         self.import_tiffs_action.setEnabled(False)
+
+        self.export_mesh_action = QAction("Export fragment as mesh...", self)
+        self.export_mesh_action.triggered.connect(self.onExportAsMeshButtonClick)
+        self.export_mesh_action.setEnabled(False)
+
         self.exit_action = QAction("Exit", self)
         self.exit_action.triggered.connect(self.onExitButtonClick)
+
         self.menu = self.menuBar()
         self.file_menu = self.menu.addMenu("&File")
         self.file_menu.addAction(self.open_project_action)
@@ -174,6 +185,7 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(self.save_project_as_action)
         self.file_menu.addAction(self.import_nrrd_action)
         self.file_menu.addAction(self.import_tiffs_action)
+        self.file_menu.addAction(self.export_mesh_action)
         # self.file_menu.addAction(self.load_hardwired_project_action)
         self.file_menu.addAction(self.exit_action)
 
@@ -649,6 +661,46 @@ class MainWindow(QMainWindow):
         parent = path.parent
         self.settingsSaveDirectory(str(parent), "nrrd_")
 
+    # TODO Should have dialog where user can select infill parameter
+    def onExportAsMeshButtonClick(self, s):
+        # self.settingsSaveDirectory(str(parent), "nrrd_")
+        print("export mesh clicked")
+        if self.project_view is None or self.project_view.project is None:
+            print("No project currently loaded")
+            return
+        if self.project_view.cur_fragment is None:
+            print("No active fragment")
+            return
+        sdir = self.settingsGetDirectory("mesh_")
+        if sdir is None:
+            sdir = self.settingsGetDirectory()
+        if sdir is None:
+            sdir = ""
+
+        filename_tuple = QFileDialog.getSaveFileName(self, "Save Fragment as Mesh", sdir, "Mesh *.obj")
+        print("user selected", filename_tuple)
+        # [0] is filename, [1] is the selector used
+        filename = filename_tuple[0]
+        if filename is None or filename == "":
+            print("No file selected")
+            return
+
+        pname = Path(filename)
+
+        name = pname.name
+
+        # TODO: allow the user to set the infill
+        err = self.project_view.cur_fragment.saveAsObjMesh(pname, 16)
+        if err != "":
+            msg = QMessageBox()
+            msg.setWindowTitle("Save fragment as mesh")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error: %s"%err)
+            msg.exec()
+
+        self.settingsSaveDirectory(str(pname.parent), "mesh_")
+
+
     def onImportTiffsButtonClick(self, s):
         self.tiff_loader.show()
         self.tiff_loader.raise_()
@@ -869,6 +921,7 @@ class MainWindow(QMainWindow):
         self.fragments_table.model().beginResetModel()
         self.project_view.setCurrentFragment(cur_fragment)
         self.fragments_table.model().endResetModel()
+        self.export_mesh_action.setEnabled(cur_fragment is not None)
         # cur_fragment_view = self.project_view.cur_fragment_view
         # self.depth.setCurrentFragmentView(cur_fragment_view)
         # self.xline.setCurrentFragmentView(cur_fragment_view)
@@ -916,6 +969,7 @@ class MainWindow(QMainWindow):
         self.save_project_as_action.setEnabled(True)
         self.import_nrrd_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
+        self.export_mesh_action.setEnabled(project_view.cur_fragment is not None)
 
     def setProject(self, project):
         project_view = ProjectView(project)
