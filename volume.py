@@ -1362,9 +1362,9 @@ class Fragment:
         for gpt in gpoints:
             print("v %d %d %d"%(gpt[0],gpt[1],gpt[2]), file=of)
         for trg in tri.simplices:
-            # print("f %d %d %d"%(trg[0]+1,trg[1]+1,trg[2]+1), file=of)
+            print("f %d %d %d"%(trg[0]+1,trg[1]+1,trg[2]+1), file=of)
             # try reversing index order:
-            print("f %d %d %d"%(trg[1]+1,trg[0]+1,trg[2]+1), file=of)
+            # print("f %d %d %d"%(trg[1]+1,trg[0]+1,trg[2]+1), file=of)
 
         return err
 
