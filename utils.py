@@ -9,6 +9,19 @@ c1 = QCC.Svg.skyblue
 
 class Utils:
 
+    class Timer():
+
+        def __init__(self, active=True):
+            self.t0 = time.time()
+            self.active = active
+
+        def time(self, msg=""):
+            t = time.time()
+            if self.active:
+                print(t-self.t0, msg)
+            self.t0 = t
+
+
     def timestamp():
         t = time.gmtime()
         txt = time.strftime("%Y-%m-%dT%H:%M:%SZ", t)

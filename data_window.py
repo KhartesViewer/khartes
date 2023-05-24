@@ -129,6 +129,10 @@ class DataWindow(QLabel):
         xyijks = self.cur_frag_pts_xyijk
         nearbyNode = self.localNearbyNodeIndex
         if nearbyNode >= 0 and xyijks is not None and xyijks.shape[0] != 0:
+            if nearbyNode >= xyijks.shape[0]:
+                print("PROBLEM in getNearbyNodeIjk")
+                print(xyijks.shape, nearbyNode)
+                return None
             tijk = xyijks[nearbyNode, 2:]
             return self.tijkToLocalIjk(tijk)
         else:
@@ -372,9 +376,10 @@ class DataWindow(QLabel):
         # print(d, z)
         self.volume_view.setZoom(z)
         mxy = (e.position().x(), e.position().y())
-        nearbyNode = self.findNearbyNode(mxy)
-        if not self.setNearbyNode(nearbyNode):
-            self.window.drawSlices()
+        # nearbyNode = self.findNearbyNode(mxy)
+        # if not self.setNearbyNode(nearbyNode):
+        #     self.window.drawSlices()
+        self.window.drawSlices()
         # z = min(2, max(z, .1))
         # print("wheel", e.position())
 
@@ -775,6 +780,7 @@ into and out of the viewing plane.
             xypts = []
             # nearbyNode = None
             nearbyNode = -1
+            self.nearbyNode = -1
             if frag == self.currentFragmentView():
                 nearbyNode = self.currentFragmentView().nearbyNode
             for i, pt in enumerate(pts):
@@ -789,6 +795,7 @@ into and out of the viewing plane.
                 # if (pt == nearbyNode).all():
                 if pt[3] == nearbyNode:
                     color = self.highlightNodeColor
+                    self.nearbyNode = i
                 self.drawNodeAtXy(outrgbx, xy, color)
             if frag == self.currentFragmentView():
                 self.cur_frag_pts_xyijk = np.array(xypts)
@@ -980,6 +987,7 @@ class SurfaceWindow(DataWindow):
             # nearbyNode = None
             lineColor = frag.fragment.cvcolor
             nearbyNode = -1
+            self.nearbyNode = -1
             if frag == self.currentFragmentView():
                 nearbyNode = self.currentFragmentView().nearbyNode
             if frag.tri is not None:
@@ -1003,6 +1011,7 @@ class SurfaceWindow(DataWindow):
                     # if (ijk == nearbyNode).all():
                     if i == nearbyNode:
                         color = self.highlightNodeColor
+                        self.nearbyNode = i
                     self.drawNodeAtXy(outrgbx, xy, color)
                 # if frag == self.cur_frag:
                 #     self.cur_frag_pts_xyijk = np.array(xypts)
@@ -1037,6 +1046,7 @@ class SurfaceWindow(DataWindow):
                     # if (ijk == nearbyNode).all():
                     if i == nearbyNode:
                         color = self.highlightNodeColor
+                        self.nearbyNode = i
                     self.drawNodeAtXy(outrgbx, xy, color)
 
                 # if frag == self.cur_fragment_view:

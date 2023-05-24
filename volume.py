@@ -1454,7 +1454,10 @@ class FragmentView:
 
 
     def createZsurf(self):
+        timer_active = False
+        timer = Utils.Timer(timer_active)
         self.triangulate()
+        timer.time("triangulate")
         nk,nj,ni = self.cur_volume_view.trdata.shape
         if self.fragment.direction != self.cur_volume_view.direction:
             ni,nj,nk = nk,nj,ni
@@ -1474,6 +1477,7 @@ class FragmentView:
                 interp = CloughTocher2DInterpolator(self.tri, self.fpoints[:,2])
             pts = np.indices((ni, nj)).transpose()
             self.zsurf = interp(pts)
+            timer.time("zsurf")
             overlay = self.fragment.params.get('overlay', '')
             if overlay == "diff":
                 # ct = CloughTocher2DInterpolator(self.tri, self.fpoints[:,2])
@@ -1529,6 +1533,9 @@ class FragmentView:
                 # print(amin, amax)
                 # self.osurf[amax-self.osurf<5] *= 2.
                 # self.osurf[self.osurf-amin<5] *= 2.
+                timer.time("simplex")
+                # TODO for testing only
+                # self.osurf = None
             if self.osurf is not None:
                 mn = np.nanmin(self.osurf)
                 mx = np.nanmax(self.osurf)
@@ -1603,6 +1610,7 @@ class FragmentView:
         ixyzs = ixyzs[:,ixyzs[0,:]<ftrdata.shape[0]]
         ixyzs = ixyzs[:,ixyzs[0,:]>=0]
         self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = ftrdata[(ixyzs[0,:], ixyzs[1,:], ixyzs[2,:])]
+        timer.time("ssurf")
 
     # returns zsurf points, as array of [ipos, jpos] values
     # for the slice with the given axis and axis position
