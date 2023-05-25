@@ -11,8 +11,6 @@ The main emphasis of khartes is on interactivity and a user-friendly GUI; no com
 algorithms are currently used.
 
 The current version is really an alpha-test version; it is being provided to get some early user feedback.
-One of the main things lacking is a function to export segments in a format readable by the 
-volume-cartographer series of programs.
 
 The only documentation at this point is the video below.  Note that it begins with an "artistic" 60-second
 intro sequence which contains no narration, but which quickly highlights some of khartes' features.
@@ -29,7 +27,7 @@ be found in the file demo1_script.txt.
 
 In theory, you should be able to run simply by
 cloning the repository, making sure you have the proper dependencies 
-(see "anaconda_installation.txt" for a list), and then typing "python khartes.py".  
+(see "anaconda_installation.txt" for a list), and then typing `python khartes.py`.  
 
 When khartes starts, you will see some explanatory text on the right-hand side of the interface 
 to help you get started.  This text is fairly limited; you might want to watch the video above to get a better
@@ -39,7 +37,7 @@ A couple of notes based on early user testing (**you might
 want to review these again** after using khartes for the first
 time):
 
-The "File / Import TIFF Files..." menu option
+The `File / Import TIFF Files...` menu option
 creates a khartes data volume
 by reading TIFF files that you already have somewhere on disk.
 You simply need to point the import-TIFF dialog to the folder
@@ -68,18 +66,45 @@ sheet of the scroll in difficult areas.
 Remember that khartes does not have auto-save; use Ctrl-S on
 a regular basis to save your latest work.
 
-## Major limitation
+## Exporting fragments
 
-At the moment, the fragments created in khartes are not
-exportable to volume-cartographer.  The intention is to make
-them exportable, but the details need to be worked out.
+Khartes allows you to export your fragments to `vc_render` and `vc_layers_from_ppm`.
 
-In the meantime, the fragments you create now in khartes can be
-saved now, and viewed in khartes, and the plan is that you will
-eventually be able to export them once the export functionality is
-added.
+To export your fragment:
 
-## Other things to fix
+1. Make sure your fragment is active, that is, that it is visible
+in the right-hand window.
+2. In the File menu, select `Export file as mesh...`.
+
+This will create a .obj file, which contains a mesh representing your
+fragment.
+
+You can import this mesh directly into `vc_render`.  Here is how.
+
+First, you need to make sure you know where the following files and
+directories are located:
+
+- Your .volpkg folder, the one that contains the TIFF files that you
+imported into khartes
+- If your .volpkg directory contains more than one volume, you need
+to know the number of the volume that contains the TIFF files
+that you used.
+- The .obj mesh file that you just created
+- The directory where you want to create a .ppm file, and the name
+that you want to give the .ppm file.  The .ppm file is needed by
+`vc_layers_from_ppm`.
+
+So the command you want to type will look something like:
+```
+vc_render -v [your volpkg directory] --input-mesh [your .obj file] --output-ppm [the name of the ppm file you want to create]
+```
+You might need to use --volume to specify your volume as well, if your volpkg has more than one.
+
+As already mentioned, the .ppm file that `vc_render` creates can be used in `vc_layers_from_ppm` to create a 
+flattened surface volume.
+
+
+## Things to fix
 
 When the user exits khartes
 or reads another project, khartes does not warn the
