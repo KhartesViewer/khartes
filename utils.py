@@ -18,7 +18,7 @@ class Utils:
         def time(self, msg=""):
             t = time.time()
             if self.active:
-                print(t-self.t0, msg)
+                print("%.3f %s"%(t-self.t0, msg))
             self.t0 = t
 
 

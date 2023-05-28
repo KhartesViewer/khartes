@@ -341,6 +341,8 @@ class MainWindow(QMainWindow):
         return slices[vbv]
 
     def setVolBoxesVisible(self, value):
+        if self.project_view is None:
+            return
         slices = self.project_view.settings['slices']
         vbv = 'vol_boxes_visible'
         old_value = slices[vbv]
@@ -993,7 +995,7 @@ class MainWindow(QMainWindow):
         else:
             w = QApplication.widgetAt(QCursor.pos())
             method = getattr(w, "keyPressEvent", None)
-            if method is not None:
+            if w != self and method is not None:
                 w.keyPressEvent(e)
 
     def drawSlices(self):

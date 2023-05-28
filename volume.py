@@ -599,6 +599,10 @@ class VolumeView():
         self.zoom = 0.
         self.minZoom = 0.
         self.maxZoom = 5
+        # TODO: voxelSizeUm should probably be an attribute
+        # of Project, not VolumeView.  apparentVoxelSize
+        # might belong here, since in the future it should
+        # be anisotropic, based on self.direction
         self.voxelSizeUm = 7.91
         self.apparentVoxelSize = self.voxelSizeUm
         gs = volume.gijk_steps
@@ -1232,6 +1236,70 @@ class Fragment:
         rgba = qcolor.getRgbF()
         self.cvcolor = [int(65535*c) for c in rgba] 
 
+
+    def badTrglsByMaxAngle(self, tri):
+        simps = tri.simplices
+        verts = tri.points
+        v0 = verts[simps[:,0]]
+        v1 = verts[simps[:,1]]
+        v2 = verts[simps[:,2]]
+        v01 = v1-v0
+        v02 = v2-v0
+        v12 = v2-v1
+        l01 = np.sqrt((v01*v01).sum(1))
+        l02 = np.sqrt((v02*v02).sum(1))
+        l12 = np.sqrt((v12*v12).sum(1))
+        d12 = (v01*v02).sum(1)/(l01*l02)
+        d01 = (v02*v12).sum(1)/(l02*l12)
+        d02 = -(v01*v12).sum(1)/(l01*l12)
+        ds = np.array((d01,d02,d12)).transpose()
+        # print("ds shape", ds.shape)
+        dmax = np.amax(ds, axis=1)
+        dmin = np.amin(ds, axis=1)
+        # print("dmax shape", dmax.shape)
+        mind = -.95
+        mind = -.99
+        bads = np.where(dmin < mind)[0]
+        return bads
+
+    def badTrglsByNormal(self, tri, pts):
+        simps = tri.simplices
+        v0 = pts[simps[:,0]]
+        v1 = pts[simps[:,1]]
+        v2 = pts[simps[:,2]]
+        v01 = v1-v0
+        v02 = v2-v0
+        l01 = np.sqrt((v01*v01).sum(1))
+        l02 = np.sqrt((v02*v02).sum(1))
+        norm = np.cross(v01, v02)/(l01*l02).reshape(-1,1)
+        # print("norm",v01.shape, v02.shape, norm.shape)
+        # print(norm[0:10])
+        bads = np.where(np.abs(norm[:,2]) < .1)
+        # bads = np.where(np.abs(norm[:,2]) < 0)
+        return bads
+
+    # given array of indices of "bad" trgls, return a subset of the list,
+    # consisting of bad trgls that are (recursively) on the border
+    def badBorderTrgls(self, tri, bads):
+        # print("bads", bads)
+        badbool = np.zeros((len(tri.simplices),), dtype=np.bool8)
+        badbool[bads] = True
+        # badtrgls = tri.simplices[bads]
+        # badneighbors = tri.neighbors[bads]
+        borderlist = np.array((-1,), dtype=np.int32)
+        lbl = len(borderlist)
+        while True:
+            # = np.where(np.isin(tri.neighbors, borderlist).any(axis=1))[0]
+            borderbool = np.isin(tri.neighbors, borderlist).any(axis=1)
+            badbordertrgls = np.where(np.logical_and(borderbool, badbool))[0]
+            # print("bad on border", len(badbordertrgls))
+            borderlist = np.unique(np.append(borderlist, badbordertrgls))
+            newlbl = len(borderlist)
+            if newlbl == lbl:
+                break
+            lbl = newlbl
+        return badbordertrgls
+
     # Using self.gpoints, create new points in the
     # global coordinate system to infill the grid at the given
     # spacing.  Infill points will be omitted wherever there
@@ -1314,18 +1382,50 @@ class Fragment:
             print("createInfillPoints triangulation error: %s"%err)
             return ngijks
 
+        bads = self.badBorderTrgls(tri, self.badTrglsByNormal(tri, tgijks))
+        badlist = bads.tolist()
+
         interp = CloughTocher2DInterpolator(tri, tgijks[:,2])
         newtks = interp(newtijs)
+        simpids = tri.find_simplex(newtijs)
         newtks = np.reshape(newtks, (newtks.shape[0],1))
         # print("newtks", newtks.shape)
         # the list of infill points, in transposed global
         # ijk coordinates
         newtijks = np.append(newtijs, newtks, axis=1)
         print("newtijks with nans", newtijks.shape)
+        # eliminate infill points in "bad" simplices
+        newtijks = newtijks[~np.isin(simpids, badlist)]
+        print("newtijks no bad trgls", newtijks.shape)
         # eliminate infill points where k is nan
         newtijks = newtijks[~np.isnan(newtijks[:,2])]
-        print("newtijks", newtijks.shape)
+        print("newtijks no nans", newtijks.shape)
         ngijks = Volume.transposedGlobalIjksToGlobalIjks(newtijks, direction)
+
+        # TODO: shouldn't be hardwired here!
+        voxelSizeUm = 7.91
+        meshCount = len(newtijks)
+        area_sq_mm_flat = meshCount*voxelSizeUm*voxelSizeUm*infill*infill/1000000
+        simps = tri.simplices
+        pts = tgijks
+        simps = simps[~(np.isin(simps, bads).any(1))]
+        v0 = pts[simps[:,0]].astype(np.float64)
+        v1 = pts[simps[:,1]].astype(np.float64)
+        v2 = pts[simps[:,2]].astype(np.float64)
+        v01 = v1-v0
+        v02 = v2-v0
+        norm = np.cross(v01, v02)
+        # print(norm.shape)
+        # print((norm*norm).shape)
+        normsq = np.sum(norm*norm, axis=1)
+        # print(norm.shape, normsq.shape)
+        # normsq = normsq[~np.isnan(normsq)]
+        # print(normsq[normsq < 0])
+        # print(normsq.shape)
+        area_sq_mm_trg = np.sum(np.sqrt(normsq))*voxelSizeUm*voxelSizeUm/(2*1000000)
+        print("areas", area_sq_mm_flat, area_sq_mm_trg)
+
+
         return ngijks
 
     # return empty string for success, non-empty error string on error
@@ -1348,6 +1448,9 @@ class Fragment:
             print(err)
             return err
 
+        bads = self.badBorderTrgls(tri, self.badTrglsByNormal(tri, tgps))
+        badlist = bads.tolist()
+
         try:
             of = filename.open("w")
         except Exception as e:
@@ -1361,7 +1464,9 @@ class Fragment:
         # for gpt in tgps:
         for gpt in gpoints:
             print("v %d %d %d"%(gpt[0],gpt[1],gpt[2]), file=of)
-        for trg in tri.simplices:
+        for i,trg in enumerate(tri.simplices):
+            if i in badlist:
+                continue
             print("f %d %d %d"%(trg[0]+1,trg[1]+1,trg[2]+1), file=of)
             # try reversing index order:
             # print("f %d %d %d"%(trg[1]+1,trg[0]+1,trg[2]+1), file=of)
@@ -1389,6 +1494,7 @@ class FragmentView:
         # to current volume, using trijk based on 
         # fragment's direction
         self.fpoints = np.zeros((0,4), dtype=np.float32)
+        self.oldzs = None
         # same as above, but trijk based on cur_volume_view's 
         # direction
         self.vpoints = np.zeros((0,4), dtype=np.float32)
@@ -1451,19 +1557,157 @@ class FragmentView:
             self.fragment.gpoints = np.append(self.fragment.gpoints, newgijks, axis=0)
             self.setLocalPoints(True)
 
+    # given node indices and a triangulation, return a list of the
+    # neighboring node indices, plus the input node indices themselves
+    def nodesNeighbors(self, tri, nodes):
+        tris = tri.simplices
+        # print("nodes", nodes)
+        # print("tris", tris)
+        # print("isin", np.isin(tris,nodes))
+        trgl_idxs = (np.isin(tris, nodes)).any(1).nonzero()[0]
+        trgls = tris[trgl_idxs]
+        vrts = np.unique(trgls.flatten())
+        return vrts
 
+    # given a node index and a triangulation, return a list of the
+    # neighboring node indices, plus the node itself
+    def nodeNeighbors(self, tri, node_idx):
+        tris = tri.simplices
+        trgl_idxs = (tris==node_idx).any(1).nonzero()[0]
+        trgls = tris[trgl_idxs]
+        vrts = np.unique(trgls.flatten())
+        # print("neighbors", vrts)
+        return vrts
+
+    def trglsVertices(self, tri, trgl_indices):
+        tris = tri.simplices
+        vrts = np.unique(tris[trgl_indices].flatten())
+        return vrts
+
+    def trglsNeighborsVertices(self, tri, trgl_indices):
+        vrts = self.trglsVertices(tri, trgl_indices)
+        return self.nodesNeighbors(tri, vrts)
+
+    # given a set of node indices, return a bounding box
+    # (minx, maxx, miny, maxy) containing all the nodes
+    def nodesBoundingBox(self, tri, nodes):
+        pts = tri.points[nodes]
+        # print(pts)
+        minx, miny = np.min(pts, axis=0)
+        maxx, maxy = np.max(pts, axis=0)
+        # print("min",minx,miny,"max",maxx,maxy)
+        return(minx, miny, maxx, maxy)
 
     def createZsurf(self):
         timer_active = False
         timer = Utils.Timer(timer_active)
+        oldtri = self.tri
         self.triangulate()
         timer.time("triangulate")
+        changed_pts_idx = np.zeros((0,), dtype=np.int32)
+        added_trgls_idx = np.zeros((0,), dtype=np.int32)
+        deleted_trgls_idx = np.zeros((0,), dtype=np.int32)
+        changed_rect = None
+        # https://stackoverflow.com/questions/66674537/python-numpy-get-difference-between-2-two-dimensional-array
+        if oldtri is not None and self.tri is not None:
+            # print("diffing")
+            oldpts = oldtri.points
+            newpts = self.tri.points
+            # if points were added or deleted, look for changed
+            # trgls rather than the added/deleted point
+            if len(oldpts) == len(newpts):
+                idx = (newpts[:,None]!=oldpts).any(-1).all(1)
+                changed_pts_idx = idx.nonzero()[0]
+                # deleted_pts_idx = (oldpts[:,None]!=newpts).any(-1).all(1)
+                # if len(nz) > 0:
+                #     print("pts changed", nz)
+                #     print(newpts[idx])
+                if len(changed_pts_idx) == 0:
+                    newzs = self.fpoints[:,2]
+                    oldzs = self.oldzs
+                    idx = (newzs!=oldzs)
+                    changed_pts_idx = idx.nonzero()[0]
+                    # nz = idx.nonzero()[0]
+                    # if len(nz) > 0:
+                    #     print("zs changed", nz)
+                    #     print(newzs[idx])
+
+            oldtris = oldtri.simplices
+            newtris = self.tri.simplices
+            idx = (newtris[:,None]!=oldtris).any(-1).all(1)
+            # NOTE that this is an index into newtris
+            added_trgls_idx = idx.nonzero()[0]
+            idx = (oldtris[:,None]!=newtris).any(-1).all(1)
+            # NOTE that this is an index into oldtris
+            # and that oldtris uses old vertex numbering
+            deleted_trgls_idx = idx.nonzero()[0]
+            # if len(nz) > 0:
+            # print("idx sum", np.sum(idx))
+            #     print("tris changed", nz)
+            #     print(newtris[idx])
+
+            # print(len(added_trgls_idx), len(deleted_trgls_idx), len(changed_pts_idx))
+            '''
+            If more than one point changed, recompute everywhere!
+            If points changed in x,y, or z and trgls did
+            not, update neighborhood only.  (point, surrounding
+            trgls, and trgls surrounding the vertices of these
+            trgls).
+            If trgls changed due to new point added, update new 
+            neighborhood?  Any way to add old neighborhood
+            as well?  (Yes, we should be able to get list of
+            deleted trgls as well as added trgls)
+            Treat trgl changes due to new point any differently
+            than trgl changes due to existing point moving?
+            '''
+            if len(added_trgls_idx) == 0 and len(deleted_trgls_idx) == 0 and len(changed_pts_idx) == 1:
+                node_idx = changed_pts_idx[0]
+                # print("node",node_idx,"changed")
+                nidxs = self.nodeNeighbors(self.tri, node_idx)
+                # print("neighbors", nidxs)
+                nnidxs = self.nodesNeighbors(self.tri, nidxs)
+                # print("next neighbors", nnidxs)
+                (minx, miny, maxx, maxy) = self.nodesBoundingBox(self.tri, nnidxs)
+                changed_rect = (minx, miny, maxx, maxy)
+                # print("v changed_rect", changed_rect)
+
+            elif len(changed_pts_idx) <= 1 and (len(added_trgls_idx) > 0 or len(deleted_trgls_idx) > 0):
+                ovrts = self.trglsNeighborsVertices(oldtri, deleted_trgls_idx)
+                (ominx, ominy, omaxx, omaxy) = self.nodesBoundingBox(oldtri, ovrts)
+                nvrts = self.trglsNeighborsVertices(self.tri, added_trgls_idx)
+                (nminx, nminy, nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nvrts)
+                minx = min(ominx, nminx)
+                miny = min(ominy, nminy)
+                maxx = max(omaxx, nmaxx)
+                maxy = max(omaxy, nmaxy)
+                if len(changed_pts_idx) == 1:
+                    node_idx = changed_pts_idx[0]
+                    nidxs = self.nodeNeighbors(self.tri, node_idx)
+                    nnidxs = self.nodesNeighbors(self.tri, nidxs)
+                    (vminx, vminy, vmaxx, vmaxy) = self.nodesBoundingBox(self.tri, nnidxs)
+                    minx = min(minx, vminx)
+                    miny = min(miny, vminy)
+                    maxx = max(maxx, vmaxx)
+                    maxy = max(maxy, vmaxy)
+                changed_rect = (minx, miny, maxx, maxy)
+                # print("t changed_rect", changed_rect)
+
+            if changed_rect is not None:
+                minx, miny, maxx, maxy = changed_rect
+                if minx >= maxx or miny >= maxy:
+                    # print("nulling changed_rect")
+                    changed_rect = None
+
+
+        self.oldzs = np.copy(self.fpoints[:,2])
+        timer.time("diff")
         nk,nj,ni = self.cur_volume_view.trdata.shape
         if self.fragment.direction != self.cur_volume_view.direction:
             ni,nj,nk = nk,nj,ni
         ns = (ni,nj,nk)
-        self.zsurf = np.zeros((nj,ni), dtype=np.float32)
-        self.zsurf.fill(np.nan)
+        if changed_rect is None or self.tri is None:
+            self.zsurf = np.zeros((nj,ni), dtype=np.float32)
+            self.zsurf.fill(np.nan)
         self.osurf = None
         if self.tri is not None:
             # interp = LinearNDInterpolator(self.tri, self.lpoints[:,2])
@@ -1475,13 +1719,34 @@ class FragmentView:
                 interp = NearestNDInterpolator(self.tri, self.fpoints[:,2])
             else:
                 interp = CloughTocher2DInterpolator(self.tri, self.fpoints[:,2])
-            pts = np.indices((ni, nj)).transpose()
-            self.zsurf = interp(pts)
+            # for testing:
+            # changed_rect = None
+            if changed_rect is None:
+                pts = np.indices((ni, nj)).transpose()
+                # print("pts shape", pts.shape)
+                self.zsurf = interp(pts)
+            else:
+                minx, miny, maxx, maxy = changed_rect
+                minx = int(max(minx, 0))
+                miny = int(max(miny, 0))
+                maxx = int(min(maxx+1, ni))
+                maxy = int(min(maxy+1, nj))
+                nx = maxx-minx
+                ny = maxy-miny
+                pts = np.indices((nx, ny))
+                pts[0,:,:] += int(minx)
+                pts[1,:,:] += int(miny)
+                pts = pts.transpose()
+                local_zsurf = interp(pts)
+                # print("shapes", self.zsurf.shape, local_zsurf.shape)
+                self.zsurf[miny:maxy,minx:maxx] = local_zsurf
+            # pts = pts.transpose()
             timer.time("zsurf")
             overlay = self.fragment.params.get('overlay', '')
             if overlay == "diff":
                 # ct = CloughTocher2DInterpolator(self.tri, self.fpoints[:,2])
                 lin = LinearNDInterpolator(self.tri, self.fpoints[:,2])
+                pts = np.indices((ni, nj)).transpose()
                 self.osurf = self.zsurf - lin(pts)
                 amin = np.nanmin(self.osurf)
                 amax = np.nanmax(self.osurf)
@@ -1575,7 +1840,19 @@ class FragmentView:
         # if self.cur_volume_view.volume.trdatas is None:
         #     return
         
-        ssi = np.indices((ni, nj))
+        if changed_rect is None:
+            ssi = np.indices((ni, nj))
+        else:
+            minx, miny, maxx, maxy = changed_rect
+            minx = int(max(minx, 0))
+            miny = int(max(miny, 0))
+            maxx = int(min(maxx+1, ni))
+            maxy = int(min(maxy+1, nj))
+            nx = maxx-minx
+            ny = maxy-miny
+            ssi = np.indices((nx, ny))
+            ssi[0,:,:] += int(minx)
+            ssi[1,:,:] += int(miny)
         # print("ssi shape",ssi.shape, ssi.dtype)
         xs = ssi[0].flatten()
         ys = ssi[1].flatten()
@@ -1601,7 +1878,9 @@ class FragmentView:
         ## print("trdata", trdata.shape)
         # print("ixyzs rot max", ixyzs[(2,0,1),:].max(axis=1))
         # print("rixyzs max", rixyzs.max(axis=1))
-        self.ssurf = np.zeros((nj,ni), dtype=np.uint16)
+        if changed_rect is None:
+            self.ssurf = np.zeros((nj,ni), dtype=np.uint16)
+        # self.ssurf = np.zeros((nj,ni), dtype=np.uint16)
         # print ("ssurf shape", self.ssurf.shape, self.ssurf.dtype)
         # print ("trdata shape", self.cur_volume_view.trdata.shape, self.cur_volume_view.trdata.dtype)
         ## print("ssurf",self.ssurf.shape)
@@ -1609,6 +1888,19 @@ class FragmentView:
         # recall that index order is k,j,i
         ixyzs = ixyzs[:,ixyzs[0,:]<ftrdata.shape[0]]
         ixyzs = ixyzs[:,ixyzs[0,:]>=0]
+        '''
+        if changed_rect is not None:
+            minx, miny, maxx, maxy = changed_rect
+            print("cr", changed_rect)
+            print("ixyzs before",ixyzs.shape)
+            print(np.min(ixyzs[2,:]), np.max(ixyzs[2,:]), np.min(ixyzs[1,:]),np.max(ixyzs[1,:]))
+            ixyzs = ixyzs[:,ixyzs[2,:]>=minx]
+            ixyzs = ixyzs[:,ixyzs[2,:]<=maxx]
+            ixyzs = ixyzs[:,ixyzs[1,:]>=miny]
+            ixyzs = ixyzs[:,ixyzs[1,:]<=maxy]
+            print("ixyzs after",ixyzs.shape)
+            print(np.min(ixyzs[2,:]), np.max(ixyzs[2,:]), np.min(ixyzs[1,:]),np.max(ixyzs[1,:]))
+        '''
         self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = ftrdata[(ixyzs[0,:], ixyzs[1,:], ixyzs[2,:])]
         timer.time("ssurf")
 

@@ -241,7 +241,7 @@ class TiffLoader(QMainWindow):
         title = "TIFF loader"
         dialog = QFileDialog(self)
         sdir = self.main_window.settingsGetDirectory("tiff_")
-        if sdir is not None:
+        if sdir is not None and Path(sdir).is_dir():
             # print("setting initial directory to", sdir)
             dialog.setDirectory(sdir)
 
