@@ -1158,30 +1158,31 @@ class SurfaceWindow(DataWindow):
                 # color = frag.fragment.color
             if frag.line is not None and frag.lineAxis > -1:
                 line = frag.line
-                pts = np.zeros((line.shape[0],2), dtype=np.int32)
+                pts = np.zeros((line.shape[0],3), dtype=np.int32)
                 # print(line.shape, pts.shape)
                 axis = frag.lineAxis
                 pts[:,1-axis] = line[:,0]
                 # print(pts.shape)
                 pts[:,axis] = frag.lineAxisPosition
+                pts[:,2] = line[:,2]
                 # m = 65535
                 # color = (0,m,0,65535)
                 for i in range(pts.shape[0]-1):
-                    xy0 = self.ijToXy(pts[i])
-                    xy1 = self.ijToXy(pts[i+1])
+                    xy0 = self.ijToXy(pts[i,0:2])
+                    xy1 = self.ijToXy(pts[i+1,0:2])
                     cv2.line(outrgbx, xy0, xy1, lineColor, self.triLineSize)
                 # m = 65535
                 # color = (m,0,0,65535)
                 # xypts = []
                 for i,pt in enumerate(pts):
-                    xy = self.ijToXy(pt)
+                    xy = self.ijToXy(pt[0:2])
                     color = self.nodeColor
                     if frag != self.currentFragmentView():
                         color = self.inactiveNodeColor
                     ijk = frag.vpoints[i]
                     # xypts.append((xy[0], xy[1], pt[0], pt[1], pt[2]))
                     # if (ijk == nearbyNode).all():
-                    if i == nearbyNode:
+                    if pt[2] == nearbyNode:
                         color = self.highlightNodeColor
                         self.nearbyNode = i
                     self.drawNodeAtXy(outrgbx, xy, color)

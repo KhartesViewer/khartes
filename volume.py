@@ -342,7 +342,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
     def scrollToEnd(self):
         table = self.main_window.fragments_table
         rows = self.rowCount()
-        print("rows", rows)
+        # print("rows", rows)
         index = self.createIndex(rows-1, 0)
         table.scrollTo(index)
 
@@ -1673,13 +1673,26 @@ class FragmentView:
 
             elif len(changed_pts_idx) <= 1 and (len(added_trgls_idx) > 0 or len(deleted_trgls_idx) > 0):
                 ovrts = self.trglsNeighborsVertices(oldtri, deleted_trgls_idx)
-                (ominx, ominy, omaxx, omaxy) = self.nodesBoundingBox(oldtri, ovrts)
                 nvrts = self.trglsNeighborsVertices(self.tri, added_trgls_idx)
-                (nminx, nminy, nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nvrts)
-                minx = min(ominx, nminx)
-                miny = min(ominy, nminy)
-                maxx = max(omaxx, nmaxx)
-                maxy = max(omaxy, nmaxy)
+                if len(nvrts) > 0:
+                    (nminx, nminy, nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nvrts)
+                if len(ovrts) > 0:
+                    (ominx, ominy, omaxx, omaxy) = self.nodesBoundingBox(oldtri, ovrts)
+                if len(ovrts) == 0:
+                    minx = nminx
+                    miny = nminy
+                    maxx = nmaxx
+                    maxy = nmaxy
+                elif len(nvrts) == 0:
+                    minx = ominx
+                    miny = ominy
+                    maxx = omaxx
+                    maxy = omaxy
+                else:
+                    minx = min(ominx, nminx)
+                    miny = min(ominy, nminy)
+                    maxx = max(omaxx, nmaxx)
+                    maxy = max(omaxy, nmaxy)
                 if len(changed_pts_idx) == 1:
                     node_idx = changed_pts_idx[0]
                     nidxs = self.nodeNeighbors(self.tri, node_idx)
@@ -1990,11 +2003,12 @@ class FragmentView:
                     self.lineAxis = 1
                 if self.lineAxis >= 0:
                     self.lineAxisPosition = int(self.fpoints[0,self.lineAxis])
-                    self.line = self.fpoints[:, (1-self.lineAxis, 2)]
+                    self.line = self.fpoints[:, (1-self.lineAxis, 2, 3)]
+                    # print("sl1",self.line)
                     self.line = self.line[self.line[:,0].argsort()]
                     # print(self.lineAxis, self.lineAxisPosition)
                     # print(self.fpoints)
-                    # print(self.line)
+                    # print("sl1",self.line)
 
 
     def getPointsOnSlice(self, axis, i):
