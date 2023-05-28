@@ -23,6 +23,13 @@ be found in the file demo1_script.txt.
 
 [![Watch the video](https://i.vimeocdn.com/video/1670955201-81a75343b71db9c84b6b4275e3447c943d2128ab8b921a822051046e83db0c96-d_640)](https://vimeo.com/827515595)
 
+## Vacation announcement
+
+I will be unavailable to work on khartes from the end of May until the
+end of June.  I will try to monitor the Vesuvius Scrolls Discord server,
+but I cannot guarantee that I will be able to fix bugs or answer questions
+during that time.  But my availability in July looks good!
+
 ## Installation
 
 In theory, you should be able to run simply by
@@ -56,6 +63,17 @@ interpolation algorithm can become erratic in areas of long,
 skinny triangles, so it is a good idea to distribute enough
 fragment nodes throughout the fragment, to keep the triangles
 more regular.  
+
+Another reason for monitoring the shapes of your triangles is to
+improve speed of interaction.  Every time a fragment node is moved
+or added, khartes updates the fragment window to reflect these changes.
+This means that triangles near the modified node, and the pixels
+that these triangles encompass, need to be recomputed
+and redrawn.  The bigger the triangles, the longer the recomputations
+take.  If a node is surrounded by large triangles that cover most
+of the data volume, each change may require several seconds to recompute,
+meaning that khartes no longer feels interactive.  You can prevent this problem
+by keep your triangles regular and local.
 
 So when segmenting, start in the center of a fragment
 and work your way out, keeping a fairly regular mesh, instead
