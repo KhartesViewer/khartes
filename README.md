@@ -57,6 +57,20 @@ should be sparing of memory, creating data volumes that are no
 larger than half the size of your physical memory,
 if you want to avoid memory swapping.
 
+## General workflow
+
+As the programmer, I know how khartes works internally.  However,
+I only have a few hours experience as a user of the software.
+The advice that follows is based on this experience, but 
+thes suggestions
+should not be treated as something engraved in stone, more
+like something written in water-based ink on papyrus.
+
+**Step 0** is to choose the area to segment.  For your first
+attempt, you should start with a sheet that is clealy separated
+from its neighbors; no need to dive into the deep end.
+For later attempts, [work in progress...]
+
 When you create fragments, pay attention to the triangulation
 that is shown in the fragment window on the right.  Khartes'
 interpolation algorithm can become erratic in areas of long,
