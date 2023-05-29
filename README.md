@@ -73,8 +73,9 @@ from its neighbors; no need to dive into the deep end.
 For your next attempt, you might want to start with a sheet
 that is separated on one side from its neighbors.
 
-![easier2](https://github.com/KhartesViewer/khartes/assets/133787404/0999ebc7-7779-4d27-91f6-d6c1b0c6c0a0)
-This is a an example of fairly easy sheet.
+<img src="https://github.com/KhartesViewer/khartes/assets/133787404/536c9c8f-b0f7-4079-92d1-b14711a0b7bb" width="360"/>
+
+This is a an example of a fairly easy sheet.
 
 Keep in mind that after you
 have created a fragment for one sheet, you can view that fragment
@@ -87,10 +88,10 @@ There are some areas in the scroll data volume that I consider
 too difficult.  In these areas, fragments appear, disappear, and
 merge into each other in a way that seems impossible to track, no
 matter what software is used.  If you try working in these areas,
-prepare to be frustrated.  And 
-please don't blame khartes for your frustration!
+prepare to be frustrated. 
 
 ![squirmy](https://github.com/KhartesViewer/khartes/assets/133787404/ffa05425-d218-410e-94be-351c4367cfbe)
+
 This area is very difficult or impossible to segment; the sheets
 are too fragmented.
 
@@ -99,6 +100,16 @@ on the inline (top window) and crossline (middle window) slices.
 This will create a diamond-shaped area in the fragment viewer
 (right-hand window).  Make sure you are happy with what you see
 before expanding.
+
+<img src="https://github.com/KhartesViewer/khartes/assets/133787404/0a355d1b-25cd-4bf7-87ec-144492900d06" width="450" />
+
+Example of a good start.  A couple of inline slices (the horizontal lines
+in the fragment view) and a crossline slice (vertical line) have been 
+interpreted.  Nodes near the lines have been moved onto the lines, to
+maintain good node spacing.  The horizontal fibers are continuous, 
+which is important.  The dark spot in the upper right quadrant is 
+due to a lack of data to constrain the interpolation; as more nodes are
+added, the spot will be replaced by a good image.
 
 **Step 2:** Expand by alternating directions.  Use the fragment viewer
 to move to a new area on the fragment and create nodes on the inline
