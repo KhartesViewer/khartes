@@ -62,23 +62,31 @@ if you want to avoid memory swapping.
 As the programmer, I know how khartes works internally.  However,
 I only have a few hours experience as a user of the software.
 The advice that follows is based on this experience, but 
-thes suggestions
+these suggestions
 should not be treated as something engraved in stone, more
-like something written in water-based ink on papyrus.
+like something written on papyrus in water-based ink.
 
 **Step 0**, before you start working,
 is to choose the area to segment.  For your first
 attempt, you should start with a sheet that is clealy separated
 from its neighbors; no need to dive into the deep end.
-For your next attempt, you mighgt want to start with a sheet
-that is separated on one side.  Keep in mind that after you
+For your next attempt, you might want to start with a sheet
+that is separated on one side from its neighbors.  
+Keep in mind that after you
 have created a fragment for one sheet, you can view that fragment
 even while working on the next sheet, as a kind of guide.
 So one strategy is to work on a series of sheets that are 
 parallel to
 each other, starting with the easiest.
 
-**Step 1:** Start in an easy area, picking some points
+There are some areas in the scroll data volume that I consider
+too difficult.  In these areas, fragments appear, disappear, and
+merge into each other in a way that seems impossible to track, no
+matter what software is used.  If you try working in these areas,
+prepare to be frustrated.  And 
+please don't blame khartes for your frustration!
+
+**Step 1:** Start in an easy area of your sheet, picking some points
 on the inline (top window) and crossline (middle window) slices.
 This will create a diamond-shaped area in the fragment viewer
 (right-hand window).  Make sure you are happy with what you see
@@ -103,8 +111,8 @@ to make sure that the horizontal fibers are the ones that are the most visible
 
 ![sheet_skip](https://github.com/KhartesViewer/khartes/assets/133787404/62d4b800-9731-4310-8ecf-01ddca1e6aa5)
 
-**This is bad!**  The horizontal fibers are not continuous.  This needs to be repaired by moving nodes
-to the correct sheet.
+**This is bad!**  The horizontal fibers are not continuous.  This needs to be repaired by
+moving some of the nodes so that they are all on the same sheet.
 
 **Step 3 continued**  The main problem to watch out for, as illustrated above,
 is what I call "sheet skipping": because two adjacent sheets are close together, or
