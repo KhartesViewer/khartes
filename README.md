@@ -66,8 +66,8 @@ these suggestions
 should not be treated as something engraved in stone, more
 like something written on papyrus in water-based ink.
 
-**Step 0**, before you start working,
-is to choose the area to segment.  For your first
+**Step 0**: The most important step, even before you start segmenting,
+is to decide in which area to work.  For your first
 attempt, you should start with a sheet that is clealy separated
 from its neighbors; no need to dive into the deep end.
 For your next attempt, you might want to start with a sheet
@@ -101,16 +101,6 @@ This will create a diamond-shaped area in the fragment viewer
 (right-hand window).  Make sure you are happy with what you see
 before expanding.
 
-<img src="https://github.com/KhartesViewer/khartes/assets/133787404/0a355d1b-25cd-4bf7-87ec-144492900d06" width="450" />
-
-Example of a good start.  A couple of inline slices (the horizontal lines
-in the fragment view) and a crossline slice (vertical line) have been 
-interpreted.  Nodes near the lines have been moved onto the lines, to
-maintain good node spacing.  The horizontal fibers are continuous, 
-which is important.  The dark spot in the upper right quadrant is 
-due to a lack of data to constrain the interpolation; as more nodes are
-added, the spot will be replaced by a good image.
-
 **Step 2:** Expand by alternating directions.  Use the fragment viewer
 to move to a new area on the fragment and create nodes on the inline
 slice.  Then create nodes on the crossline slice.
@@ -121,6 +111,16 @@ that line.  IF there are, and it is feasible, move these existing nodes
 onto the line.  This is to avoid the situation where a node on the line
 and a node just off of the line end up too close to each other, which can
 cause undesirable waviness in the fragment.
+
+<img src="https://github.com/KhartesViewer/khartes/assets/133787404/0a355d1b-25cd-4bf7-87ec-144492900d06" width="600" />
+
+Example of a good start.  A couple of inline slices (the horizontal lines
+in the fragment view) and a crossline slice (vertical line) have been 
+interpreted.  Nodes near the lines have been moved onto the lines, to
+maintain good node spacing.  The horizontal fibers are continuous, 
+which is important.  The dark spot in the upper right quadrant is 
+due to a lack of data to constrain the interpolation; as more nodes are
+added, the spot will be replaced by a good image.
 
 **Step 3**: Pause, verify, repair.  The most important criterion for
 a good fragment is that the horizontal fibers (as seen in the fragment view)
