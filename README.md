@@ -84,7 +84,7 @@ This will create a diamond-shaped area in the fragment viewer
 (right-hand window).  Make sure you are happy with what you see
 before expanding.
 
-**Step 2:** Sxpand by alternating directions.  Use the fragment viewer
+**Step 2:** Expand by alternating directions.  Use the fragment viewer
 to move to a new area on the fragment and create nodes on the inline
 slice.  Then create nodes on the crossline slice.
 
@@ -93,7 +93,7 @@ look in the fragment viewer to see if there are any existing nodes near
 that line.  IF there are, and it is feasible, move these existing nodes
 onto the line.  This is to avoid the situation where a node on the line
 and a node just off of the line end up too close to each other, which can
-cause undesirable wavieness in the fragment.
+cause undesirable waviness in the fragment.
 
 **Step 3**: Pause, verify, repair.  The most important criterion for
 a good fragment is that the horizontal fibers (as seen in the fragment view)
@@ -103,7 +103,8 @@ to make sure that the horizontal fibers are the ones that are the most visible
 
 ![sheet_skip](https://github.com/KhartesViewer/khartes/assets/133787404/62d4b800-9731-4310-8ecf-01ddca1e6aa5)
 
-**This is bad!**  The horizontal fibers are not continuous.  This needs to be repaired.
+**This is bad!**  The horizontal fibers are not continuous.  This needs to be repaired by moving nodes
+to the correct sheet.
 
 **Step 3 continued**  The main problem to watch out for, as illustrated above,
 is what I call "sheet skipping": because two adjacent sheets are close together, or
