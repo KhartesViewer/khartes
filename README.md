@@ -66,10 +66,11 @@ these suggestions
 should not be treated as something engraved in stone, more
 like something written on papyrus in water-based ink.
 
-**Step 0**: The most important step, even before you start segmenting,
+**Step 0**: The most important step, which you
+must take even before you start segmenting,
 is to decide in which area to work.  For your first
-attempt, you should start with a sheet that is clealy separated
-from its neighbors; no need to dive into the deep end.
+attempt, you should start with a sheet that is clearly separated
+from its neighbors; no need to start with a difficult case.
 For your next attempt, you might want to start with a sheet
 that is separated on one side from its neighbors.
 
@@ -78,13 +79,13 @@ that is separated on one side from its neighbors.
 This is a an example of a fairly easy sheet.
 
 Keep in mind that after you
-have created a fragment for one sheet, you can view that fragment
+have created a fragment for one sheet, you can view that fragment,
 even while working on the next sheet, as a kind of guide.
 So one strategy is to work on a series of sheets that are 
 parallel to
 each other, starting with the easiest.
 
-There are some areas in the scroll data volume that I consider
+There are some areas in the scroll data volume that I found to be
 too difficult.  In these areas, fragments appear, disappear, and
 merge into each other in a way that seems impossible to track, no
 matter what software is used.  If you try working in these areas,
@@ -95,6 +96,12 @@ prepare to be frustrated.
 This area is very difficult or impossible to segment; the sheets
 are too fragmented.
 
+Bear in mind that khartes works only with single-valued surfaces;
+it cannot handle sheets that turn over onto themselves.
+If you want to work on such a sheet, turn your volume
+on its side (in the lower right corner, find the Volume panel, and
+change the direction of your volume from "Y" to "X").
+
 **Step 1:** Start in an easy area of your sheet, picking some points
 on the inline (top window) and crossline (middle window) slices.
 This will create a diamond-shaped area in the fragment viewer
@@ -103,7 +110,8 @@ before expanding.
 
 **Step 2:** Expand by alternating directions.  Use the fragment viewer
 to move to a new area on the fragment and create nodes on the inline
-slice.  Then create nodes on the crossline slice.
+slice.  Then create nodes on the crossline slice.  You can also add
+nodes to the bottom slice; these act like contour lines on a map.
 
 **Hint for step 2:** Before you start adding new nodes onto the line,
 look in the fragment viewer to see if there are any existing nodes near
