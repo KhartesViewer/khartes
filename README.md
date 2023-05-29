@@ -28,11 +28,11 @@ be found in the file demo1_script.txt.
 I will be unavailable to work on khartes from the end of May until the
 end of June.  I will try to monitor the Vesuvius Scrolls Discord server,
 but I cannot guarantee that I will be able to fix bugs or answer questions
-during that time.  But my availability in July looks good!
+during that time.  However, my availability in July looks good!
 
 ## Installation
 
-In theory, you should be able to run simply by
+You should be able to run simply by
 cloning the repository, making sure you have the proper dependencies 
 (see "anaconda_installation.txt" for a list), and then typing `python khartes.py`.  
 
@@ -59,9 +59,12 @@ if you want to avoid memory swapping.
 
 ## General workflow
 
-As the programmer, I know how khartes works internally.  However,
+As the programmer, I am very familiar with
+how khartes works internally.
+However,
 I only have a few hours experience as a user of the software.
-The advice that follows is based on this experience, but 
+The advice that follows is based on this 
+limited experience, but 
 these suggestions
 should not be treated as something engraved in stone, more
 like something written on papyrus in water-based ink.
@@ -118,7 +121,7 @@ nodes to the bottom slice; these act like contour lines on a map.
 
 **Hint for step 2:** Before you start adding new nodes onto the line,
 look in the fragment viewer to see if there are any existing nodes near
-that line.  IF there are, and it is feasible, move these existing nodes
+that line.  If there are, and it is feasible, move these existing nodes
 onto the line.  This is to avoid the situation where a node on the line
 and a node just off of the line end up close to each other, which can
 cause undesirable waviness in the fragment.
@@ -128,8 +131,8 @@ cause undesirable waviness in the fragment.
 *Example of a good start.*  A couple of inline slices (the horizontal lines
 in the fragment view) and a crossline slice (vertical line) have been 
 interpreted.  Nodes near the lines have been moved onto the lines, to
-maintain good node spacing.  
-Some "contour" points have been added to the bottom slice as well.
+maintain good node spacing.
+Some contour points have been added to the bottom slice as well.
 The horizontal fibers are continuous, 
 which is important (see Step 3).  The dark spot in the upper right quadrant is 
 due to a lack of data to constrain the interpolation; as more nodes are
@@ -138,7 +141,7 @@ added, the spot will be replaced by the image of the sheet.
 **Step 3**: Pause, verify, repair.  The most important criterion for
 a good fragment is that the horizontal fibers (as seen in the fragment view)
 are continuous, since the horizontal fibers (also called the circumferential fibers)
-are the ones that are most likely to contain the ink.  
+are the ones that are most likely to contain the ink.
 Where horizontal and vertical fibers cross, try
 to make sure that the horizontal fibers are the ones that are the most visible
 
@@ -161,14 +164,15 @@ more repair work you will have to do later.
 <img src="https://github.com/KhartesViewer/khartes/assets/133787404/2f685bc9-bf55-4d1a-9c54-f472e3c0dc4b" width="800" />
 
 *The surface has been repaired;* horizontal fibers are now continuous.  The inline and crossline slices show
-the location of the original (magenta) and repaired (cyan) surfaces.  Note that these overlap on the right,
-but diverge on the left.
+the location of the original (magenta) and repaired (cyan) surfaces.  Note that these overlap in one half
+of the slice,
+but diverge in the other half.
 
 ## Workflow notes
 
 **Save often.**  You can simply type Ctrl-S to save your work; try to remember to do this whenever
-a dozen or so nodes have been added or changed.  The "save" operation is very quick, since only 
-fragments are saved; the volume data does not change and thus is not part of the operation.
+you have added or moved a dozen or so nodes.  The "save" operation is very quick, since only 
+fragments are saved; the volume data does not change and thus does not slow down the operation.
 
 When you create fragments, pay attention to the triangulation
 that is shown in the fragment window on the right.  Khartes'
