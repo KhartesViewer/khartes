@@ -66,15 +66,26 @@ thes suggestions
 should not be treated as something engraved in stone, more
 like something written in water-based ink on papyrus.
 
-**Step 0** is to choose the area to segment.  For your first
+**Step 0**, before you start working,
+is to choose the area to segment.  For your first
 attempt, you should start with a sheet that is clealy separated
 from its neighbors; no need to dive into the deep end.
 For your next attempt, you mighgt want to start with a sheet
 that is separated on one side.  Keep in mind that after you
 have created a fragment for one sheet, you can view that fragment
 even while working on the next sheet, as a kind of guide.
-So you might want to work on a series of sheets parallel to
-each other.
+So one strategy is to work on a series of sheets that are 
+parallel to
+each other, starting with the easiest.
+
+**Step 1** is to start in an easy area, picking some points
+on the inline (top window) and crossline (middle window) slices.
+This will create a diamond-shaped area in the fragment viewer
+(right-hand window).  Make sure you are happy with what you see
+before expanding.
+
+**Step 2**, expand by alternating between picking lines in the
+inline
 
 [work in progress...]
 
