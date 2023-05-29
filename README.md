@@ -70,7 +70,8 @@ like something written on papyrus in water-based ink.
 must take even before you start segmenting,
 is to decide in which area to work.  For your first
 attempt, you should start with a sheet that is clearly separated
-from its neighbors; no need to start with a difficult case.
+from its neighbors; no need to 
+make your learning experience difficult.
 
 <img src="https://github.com/KhartesViewer/khartes/assets/133787404/536c9c8f-b0f7-4079-92d1-b14711a0b7bb" width="360"/>
 
@@ -132,28 +133,30 @@ Some "contour" points have been added to the bottom slice as well.
 The horizontal fibers are continuous, 
 which is important (see Step 3).  The dark spot in the upper right quadrant is 
 due to a lack of data to constrain the interpolation; as more nodes are
-added, the image of the sheet will replace the spot.
+added, the spot will be replaced by the image of the sheet.
 
 **Step 3**: Pause, verify, repair.  The most important criterion for
 a good fragment is that the horizontal fibers (as seen in the fragment view)
 are continuous, since the horizontal fibers (also called the circumferential fibers)
-are the ones that were written on.  Where horizontal and vertical fibers cross, try
+are the ones that are most likely to contain the ink.  
+Where horizontal and vertical fibers cross, try
 to make sure that the horizontal fibers are the ones that are the most visible
 
 ![sheet_skip](https://github.com/KhartesViewer/khartes/assets/133787404/62d4b800-9731-4310-8ecf-01ddca1e6aa5)
 
 ***This is bad!***  The horizontal fibers are not continuous.  This needs to be repaired by
-moving some of the nodes so that they are all on the same sheet.
+moving some of the nodes so that they all lie on the same sheet.
 
 **Step 3 continued**  The main problem to watch out for, as illustrated above,
 is what I call "sheet skipping": because two adjacent sheets are close together, or
 even merge in some areas, the user has unintentionally started adding nodes onto
-the wrong sheet.  As a result, the fibers in the left of this picture are from
-a different sheet than the fibers on the right.  This is a signal that the user has
-to go back, analyze the existing nodes, and move them all onto the correct sheet.
+the wrong sheet.  As a result, the fibers on the left side of this picture are from
+a different sheet than the fibers on the right.  This creates a
+visual discontinuity, which is a signal that the user needs
+to go back, analyze the existing nodes, and move as many as necessary 
+until all are on the correct sheet.
 So again: pause, verify, repair.  The longer you wait to do this basic check, the
 more repair work you will have to do later.
-
 
 <img src="https://github.com/KhartesViewer/khartes/assets/133787404/2f685bc9-bf55-4d1a-9c54-f472e3c0dc4b" width="800" />
 
@@ -163,7 +166,7 @@ but diverge on the left.
 
 ## Workflow notes
 
-Save often.  You can simply type Ctrl-S to save your work; try to remember to do this whenever
+**Save often.**  You can simply type Ctrl-S to save your work; try to remember to do this whenever
 a dozen or so nodes have been added or changed.  The "save" operation is very quick, since only 
 fragments are saved; the volume data does not change and thus is not part of the operation.
 
