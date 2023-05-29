@@ -71,7 +71,11 @@ is to choose the area to segment.  For your first
 attempt, you should start with a sheet that is clealy separated
 from its neighbors; no need to dive into the deep end.
 For your next attempt, you might want to start with a sheet
-that is separated on one side from its neighbors.  
+that is separated on one side from its neighbors.
+
+![easier2](https://github.com/KhartesViewer/khartes/assets/133787404/0999ebc7-7779-4d27-91f6-d6c1b0c6c0a0)
+This is a an example of fairly easy sheet.
+
 Keep in mind that after you
 have created a fragment for one sheet, you can view that fragment
 even while working on the next sheet, as a kind of guide.
@@ -85,6 +89,10 @@ merge into each other in a way that seems impossible to track, no
 matter what software is used.  If you try working in these areas,
 prepare to be frustrated.  And 
 please don't blame khartes for your frustration!
+
+![squirmy](https://github.com/KhartesViewer/khartes/assets/133787404/ffa05425-d218-410e-94be-351c4367cfbe)
+This area is very difficult or impossible to segment; the sheets
+are too fragmented.
 
 **Step 1:** Start in an easy area of your sheet, picking some points
 on the inline (top window) and crossline (middle window) slices.
