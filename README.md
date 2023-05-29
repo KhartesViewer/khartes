@@ -38,7 +38,7 @@ cloning the repository, making sure you have the proper dependencies
 
 When khartes starts, you will see some explanatory text on the right-hand side of the interface 
 to help you get started.  This text is fairly limited; you might want to watch the video above to get a better
-idea how to proceed.
+idea how to proceed, or read the "General Workflow" section below.
 
 A couple of notes based on early user testing (**you might
 want to review these again** after using khartes for the first
@@ -122,7 +122,7 @@ onto the line.  This is to avoid the situation where a node on the line
 and a node just off of the line end up close to each other, which can
 cause undesirable waviness in the fragment.
 
-<img src="https://github.com/KhartesViewer/khartes/assets/133787404/0a355d1b-25cd-4bf7-87ec-144492900d06" width="600" />
+<img src="https://github.com/KhartesViewer/khartes/assets/133787404/0a355d1b-25cd-4bf7-87ec-144492900d06" width="800" />
 
 *Example of a good start.*  A couple of inline slices (the horizontal lines
 in the fragment view) and a crossline slice (vertical line) have been 
@@ -155,14 +155,17 @@ So again: pause, verify, repair.  The longer you wait to do this basic check, th
 more repair work you will have to do later.
 
 
-<img src="https://github.com/KhartesViewer/khartes/assets/133787404/2f685bc9-bf55-4d1a-9c54-f472e3c0dc4b" width="600" />
+<img src="https://github.com/KhartesViewer/khartes/assets/133787404/2f685bc9-bf55-4d1a-9c54-f472e3c0dc4b" width="800" />
 
 *The surface has been repaired;* horizontal fibers are now continuous.  The inline and crossline slices show
 the location of the original (magenta) and repaired (cyan) surfaces.  Note that these overlap on the right,
 but diverge on the left.
 
-[work in progress...]
+## Workflow notes
 
+Save often.  You can simply type Ctrl-S to save your work; try to remember to do this whenever
+a dozen or so nodes have been added or changed.  The "save" operation is very quick, since only 
+fragments are saved; the volume data does not change and thus is not part of the operation.
 
 When you create fragments, pay attention to the triangulation
 that is shown in the fragment window on the right.  Khartes'
