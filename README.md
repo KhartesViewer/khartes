@@ -74,7 +74,7 @@ from its neighbors; no need to start with a difficult case.
 
 <img src="https://github.com/KhartesViewer/khartes/assets/133787404/536c9c8f-b0f7-4079-92d1-b14711a0b7bb" width="360"/>
 
-This is a an example of a fairly easy sheet.
+*This is a an example* of a fairly easy sheet.
 
 For your next attempt, you might want to start with a sheet
 that is separated on one side from its neighbors.
@@ -95,7 +95,7 @@ prepare to be frustrated.
 
 ![squirmy](https://github.com/KhartesViewer/khartes/assets/133787404/ffa05425-d218-410e-94be-351c4367cfbe)
 
-This area is very difficult or impossible to segment; the sheets
+*This area* is very difficult or impossible to segment; the sheets
 are too fragmented.
 
 Bear in mind that khartes works only with single-valued surfaces;
@@ -124,10 +124,12 @@ cause undesirable waviness in the fragment.
 
 <img src="https://github.com/KhartesViewer/khartes/assets/133787404/0a355d1b-25cd-4bf7-87ec-144492900d06" width="600" />
 
-Example of a good start.  A couple of inline slices (the horizontal lines
+*Example of a good start.*  A couple of inline slices (the horizontal lines
 in the fragment view) and a crossline slice (vertical line) have been 
 interpreted.  Nodes near the lines have been moved onto the lines, to
-maintain good node spacing.  The horizontal fibers are continuous, 
+maintain good node spacing.  
+Some "contour" points have been added to the bottom slice as well.
+The horizontal fibers are continuous, 
 which is important (see Step 3).  The dark spot in the upper right quadrant is 
 due to a lack of data to constrain the interpolation; as more nodes are
 added, the image of the sheet will replace the spot.
@@ -140,7 +142,7 @@ to make sure that the horizontal fibers are the ones that are the most visible
 
 ![sheet_skip](https://github.com/KhartesViewer/khartes/assets/133787404/62d4b800-9731-4310-8ecf-01ddca1e6aa5)
 
-**This is bad!**  The horizontal fibers are not continuous.  This needs to be repaired by
+***This is bad!***  The horizontal fibers are not continuous.  This needs to be repaired by
 moving some of the nodes so that they are all on the same sheet.
 
 **Step 3 continued**  The main problem to watch out for, as illustrated above,
@@ -155,7 +157,7 @@ more repair work you will have to do later.
 
 <img src="https://github.com/KhartesViewer/khartes/assets/133787404/2f685bc9-bf55-4d1a-9c54-f472e3c0dc4b" width="600" />
 
-The surface has been repaired; horizontal fibers are now continuous.  The inline and crossline slices show
+*The surface has been repaired;* horizontal fibers are now continuous.  The inline and crossline slices show
 the location of the original (magenta) and repaired (cyan) surfaces.  Note that these overlap on the right,
 but diverge on the left.
 
