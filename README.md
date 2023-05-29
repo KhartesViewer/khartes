@@ -69,7 +69,14 @@ like something written in water-based ink on papyrus.
 **Step 0** is to choose the area to segment.  For your first
 attempt, you should start with a sheet that is clealy separated
 from its neighbors; no need to dive into the deep end.
-For later attempts, [work in progress...]
+For your next attempt, you mighgt want to start with a sheet
+that is separated on one side.  Keep in mind that after you
+have created a fragment for one sheet, you can view that fragment
+even while working on the next sheet, as a kind of guide.
+So you might want to work on a series of sheets parallel to
+each other.
+
+[work in progress...]
 
 When you create fragments, pay attention to the triangulation
 that is shown in the fragment window on the right.  Khartes'
