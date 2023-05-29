@@ -98,9 +98,24 @@ cause undesirable wavieness in the fragment.
 **Step 3**: Pause, verify, repair.  The most important criterion for
 a good fragment is that the horizontal fibers (as seen in the fragment view)
 are continuous, since the horizontal fibers (also called the circumferential fibers)
-are the ones that were written on.
+are the ones that were written on.  Where horizontal and vertical fibers cross, try
+to make sure that the horizontal fibers are the ones that are the most visible
+
+![sheet_skip](https://github.com/KhartesViewer/khartes/assets/133787404/62d4b800-9731-4310-8ecf-01ddca1e6aa5)
+
+**This is bad!**  The horizontal fibers are not continuous.  This needs to be repaired.
+
+**Step 3 continued**  The main problem to watch out for, as illustrated above,
+is what I call "sheet skipping": because two adjacent sheets are close together, or
+even merge in some areas, the user has unintentionally started adding nodes onto
+the wrong sheet.  As a result, the fibers in the left of this picture are from
+a different sheet than the fibers on the right.  This is a signal that the user has
+to go back, analyze the existing nodes, and move them all onto the correct sheet.
+So again: pause, verify, repair.  The longer you wait to do this basic check, the
+more repair work you will have to do later.
 
 [work in progress...]
+
 
 When you create fragments, pay attention to the triangulation
 that is shown in the fragment window on the right.  Khartes'
