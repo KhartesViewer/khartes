@@ -71,16 +71,18 @@ must take even before you start segmenting,
 is to decide in which area to work.  For your first
 attempt, you should start with a sheet that is clearly separated
 from its neighbors; no need to start with a difficult case.
-For your next attempt, you might want to start with a sheet
-that is separated on one side from its neighbors.
 
 <img src="https://github.com/KhartesViewer/khartes/assets/133787404/536c9c8f-b0f7-4079-92d1-b14711a0b7bb" width="360"/>
 
 This is a an example of a fairly easy sheet.
 
+For your next attempt, you might want to start with a sheet
+that is separated on one side from its neighbors.
+
 Keep in mind that after you
-have created a fragment for one sheet, you can view that fragment,
-even while working on the next sheet, as a kind of guide.
+have created a fragment for one sheet, you can view that fragment
+even while working on the next sheet, 
+using it as a kind of guide.
 So one strategy is to work on a series of sheets that are 
 parallel to
 each other, starting with the easiest.
@@ -117,7 +119,7 @@ nodes to the bottom slice; these act like contour lines on a map.
 look in the fragment viewer to see if there are any existing nodes near
 that line.  IF there are, and it is feasible, move these existing nodes
 onto the line.  This is to avoid the situation where a node on the line
-and a node just off of the line end up too close to each other, which can
+and a node just off of the line end up close to each other, which can
 cause undesirable waviness in the fragment.
 
 <img src="https://github.com/KhartesViewer/khartes/assets/133787404/0a355d1b-25cd-4bf7-87ec-144492900d06" width="600" />
@@ -126,9 +128,9 @@ Example of a good start.  A couple of inline slices (the horizontal lines
 in the fragment view) and a crossline slice (vertical line) have been 
 interpreted.  Nodes near the lines have been moved onto the lines, to
 maintain good node spacing.  The horizontal fibers are continuous, 
-which is important.  The dark spot in the upper right quadrant is 
+which is important (see Step 3).  The dark spot in the upper right quadrant is 
 due to a lack of data to constrain the interpolation; as more nodes are
-added, the spot will be replaced by a good image.
+added, the image of the sheet will replace the spot.
 
 **Step 3**: Pause, verify, repair.  The most important criterion for
 a good fragment is that the horizontal fibers (as seen in the fragment view)
@@ -149,6 +151,13 @@ a different sheet than the fibers on the right.  This is a signal that the user 
 to go back, analyze the existing nodes, and move them all onto the correct sheet.
 So again: pause, verify, repair.  The longer you wait to do this basic check, the
 more repair work you will have to do later.
+
+
+<img src="https://github.com/KhartesViewer/khartes/assets/133787404/2f685bc9-bf55-4d1a-9c54-f472e3c0dc4b" width="600" />
+
+The surface has been repaired; horizontal fibers are now continuous.  The inline and crossline slices show
+the location of the original (magenta) and repaired (cyan) surfaces.  Note that these overlap on the right,
+but diverge on the left.
 
 [work in progress...]
 
