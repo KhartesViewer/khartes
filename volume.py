@@ -1488,6 +1488,8 @@ class FragmentView:
         self.lineAxis = -1
         self.lineAxisPosition = 0
         self.zsurf = None
+        self.prevZslice = -1
+        self.prevZslicePts = None
         self.ssurf = None
         self.nearbyNode = -1
         # gpoints converted to ijk coordinates relative
@@ -1498,6 +1500,10 @@ class FragmentView:
         # same as above, but trijk based on cur_volume_view's 
         # direction
         self.vpoints = np.zeros((0,4), dtype=np.float32)
+
+    def clearZsliceCache(self):
+        self.prevZslice = -1
+        self.prevZslicePts = None
 
     def setVolumeView(self, vol_view):
         self.cur_volume_view = vol_view
@@ -1649,16 +1655,12 @@ class FragmentView:
             # print(len(added_trgls_idx), len(deleted_trgls_idx), len(changed_pts_idx))
             '''
             If more than one point changed, recompute everywhere!
-            If points changed in x,y, or z and trgls did
+            If one point changed in x,y, or z and trgls did
             not, update neighborhood only.  (point, surrounding
             trgls, and trgls surrounding the vertices of these
             trgls).
-            If trgls changed due to new point added, update new 
-            neighborhood?  Any way to add old neighborhood
-            as well?  (Yes, we should be able to get list of
-            deleted trgls as well as added trgls)
-            Treat trgl changes due to new point any differently
-            than trgl changes due to existing point moving?
+            If trgls changed, updated neighborhoods of old and
+            new triangle.
             '''
             if len(added_trgls_idx) == 0 and len(deleted_trgls_idx) == 0 and len(changed_pts_idx) == 1:
                 node_idx = changed_pts_idx[0]
@@ -1667,7 +1669,14 @@ class FragmentView:
                 # print("neighbors", nidxs)
                 nnidxs = self.nodesNeighbors(self.tri, nidxs)
                 # print("next neighbors", nnidxs)
-                (minx, miny, maxx, maxy) = self.nodesBoundingBox(self.tri, nnidxs)
+                (ominx, ominy, omaxx, omaxy) = self.nodesBoundingBox(oldtri, nnidxs)
+                # print(ominx, ominy, omaxx, omaxy)
+                (nminx, nminy, nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nnidxs)
+                # print(nminx, nminy, nmaxx, nmaxy)
+                minx = min(ominx, nminx)
+                miny = min(ominy, nminy)
+                maxx = max(omaxx, nmaxx)
+                maxy = max(omaxy, nmaxy)
                 changed_rect = (minx, miny, maxx, maxy)
                 # print("v changed_rect", changed_rect)
 
@@ -1710,6 +1719,13 @@ class FragmentView:
                 if minx >= maxx or miny >= maxy:
                     # print("nulling changed_rect")
                     changed_rect = None
+                else:
+                    nk,nj,ni = self.cur_volume_view.trdata.shape
+                    minx = int(max(minx-1, 0))
+                    miny = int(max(miny-1, 0))
+                    maxx = int(min(maxx+1, ni))
+                    maxy = int(min(maxy+1, nj))
+                    changed_rect = (minx, miny, maxx, maxy)
 
 
         self.oldzs = np.copy(self.fpoints[:,2])
@@ -1721,6 +1737,7 @@ class FragmentView:
         if changed_rect is None or self.tri is None:
             self.zsurf = np.zeros((nj,ni), dtype=np.float32)
             self.zsurf.fill(np.nan)
+            self.clearZsliceCache()
         self.osurf = None
         if self.tri is not None:
             # interp = LinearNDInterpolator(self.tri, self.lpoints[:,2])
@@ -1733,17 +1750,13 @@ class FragmentView:
             else:
                 interp = CloughTocher2DInterpolator(self.tri, self.fpoints[:,2])
             # for testing:
-            # changed_rect = None
             if changed_rect is None:
                 pts = np.indices((ni, nj)).transpose()
                 # print("pts shape", pts.shape)
                 self.zsurf = interp(pts)
+                self.clearZsliceCache()
             else:
                 minx, miny, maxx, maxy = changed_rect
-                minx = int(max(minx, 0))
-                miny = int(max(miny, 0))
-                maxx = int(min(maxx+1, ni))
-                maxy = int(min(maxy+1, nj))
                 nx = maxx-minx
                 ny = maxy-miny
                 pts = np.indices((nx, ny))
@@ -1753,6 +1766,7 @@ class FragmentView:
                 local_zsurf = interp(pts)
                 # print("shapes", self.zsurf.shape, local_zsurf.shape)
                 self.zsurf[miny:maxy,minx:maxx] = local_zsurf
+                self.clearZsliceCache()
             # pts = pts.transpose()
             timer.time("zsurf")
             overlay = self.fragment.params.get('overlay', '')
@@ -1840,8 +1854,10 @@ class FragmentView:
             lap = self.lineAxisPosition
             if self.lineAxis == 0 and lap >=0 and lap < zshape[1]:
                 self.zsurf[:,lap] = ys
+                self.clearZsliceCache()
             elif self.lineAxis == 1 and lap >= 0 and lap < zshape[0]:
                 self.zsurf[lap,:] = ys
+                self.clearZsliceCache()
             # print(ys)
 
         if self.fragment.direction != self.cur_volume_view.direction:
@@ -1857,10 +1873,10 @@ class FragmentView:
             ssi = np.indices((ni, nj))
         else:
             minx, miny, maxx, maxy = changed_rect
-            minx = int(max(minx, 0))
-            miny = int(max(miny, 0))
-            maxx = int(min(maxx+1, ni))
-            maxy = int(min(maxy+1, nj))
+            # minx = int(max(minx, 0))
+            # miny = int(max(miny, 0))
+            # maxx = int(min(maxx+1, ni))
+            # maxy = int(min(maxy+1, nj))
             nx = maxx-minx
             ny = maxy-miny
             ssi = np.indices((nx, ny))
@@ -1893,6 +1909,8 @@ class FragmentView:
         # print("rixyzs max", rixyzs.max(axis=1))
         if changed_rect is None:
             self.ssurf = np.zeros((nj,ni), dtype=np.uint16)
+        else:
+            self.ssurf[miny:maxy,minx:maxx] = np.zeros((maxy-miny,maxx-minx), dtype=np.uint16)
         # self.ssurf = np.zeros((nj,ni), dtype=np.uint16)
         # print ("ssurf shape", self.ssurf.shape, self.ssurf.dtype)
         # print ("trdata shape", self.cur_volume_view.trdata.shape, self.cur_volume_view.trdata.dtype)
@@ -1942,23 +1960,49 @@ class FragmentView:
                 pts = pts[~np.isnan(pts[:,1])]
                 return pts
             else:
+                # The so-called z slice is a relatively expensive
+                # operation, and should not be performed unless "z"
+                # or the zsurf has changed.  So cache the results.
+                if self.prevZslicePts is not None and self.prevZslice == vaxisPosition:
+                    return self.prevZslicePts
+                # timer = Utils.Timer(False)
                 pts = np.indices((nj, ni))
+                # timer.time(" indices")
                 # print(pts.shape, self.zsurf.shape)
                 pts = pts[:, np.rint(self.zsurf)==vaxisPosition].transpose()
+                # rint = np.rint(self.zsurf)
+                # rint = self.zsurf.astype(np.int32)
+                # timer.time(" rint")
+                # ptb = (rint == vaxisPosition)
+                # timer.time(" bool")
+                # pts = pts[:, ptb]
+                # timer.time(" select")
+                # pts = pts.transpose()
+                # timer.time(" transpose")
                 # print(pts.shape)
                 pts = pts[:,(1,0)]
-                # print(pts)
+                # timer.time(" pts swap")
+                # print(pts.shape)
+                self.prevZslice = vaxisPosition
+                self.prevZslicePts = pts
                 return pts
         else:
             vnk,vnj,vni = self.cur_volume_view.trdata.shape
             fni,fnj,fnk = vnk,vnj,vni
             if vaxis == 0: # faxis = 2
+                # The so-called z slice is a relatively expensive
+                # operation, and should not be performed unless "z"
+                # or the zsurf has changed.  So cache the results.
+                if self.prevZslicePts is not None and self.prevZslice == vaxisPosition:
+                    return self.prevZslicePts
                 pts = np.indices((fnj, fni))
                 # print(fni,fnj,fnk)
                 # print(self.cur_volume_view.trdata.shape, pts.shape, self.zsurf.shape)
                 pts = pts[:, np.rint(self.zsurf)==vaxisPosition].transpose()
                 # print(pts.shape)
                 # print(pts)
+                self.prevZslice = vaxisPosition
+                self.prevZslicePts = pts
                 return pts
             if vaxis == 1: # faxis = 1
                 ivec = np.arange(fni)

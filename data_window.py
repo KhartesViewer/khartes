@@ -726,8 +726,8 @@ into and out of the viewing plane.
         # npo = np.array(out)
 
         # zoomed data slice
-        zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
-        timera.time("resize")
+        # zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
+        # timera.time("resize")
         # viewing window
         out = np.zeros((wh,ww), dtype=np.uint16)
 
@@ -747,8 +747,21 @@ into and out of the viewing plane.
         ri = self.rectIntersection((ax1,ay1,ax2,ay2), (bx1,by1,bx2,by2))
         if ri is not None:
             (x1,y1,x2,y2) = ri
-            out[y1:y2, x1:x2] = zslc[(y1-ay1):(y2-ay1),(x1-ax1):(x2-ax1)]
-        timera.time("fit rect")
+            # zoomed data slice
+            x1s = int((x1-ax1)/z)
+            y1s = int((y1-ay1)/z)
+            x2s = int((x2-ax1)/z)
+            y2s = int((y2-ay1)/z)
+            # print(sw,sh,ww,wh)
+            # print(x1,y1,x2,y2)
+            # print(x1s,y1s,x2s,y2s)
+            zslc = cv2.resize(slc[y1s:y2s,x1s:x2s], (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+            out[y1:y2, x1:x2] = zslc
+
+            # zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
+            # out[y1:y2, x1:x2] = zslc[(y1-ay1):(y2-ay1),(x1-ax1):(x2-ax1)]
+            timera.time("resize")
+        # timera.time("fit rect")
 
         # convert 16-bit (uint16) gray scale to 16-bit RGBX (X is like
         # alpha, but always has the value 65535)
@@ -776,6 +789,7 @@ into and out of the viewing plane.
             if not frag.visible:
                 continue
             pts = frag.getZsurfPoints(self.axis, self.positionOnAxis())
+            timera.time("get zsurf points")
             if pts is not None:
                 # print(pts)
                 m = 65535
@@ -808,8 +822,10 @@ into and out of the viewing plane.
                 vrts = self.ijsToXys(pts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
                 cv2.polylines(outrgbx, vrts, True, color, size*2)
+                timera.time("draw zsurf points")
 
             pts = frag.getPointsOnSlice(self.axis, self.positionOnAxis())
+            timera.time("get nodes on slice")
             m = 65535
             # color = (m,0,0,65535)
             # color = self.nodeColor
@@ -833,8 +849,11 @@ into and out of the viewing plane.
                     color = self.highlightNodeColor
                     self.nearbyNode = i
                 self.drawNodeAtXy(outrgbx, xy, color)
+            timera.time("draw nodes on slice")
+            m = 65535
             if frag == self.currentFragmentView():
                 self.cur_frag_pts_xyijk = np.array(xypts)
+        timera.time("draw zsurf points")
 
         if self.window.project_view.settings['slices']['vol_boxes_visible']:
             cur_vol_view = self.window.project_view.cur_volume_view
@@ -975,7 +994,7 @@ class SurfaceWindow(DataWindow):
         
                 # zoomed data slice
                 timera.time("prep")
-                zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
+                # zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
                 '''
                 slc = self.currentFragmentView().ssurf
                 slcrgbx = np.stack(((slc,)*4), axis=-1)
@@ -1015,7 +1034,7 @@ class SurfaceWindow(DataWindow):
                 timera.time("prep")
                 zslc = cv2.resize(slcrgbx, (zsw, zsh), interpolation=cv2.INTER_AREA)
                 '''
-                timera.time("resize")
+                # timera.time("resize")
                 # viewing window
         
                 # Pasting zoomed data slice into viewing-area array, taking
@@ -1034,7 +1053,20 @@ class SurfaceWindow(DataWindow):
                 ri = self.rectIntersection((ax1,ay1,ax2,ay2), (bx1,by1,bx2,by2))
                 if ri is not None:
                     (x1,y1,x2,y2) = ri
-                    out[y1:y2, x1:x2] = zslc[(y1-ay1):(y2-ay1),(x1-ax1):(x2-ax1)]
+                    x1s = int((x1-ax1)/z)
+                    y1s = int((y1-ay1)/z)
+                    x2s = int((x2-ax1)/z)
+                    y2s = int((y2-ay1)/z)
+                    # print(sw,sh,ww,wh)
+                    # print(x1,y1,x2,y2)
+                    # print(x1s,y1s,x2s,y2s)
+                    zslc = cv2.resize(slc[y1s:y2s,x1s:x2s], (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+                    out[y1:y2, x1:x2] = zslc
+
+                    # zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
+                    # out[y1:y2, x1:x2] = zslc[(y1-ay1):(y2-ay1),(x1-ax1):(x2-ax1)]
+                    timera.time("resize")
+                    # out[y1:y2, x1:x2] = zslc[(y1-ay1):(y2-ay1),(x1-ax1):(x2-ax1)]
                 ogrid = None
                 if hasattr(curfv, 'osurf'):
                     ogrid = curfv.osurf
