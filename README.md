@@ -4,15 +4,14 @@ Khartes (from χάρτης, an ancient Greek word for scroll) is a program
 that allows users to interactively explore, and then segment, 
 the data volumes created by high-resolution X-ray tomography of the Herculaneum scrolls.
 
-Khartes is written in Python; it uses PyQt5 for the user interface, numpy and scikit for efficient computations,
+Khartes is written in Python; it uses PyQt5 for the user interface, numpy and scipy for efficient computations,
 pynrrd to read and write NRRD files (a data format for volume files), and OpenCV for graphics operations.
 
 The main emphasis of khartes is on interactivity and a user-friendly GUI; no computer-vision or machine-learning
 algorithms are currently used.
 
-The current version is really an alpha-test version; it is being provided to get some early user feedback.
-
-The only documentation at this point is the video below.  Note that it begins with an "artistic" 60-second
+The video below provides an introduction to khartes.
+Note that it begins with an "artistic" 60-second
 intro sequence which contains no narration, but which quickly highlights some of khartes' features.
 After the intro, the video follows a more traditional format, with a voiceover and a demo.
 The entire video
@@ -38,7 +37,7 @@ cloning the repository, making sure you have the proper dependencies
 
 When khartes starts, you will see some explanatory text on the right-hand side of the interface 
 to help you get started.  This text is fairly limited; you might want to watch the video above to get a better
-idea how to proceed, or read the "General Workflow" section below.
+idea how to proceed, and read the "General Workflow" section below.
 
 A couple of notes based on early user testing (**you might
 want to review these again** after using khartes for the first
@@ -59,8 +58,8 @@ if you want to avoid memory swapping.
 
 ## General workflow
 
-As the programmer, I am very familiar with
-how khartes works internally.
+As the programmer of khartes, I am very familiar with
+how it works internally.
 However,
 I only have a few hours experience as a user of the software.
 The advice that follows is based on this 
@@ -87,14 +86,14 @@ Keep in mind that after you
 have created a fragment for one sheet, you can view that fragment
 even while working on the next sheet, 
 using it as a kind of guide.
-So one strategy is to work on a series of sheets that are 
+So one strategy is to create fragments on a series of sheets that are 
 parallel to
 each other, starting with the easiest.
 
 There are some areas in the scroll data volume that I found to be
-too difficult.  In these areas, fragments appear, disappear, and
+too difficult to fragment.  In these areas, sheets appear, disappear, and
 merge into each other in a way that seems impossible to track, no
-matter what software is used.  If you try working in these areas,
+matter which software is used.  If you try working in these areas,
 prepare to be frustrated. 
 
 ![squirmy](https://github.com/KhartesViewer/khartes/assets/133787404/ffa05425-d218-410e-94be-351c4367cfbe)
@@ -119,9 +118,11 @@ to move to a new area on the fragment and create nodes on the inline
 slice.  Then create nodes on the crossline slice.  You can also add
 nodes to the bottom slice; these act like contour lines on a map.
 
-**Hint for step 2:** Before you start adding new nodes onto the line,
+**Hint for step 2:** Before you start adding new nodes onto the 
+inline or crossline slice,
 look in the fragment viewer to see if there are any existing nodes near
-that line.  If there are, and it is feasible, move these existing nodes
+the line you are working on.
+If there are, and it is feasible, move these existing nodes
 onto the line.  This is to avoid the situation where a node on the line
 and a node just off of the line end up close to each other, which can
 cause undesirable waviness in the fragment.
@@ -134,30 +135,31 @@ interpreted.  Nodes near the lines have been moved onto the lines, to
 maintain good node spacing.
 Some contour points have been added to the bottom slice as well.
 The horizontal fibers are continuous, 
-which is important (see Step 3).  The dark spot in the upper right quadrant is 
+which is a sign that the segmentation has been done correctly (see Step 3).
+The dark spot in the upper right quadrant is 
 due to a lack of data to constrain the interpolation; as more nodes are
 added, the spot will be replaced by the image of the sheet.
 
 **Step 3**: Pause, verify, repair.  The most important criterion for
 a good fragment is that the horizontal fibers (as seen in the fragment view)
 are continuous, since the horizontal fibers (also called the circumferential fibers)
-are the ones that are most likely to contain the ink.
+are the ones that are most likely to contain text.
 Where horizontal and vertical fibers cross, try
 to make sure that the horizontal fibers are the ones that are the most visible
 
 ![sheet_skip](https://github.com/KhartesViewer/khartes/assets/133787404/62d4b800-9731-4310-8ecf-01ddca1e6aa5)
 
 ***This is bad!***  The horizontal fibers are not continuous.  This needs to be repaired by
-moving some of the nodes so that they all lie on the same sheet.
+moving nodes so that all the nodes lie on the same sheet.
 
 **Step 3 continued**  The main problem to watch out for, as illustrated above,
-is what I call "sheet skipping": because two adjacent sheets are close together, or
+is "sheet skipping": because two adjacent sheets are close together, or
 even merge in some areas, the user has unintentionally started adding nodes onto
 the wrong sheet.  As a result, the fibers on the left side of this picture are from
 a different sheet than the fibers on the right.  This creates a
 visual discontinuity, which is a signal that the user needs
 to go back, analyze the existing nodes, and move as many as necessary 
-until all are on the correct sheet.
+until all are on the same sheet.
 So again: pause, verify, repair.  The longer you wait to do this basic check, the
 more repair work you will have to do later.
 
@@ -259,6 +261,6 @@ Allow the user to change display settings such as node size and
 crosshair thickness.
 
 The scale bar is based on a voxel spacing of 7.9 um; allow the user to 
-change this.
+set this to a different value.
 
 (Many others too uninteresting to list here)
