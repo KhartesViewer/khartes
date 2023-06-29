@@ -9,7 +9,8 @@ import sys
 from PyQt5.QtWidgets import QApplication
 
 from main_window import MainWindow
-from volume import Volume, Fragment
+from volume import Volume
+from fragment import Fragment
 from project import Project
 # from utils import Utils
 

@@ -4,7 +4,7 @@ import time
 import json
 from utils import Utils
 from volume import Volume, VolumeView
-from volume import Fragment, FragmentView
+from fragment import Fragment, FragmentView
 from PyQt5.QtGui import QColor 
 
 

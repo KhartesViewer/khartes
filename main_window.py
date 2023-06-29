@@ -21,8 +21,9 @@ from PyQt5.QtGui import QPalette, QColor, QCursor
 from tiff_loader import TiffLoader
 from data_window import DataWindow, SurfaceWindow
 from project import Project, ProjectView
+from fragment import Fragment, FragmentsModel
 from volume import (
-        Fragment, Volume, FragmentsModel, VolumesModel, 
+        Volume, VolumesModel, 
         DirectionSelectorDelegate,
         ColorSelectorDelegate)
 from utils import Utils
