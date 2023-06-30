@@ -647,6 +647,7 @@ class FragmentView:
         # with current zsurf and ssurf
         self.cur_volume_view = None
         self.visible = True
+        self.active = False
         self.tri = None
         self.line = None
         self.lineAxis = -1

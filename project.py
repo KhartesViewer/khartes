@@ -55,6 +55,13 @@ class ProjectView:
         if fragment not in self.fragments:
             self.fragments[fragment] = FragmentView(self, fragment)
 
+    # "id" is fragment's "created" attribute
+    # returns None if nothing found
+    def findFragmentViewById(self, fid):
+        for f,fv in self.fragments.elements():
+            if f.created == fid:
+                return fv;
+        return None
 
     def save(self):
         print("called project_view save")
@@ -82,7 +89,8 @@ class ProjectView:
         for frag in self.fragments.values():
             fv = {}
             fv['visible'] = frag.visible
-            fvs[frag.fragment.name] = fv
+            fv['active'] = frag.active
+            fvs[frag.fragment.created] = fv
         info['fragments'] = fvs
 
         info_txt = json.dumps(info, sort_keys=True, indent=4)
@@ -144,11 +152,21 @@ class ProjectView:
             finfos = info['fragments']
             for fv in pv.fragments.values():
                 name = fv.fragment.name
-                if name not in finfos:
+                created = fv.fragment.created
+                # if name not in finfos:
+                #     continue
+                # finfo = finfos[name]
+                finfo = None
+                if name in finfos:
+                    finfo = finfos[name]
+                elif created in finfos:
+                    finfo = finfos[created]
+                if finfo is None:
                     continue
-                finfo = finfos[name]
                 if 'visible' in finfo:
                     fv.visible = finfo['visible']
+                if 'active' in finfo:
+                    fv.active = finfo['active']
 
         if 'project' in info:
             pinfo = info['project']
@@ -167,6 +185,14 @@ class ProjectView:
                     if frag.name == cfname:
                         pv.setCurrentFragment(frag)
                         break
+            '''
+            if 'active_fragments' in pinfo:
+                afs = pinfo['active_fragments']
+                for af in afs:
+                    fv = pv.findFragmentViewById(af)
+                    if fv is not None:
+                        pv.setActiveFragmentView(fv)
+            '''
 
         return pv
 
@@ -266,7 +292,28 @@ class ProjectView:
                 # print("%s set as cur fragment"%fv.fragment.name)
                 self.cur_fragment_view = fv
 
+    def clearActiveFragmentViews(self):
+        for fv in self.fragments.values():
+            fv.active = False
 
+    '''
+    def setActiveFragmentView(self, fv, unique=False):
+        if unique:
+            for fv in self.fragments.values():
+                fv.active = False
+        if fv is None:
+            return
+        cvv = self.cur_volume_view
+        if cvv is None or cvv.direction != fv.fragment.direction:
+            print("cannot set current fragment view")
+        else:
+            fv.active = True
+
+    def unsetActiveFragmentView(self, fv):
+        if fv is None:
+            return
+        fv.active = False
+    '''
 
 class Project:
 
@@ -463,4 +510,12 @@ class Project:
         for pv in self.project_views:
             pv.addFragmentView(fragment)
         self.alphabetizeFragments()
+
+    # "id" is fragment's "created" attribute
+    # returns None if nothing found
+    def findFragmentById(self, fid):
+        for frag in self.fragments:
+            if frag.created == fid:
+                return frag;
+        return None
 
