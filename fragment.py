@@ -1,4 +1,5 @@
 import json
+import time
 import numpy as np
 from scipy.spatial import Delaunay
 from scipy.spatial.qhull import QhullError
@@ -257,12 +258,13 @@ class Fragment:
     def toDict(self):
         info = {}
         info['name'] = self.name
+        info['created'] = self.created
         info['direction'] = self.direction
         info['color'] = self.color.name()
+        info['params'] = self.params
         info['gpoints'] = self.gpoints.tolist()
         if self.params.get('echo', '') != '':
             info['gpoints'] = []
-        info['params'] = self.params
         return info
 
 
@@ -326,6 +328,13 @@ class Fragment:
             frag.params = info['params']
         else:
             frag.params = {}
+        if 'created' in info:
+            frag.created = info['created']
+        else:
+            # old file without "created" timestamp
+            # sleeping to make sure timestamp is unique
+            time.sleep(.1)
+            frag.created = Utils.timestamp()
 
         return frag
 

@@ -1,5 +1,6 @@
 import time
 import random
+import datetime
 from PyQt5.QtGui import QColorConstants as QCC
 from PyQt5.QtGui import QColor
 # import PyQt5.QtGuiQColor.SVG as QtSVG
@@ -23,9 +24,12 @@ class Utils:
 
 
     def timestamp():
-        t = time.gmtime()
-        txt = time.strftime("%Y-%m-%dT%H:%M:%SZ", t)
-        return txt
+        t = datetime.datetime.utcnow()
+        txt = t.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        # round to hundredths of a second
+        txt2 = txt[:-5]+'Z'
+        # print("timer", txt, txt2)
+        return txt2
 
     def getNextColor():
         h = random.randrange(359)
