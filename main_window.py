@@ -387,6 +387,16 @@ class MainWindow(QMainWindow):
         self.app.processEvents()
         self.fragments_table.model().scrollToEnd()
 
+    def renameFragment(self, frag, name):
+        self.fragments_table.model().beginResetModel()
+        frag.name = name
+        proj = self.project_view.project
+        proj.alphabetizeFragments()
+        self.fragments_table.model().endResetModel()
+        self.app.processEvents()
+        index = proj.fragments.index(frag)
+        self.fragments_table.model().scrollToRow(index)
+
     def addPointToCurrentFragment(self, tijk):
         cur_frag_view = self.project_view.cur_fragment_view
         if cur_frag_view is None:

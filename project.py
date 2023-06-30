@@ -43,6 +43,14 @@ class ProjectView:
         if volume not in self.volumes:
             self.volumes[volume] = VolumeView(self, volume)
 
+    def alphabetizeFragmentViews(self):
+        frags = list(self.fragments.keys())
+        Fragment.sortFragmentList(frags)
+        new_frags = {}
+        for frag in frags:
+            new_frags[frag] = self.fragments[frag]
+        self.fragments = new_frags
+
     def addFragmentView(self, fragment):
         if fragment not in self.fragments:
             self.fragments[fragment] = FragmentView(self, fragment)
@@ -445,8 +453,14 @@ class Project:
         for pv in self.project_views:
             pv.addVolumeView(volume)
 
+    def alphabetizeFragments(self):
+        Fragment.sortFragmentList(self.fragments)
+        for pv in self.project_views:
+            pv.alphabetizeFragmentViews()
+
     def addFragment(self, fragment):
         self.fragments.append(fragment)
         for pv in self.project_views:
             pv.addFragmentView(fragment)
+        self.alphabetizeFragments()
 

@@ -182,7 +182,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         # if role != Qt.EditRole:
         #     return False
         if role == Qt.CheckStateRole and column == 0:
-            # print(row, value)
+            # print("check", row, value)
             if value != Qt.Checked:
                 self.main_window.setCurrentFragment(None)
             else:
@@ -198,6 +198,16 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             fragment_view = fragments[fragment]
             self.main_window.setFragmentVisibility(fragment, value==Qt.Checked)
             return True
+        elif role == Qt.EditRole and column == 2:
+            # print("setdata", row, value)
+            name = value
+            # print("sd name", value)
+            fragments = self.project_view.fragments
+            fragment = list(fragments.keys())[row]
+            # print("%s to %s"%(fragment.name, name))
+            if name != "":
+                self.main_window.renameFragment(fragment, name)
+
         elif role == Qt.EditRole and column == 3:
             # print("sd color", value)
             fragments = self.project_view.fragments
@@ -206,23 +216,19 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             # print("setdata", row, color.name())
             # fragment.setColor(color)
             self.main_window.setFragmentColor(fragment, value)
-        elif role == Qt.EditRole and column == 2:
-            # print("setdata", row, value)
-            name = value
-            # print("sd name", value)
-            fragments = self.project_view.fragments
-            fragment = list(fragments.keys())[row]
-            # TODO: set fragment name
-            # self.main_window.setDirection(volume, direction)
 
         return False
 
-    def scrollToEnd(self):
+    def scrollToRow(self, row):
+        index = self.createIndex(row, 0)
         table = self.main_window.fragments_table
-        rows = self.rowCount()
-        # print("rows", rows)
-        index = self.createIndex(rows-1, 0)
         table.scrollTo(index)
+
+    def scrollToEnd(self):
+        row = self.rowCount()-1
+        if row < 0:
+            return
+        self.scrollToRow(row)
 
 
     '''
@@ -374,6 +380,11 @@ class Fragment:
                 return [frag]
             frags.append(frag)
         return frags
+
+    # class function
+    # performs an in-place sort of the list
+    def sortFragmentList(frags):
+        frags.sort(key=lambda f: f.name)
 
     def setColor(self, qcolor):
         self.color = qcolor
