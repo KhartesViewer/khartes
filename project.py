@@ -354,9 +354,14 @@ class Project:
 
     def save(self):
         print("called project save")
-        for frag in self.fragments:
-            print("saving frag", frag.name)
-            frag.save(self.fragments_path)
+        # for frag in self.fragments:
+        #     print("saving frag", frag.name)
+        #     frag.save(self.fragments_path)
+        files = list(self.fragments_path.glob("*.json"))
+        # print("glob files", files)
+        for file in files:
+            file.unlink(missing_ok=True)
+        Fragment.saveList(self.fragments, self.fragments_path, "all")
 
         info = {}
         # TODO: set modified-date in info
@@ -426,9 +431,11 @@ class Project:
                 prj.addVolume(vol)
 
         for ffile in fdir.glob("*.json"):
-            frag = Fragment.load(ffile)
-            if frag is not None and frag.valid:
-                prj.addFragment(frag)
+            frags = Fragment.load(ffile)
+            if frags is not None:
+                for frag in frags:
+                    if frag.valid:
+                        prj.addFragment(frag)
 
         return prj
 

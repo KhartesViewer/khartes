@@ -248,8 +248,7 @@ class Fragment:
         self.created = Utils.timestamp()
         self.modified = Utils.timestamp()
 
-    # TODO: need "created" and "modified" timestamps
-    def save(self, path):
+    def toDict(self):
         info = {}
         info['name'] = self.name
         info['direction'] = self.direction
@@ -258,33 +257,47 @@ class Fragment:
         if self.params.get('echo', '') != '':
             info['gpoints'] = []
         info['params'] = self.params
+        return info
+
+
+    # TODO: need "created" and "modified" timestamps
+    def save(self, path):
+        '''
+        info = {}
+        info['name'] = self.name
+        info['direction'] = self.direction
+        info['color'] = self.color.name()
+        info['gpoints'] = self.gpoints.tolist()
+        if self.params.get('echo', '') != '':
+            info['gpoints'] = []
+        info['params'] = self.params
+        '''
+        info = self.toDict()
         # print(info)
         info_txt = json.dumps(info, indent=4)
         file = path / (self.name + ".json")
         print("writing to",file)
         file.write_text(info_txt, encoding="utf8")
 
+    # class function
+    def saveList(frags, path, stem):
+        infos = []
+        for frag in frags:
+            info = frag.toDict()
+            infos.append(info)
+        info_txt = json.dumps(infos, indent=4)
+        file = path / (stem + ".json")
+        print("writing to",file)
+        file.write_text(info_txt, encoding="utf8")
+
+
     def createErrorFragment():
         frag = Fragment("", -1)
         frag.error = err
         return frag
 
-    # TODO: need "created" and "modified" timestamps
-    def load(json_file):
-        try:
-            json_txt = json_file.read_text(encoding="utf8")
-        except:
-            err = "Could not read file %s"%json_file
-            print(err)
-            return Fragment.createErrorFragment(err)
-
-        try:
-            info = json.loads(json_txt)
-        except:
-            err = "Could not parse file %s"%json_file
-            print(err)
-            return Fragment.createErrorFragment(err)
-
+    # class function
+    def fragFromDict(info):
         for attr in ['name', 'direction', 'gpoints']:
             if attr not in info:
                 err = "file %s missing parameter %s"%(json_file, attr)
@@ -307,7 +320,60 @@ class Fragment:
             frag.params = info['params']
         else:
             frag.params = {}
+
         return frag
+
+    # TODO: need "created" and "modified" timestamps
+    # class function
+    def load(json_file):
+        try:
+            json_txt = json_file.read_text(encoding="utf8")
+        except:
+            err = "Could not read file %s"%json_file
+            print(err)
+            return [Fragment.createErrorFragment(err)]
+
+        try:
+            infos = json.loads(json_txt)
+        except:
+            err = "Could not parse file %s"%json_file
+            print(err)
+            return [Fragment.createErrorFragment(err)]
+
+        if not isinstance(infos, list):
+            infos = [infos]
+
+        frags = []
+        for info in infos:
+            '''
+            for attr in ['name', 'direction', 'gpoints']:
+                if attr not in info:
+                    err = "file %s missing parameter %s"%(json_file, attr)
+                    print(err)
+                    return [Fragment.createErrorFragment(err)]
+
+            if 'color' in info:
+                color = QColor(info['color'])
+            else:
+                color = Utils.getNextColor()
+            name = info['name']
+            direction = info['direction']
+            gpoints = info['gpoints']
+            frag = Fragment(name, direction)
+            frag.setColor(color)
+            frag.valid = True
+            if len(gpoints) > 0:
+                frag.gpoints = np.array(gpoints, dtype=np.int32)
+            if 'params' in info:
+                frag.params = info['params']
+            else:
+                frag.params = {}
+            '''
+            frag = Fragment.fragFromDict(info)
+            if not frag.valid:
+                return [frag]
+            frags.append(frag)
+        return frags
 
     def setColor(self, qcolor):
         self.color = qcolor

@@ -563,7 +563,7 @@ class MainWindow(QMainWindow):
         print("save as", idir)
         pdir = Path(idir)
         if pdir.exists():
-            answer = QMessageBox.warning(self, "khartes", "The project directory %s already exists.\nDo you want to overwrite it?"%idir, QMessageBox.Ok|QMessageBox.Cancel, QMessageBox.Ok)
+            answer = QMessageBox.warning(self, "Save project as...", "The project directory %s already exists.\nDo you want to overwrite it?"%idir, QMessageBox.Ok|QMessageBox.Cancel, QMessageBox.Ok)
             if answer != QMessageBox.Ok:
                 print("Save as cancelled by user")
                 return
@@ -572,7 +572,12 @@ class MainWindow(QMainWindow):
         new_prj = Project.create(idir)
         if not new_prj.valid:
             err = new_prj.error
-            print("Failed to create project to save to: %s", err)
+            print("Failed to create project to save to: %s"%err)
+            msg = QMessageBox()
+            msg.setWindowTitle("Save project as...")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("'Save as' failed: %s"%err)
+            msg.exec()
             return
 
         self.setWindowTitle("%s - %s"%(MainWindow.appname, Path(idir).name))
