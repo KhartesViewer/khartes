@@ -29,8 +29,10 @@ class ProjectView:
 
         self.cur_volume = None
         self.cur_volume_view = None
-        self.cur_fragment = None
-        self.cur_fragment_view = None
+        # self.cur_fragment = None
+        # self.cur_fragment_view = None
+        self.nearby_node_index = -1
+        self.nearby_node_fv = None
         project.project_views.append(self)
         self.settings = {}
         self.settings['fragment'] = {}
@@ -69,8 +71,8 @@ class ProjectView:
 
         info = {}
         prj = {}
-        if self.cur_fragment is not None:
-            prj['cur_fragment'] = self.cur_fragment.name
+        # if self.cur_fragment is not None:
+        #     prj['cur_fragment'] = self.cur_fragment.name
         if self.cur_volume is not None:
             prj['cur_volume'] = self.cur_volume.name
         info['project'] = prj
@@ -183,7 +185,8 @@ class ProjectView:
                 cfname = pinfo['cur_fragment']
                 for frag in pv.fragments.keys():
                     if frag.name == cfname:
-                        pv.setCurrentFragment(frag)
+                        # pv.setCurrentFragment(frag)
+                        pv.fragments[frag].active = True
                         break
             '''
             if 'active_fragments' in pinfo:
@@ -260,7 +263,7 @@ class ProjectView:
         # save direction in volume view
 
         # will unset cur_fragment if direction is not compatible
-        self.setCurrentFragment(self.cur_fragment)
+        # self.setCurrentFragment(self.cur_fragment)
 
     def setDirection(self, volume, direction):
         if volume == self.cur_volume:
@@ -276,8 +279,9 @@ class ProjectView:
         self.cur_volume_view.setDirection(direction)
         for fv in self.fragments.values():
             fv.setVolumeViewDirection(direction)
-        self.setCurrentFragment(None)
+        # self.setCurrentFragment(None)
 
+    '''
     def setCurrentFragment(self, fragment):
         self.cur_fragment = fragment
         if fragment is None:
@@ -291,10 +295,30 @@ class ProjectView:
             else:
                 # print("%s set as cur fragment"%fv.fragment.name)
                 self.cur_fragment_view = fv
+    '''
 
     def clearActiveFragmentViews(self):
         for fv in self.fragments.values():
             fv.active = False
+
+    def mainActiveFragmentView(self, unaligned_ok=False):
+        last = None
+        for fv in self.fragments.values():
+            if fv.activeAndAligned():
+                last = fv
+            elif fv.active and unaligned_ok:
+                last = fv
+        return last
+
+    def activeFragmentViews(self, unaligned_ok=False):
+        fvs = []
+        for fv in self.fragments.values():
+            if fv.activeAndAligned():
+                fvs.append(fv)
+            elif fv.active and unaligned_ok:
+                fvs.append(fv)
+        return fvs
+
 
     '''
     def setActiveFragmentView(self, fv, unique=False):

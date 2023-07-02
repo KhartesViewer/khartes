@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import QApplication
 
 from main_window import MainWindow
 from volume import Volume
+from utils import Utils
 from fragment import Fragment
 from project import Project
 # from utils import Utils
@@ -138,6 +139,12 @@ testCreateVolumes(new_prj)
 # prj = testReadProject()
 
 exit()
+'''
+
+'''
+for word in ["frag", "frag1", "frag23", "45"]:
+    for inc in range(1,3):
+        print(word, inc, Utils.getNextName(word, inc))
 '''
 
 app = QApplication(sys.argv)

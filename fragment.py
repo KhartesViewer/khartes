@@ -1,5 +1,6 @@
 import json
 import time
+import math
 import numpy as np
 from scipy.spatial import Delaunay
 from scipy.spatial.qhull import QhullError
@@ -10,6 +11,7 @@ from scipy.interpolate import (
         )
 from scipy.interpolate import CubicSpline
 from utils import Utils
+from volume import Volume
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
@@ -122,9 +124,10 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         fragments = self.project_view.fragments
         fragment = list(fragments.keys())[row]
         fragment_view = fragments[fragment]
-        selected = (self.project_view.cur_fragment == fragment)
+        # selected = (self.project_view.cur_fragment == fragment)
         if column == 0:
-            if selected:
+            # if selected:
+            if fragment_view.active:
                 return Qt.Checked
             else:
                 return Qt.Unchecked
@@ -144,8 +147,9 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         row = index.row()
         fragments = self.project_view.fragments
         fragment = list(fragments.keys())[row]
-        # fragment_view = fragments[fragment]
-        if self.project_view.cur_fragment == fragment:
+        fragment_view = fragments[fragment]
+        # if self.project_view.cur_fragment == fragment:
+        if self.project_view.mainActiveFragmentView() == fragment_view:
             # return QtGui.QColor('lightgray')
             return QtGui.QColor('beige')
 
@@ -155,7 +159,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         fragments = self.project_view.fragments
         fragment = list(fragments.keys())[row]
         fragment_view = fragments[fragment]
-        selected = (self.project_view.cur_fragment == fragment)
+        # selected = (self.project_view.cur_fragment == fragment)
         # if column == 0:
         #     if selected:
         #         return Qt.Checked
@@ -184,13 +188,22 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         #     return False
         if role == Qt.CheckStateRole and column == 0:
             # print("check", row, value)
+            fragments = self.project_view.fragments
+            fragment = list(fragments.keys())[row]
+            fragment_view = fragments[fragment]
+            '''
             if value != Qt.Checked:
                 self.main_window.setCurrentFragment(None)
             else:
-                fragments = self.project_view.fragments
-                fragment = list(fragments.keys())[row]
-                fragment_view = fragments[fragment]
                 self.main_window.setCurrentFragment(fragment)
+            '''
+            exclusive = True
+            # print(self.main_window.app.keyboardModifiers())
+            if ((self.main_window.app.keyboardModifiers() & Qt.ControlModifier) 
+               or 
+               len(self.main_window.project_view.activeFragmentViews()) > 1):
+                exclusive = False
+            self.main_window.setFragmentActive(fragment, value==Qt.Checked, exclusive)
             return True
         elif role == Qt.CheckStateRole and column == 1:
             # print(row, value)
@@ -592,6 +605,76 @@ class Fragment:
 
         return ngijks
 
+    class ExportMesh:
+        def __init__(self, igpoints, infill, frag):
+            gpoints = np.copy(igpoints)
+            fname = frag.name
+            self.err = ""
+            self.frag = frag
+            print(fname,"gpoints before", len(gpoints))
+            newgps = frag.createInfillPoints(infill)
+            gpoints = np.append(gpoints, newgps, axis=0)
+            print(fname,"gpoints after", len(gpoints))
+            tgps = Volume.globalIjksToTransposedGlobalIjks(gpoints, frag.direction)
+            try:
+                # triangulate the new gpoints
+                tri = Delaunay(tgps[:,0:2])
+            except QhullError as err:
+                self.err = "%s triangulation error: %s"%(fname,err)
+                self.err = self.err.splitlines()[0]
+                print(self.err)
+
+            bads = frag.badBorderTrgls(tri, frag.badTrglsByNormal(tri, tgps))
+            badlist = bads.tolist()
+            trgs = []
+            for i,trg in enumerate(tri.simplices):
+                if i in badlist:
+                    continue
+                trgs.append(trg)
+            self.trgs = trgs
+            print("all",len(tri.simplices),"good",len(trgs))
+            self.vrts = gpoints
+
+    # class function
+    def saveListAsObjMesh(frags, filename, infill):
+        print("slaom", len(frags), filename, infill)
+        err = ""
+
+        ems = []
+        for frag in frags:
+            em = Fragment.ExportMesh(frag.gpoints, infill, frag)
+            if em.err != "":
+                err += em.err + '\n'
+                continue
+            ems.append(em)
+
+        if len(ems) == 0:
+            return err
+
+        try:
+            of = filename.open("w")
+        except Exception as e:
+            err = "Could not open %s: %s"%(str(filename), e)
+            print(err)
+            return err
+
+        print("# khartes .obj file", file=of)
+        print("#", file=of)
+        for em in ems:
+            print("# fragment", em.frag.name, file=of)
+            for vrt in em.vrts:
+                print("v %d %d %d"%(vrt[0],vrt[1],vrt[2]), file=of)
+
+        i0 = 1
+        for em in ems:
+            print("# fragment", em.frag.name, file=of)
+            for trg in em.trgs:
+                print("f %d %d %d"%(trg[0]+i0,trg[1]+i0,trg[2]+i0), 
+                        file=of)
+            i0 += len(em.vrts)
+
+        return err
+
     # return empty string for success, non-empty error string on error
     def saveAsObjMesh(self, filename, infill):
         print("saom", filename, infill)
@@ -674,6 +757,15 @@ class FragmentView:
         self.cur_volume_view = vol_view
         if vol_view is not None:
             self.setLocalPoints(False)
+
+    def activeAndAligned(self):
+        if not self.active:
+            return False
+        if self.cur_volume_view is None:
+            return False
+        if self.cur_volume_view.direction != self.fragment.direction:
+            return False
+        return True
 
     # direction is not used here, but this notifies fragment view
     # to recompute things

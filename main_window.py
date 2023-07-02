@@ -366,8 +366,13 @@ class MainWindow(QMainWindow):
         for frag in self.project_view.fragments.keys():
             name = frag.name
             names.add(name)
+        stem = "frag"
+        mfv = self.project_view.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is not None:
+            stem = mfv.fragment.name
         for i in range(1,1000):
-            name = "frag%d"%i
+            # name = "%s%d"%(stem,i)
+            name = Utils.nextName(stem, i)
             if name not in names:
                 break
         # print("color",color)
@@ -381,13 +386,19 @@ class MainWindow(QMainWindow):
         # self.project_view.addFragmentView(frag)
         self.setFragments()
         # self.project_view.setCurrentFragment(frag)
-        self.setCurrentFragment(frag)
+        # self.setCurrentFragment(frag)
+        fv = self.project_view.fragments[frag]
+        fv.active = True
         # need to make sure new fragment is added to table
-        # before calling scrollToEnd
+        # before calling scrollToRow
         self.app.processEvents()
-        self.fragments_table.model().scrollToEnd()
+        index = self.project_view.project.fragments.index(frag)
+        self.fragments_table.model().scrollToRow(index)
+        # self.fragments_table.model().scrollToEnd()
 
     def renameFragment(self, frag, name):
+        if frag.name == name:
+            return
         self.fragments_table.model().beginResetModel()
         frag.name = name
         proj = self.project_view.project
@@ -396,9 +407,11 @@ class MainWindow(QMainWindow):
         self.app.processEvents()
         index = proj.fragments.index(frag)
         self.fragments_table.model().scrollToRow(index)
+        self.drawSlices()
 
     def addPointToCurrentFragment(self, tijk):
-        cur_frag_view = self.project_view.cur_fragment_view
+        # cur_frag_view = self.project_view.cur_fragment_view
+        cur_frag_view = self.project_view.mainActiveFragmentView()
         if cur_frag_view is None:
             print("no current fragment view set")
             return
@@ -686,7 +699,12 @@ class MainWindow(QMainWindow):
         if self.project_view is None or self.project_view.project is None:
             print("No project currently loaded")
             return
-        if self.project_view.cur_fragment is None:
+        # if self.project_view.cur_fragment is None:
+        frags = []
+        for frag, fv in self.project_view.fragments.items():
+            if fv.active:
+                frags.append(frag)
+        if len(frags) == 0:
             print("No active fragment")
             return
         sdir = self.settingsGetDirectory("mesh_")
@@ -708,7 +726,11 @@ class MainWindow(QMainWindow):
         name = pname.name
 
         # TODO: allow the user to set the infill
-        err = self.project_view.cur_fragment.saveAsObjMesh(pname, 16)
+        # TODO: save all active fragments
+        # err = self.project_view.cur_fragment.saveAsObjMesh(pname, 16)
+        # err = self.project_view.mainActiveFragment().saveAsObjMesh(pname, 16)
+        err = Fragment.saveListAsObjMesh(frags, pname, 16)
+
         if err != "":
             msg = QMessageBox()
             msg.setWindowTitle("Save fragment as mesh")
@@ -776,6 +798,9 @@ class MainWindow(QMainWindow):
             if len(pv.volumes) > 0:
                 cur_volume = list(spv.keys())[0]
         self.setVolume(cur_volume)
+        # intentionally called a second time to use
+        # cur_volume information
+        self.setProjectView(pv)
         path = Path(idir)
         path = path.absolute()
         parent = path.parent
@@ -935,6 +960,7 @@ class MainWindow(QMainWindow):
         # self.surface.setFragmentViews(fragment_views)
         self.drawSlices()
 
+    '''
     def setCurrentFragment(self, cur_fragment):
         self.fragments_table.model().beginResetModel()
         self.project_view.setCurrentFragment(cur_fragment)
@@ -946,6 +972,7 @@ class MainWindow(QMainWindow):
         # self.inline.setCurrentFragmentView(cur_fragment_view)
         # self.surface.setCurrentFragmentView(cur_fragment_view)
         self.drawSlices()
+    '''
 
     def setFragmentVisibility(self, fragment, visible):
         fragment_view = self.project_view.fragments[fragment]
@@ -954,6 +981,19 @@ class MainWindow(QMainWindow):
         self.fragments_table.model().beginResetModel()
         fragment_view.visible = visible
         self.fragments_table.model().endResetModel()
+        self.drawSlices()
+
+    def setFragmentActive(self, fragment, active, exclusive=False):
+        # print("sfa", fragment.name, active, exclusive)
+        fragment_view = self.project_view.fragments[fragment]
+        if fragment_view.active == active:
+            return
+        self.fragments_table.model().beginResetModel()
+        if exclusive:
+            self.project_view.clearActiveFragmentViews()
+        fragment_view.active = active
+        self.fragments_table.model().endResetModel()
+        self.export_mesh_action.setEnabled(self.project_view.mainActiveFragmentView() is not None)
         self.drawSlices()
 
     def setFragmentColor(self, fragment, color):
@@ -987,7 +1027,7 @@ class MainWindow(QMainWindow):
         self.save_project_as_action.setEnabled(True)
         self.import_nrrd_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
-        self.export_mesh_action.setEnabled(project_view.cur_fragment is not None)
+        self.export_mesh_action.setEnabled(project_view.mainActiveFragmentView() is not None)
 
     def setProject(self, project):
         project_view = ProjectView(project)
