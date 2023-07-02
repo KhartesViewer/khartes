@@ -22,13 +22,6 @@ be found in the file demo1_script.txt.
 
 [![Watch the video](https://i.vimeocdn.com/video/1670955201-81a75343b71db9c84b6b4275e3447c943d2128ab8b921a822051046e83db0c96-d_640)](https://vimeo.com/827515595)
 
-## Vacation announcement
-
-I will be unavailable to work on khartes from the end of May until the
-end of June.  I will try to monitor the Vesuvius Scrolls Discord server,
-but I cannot guarantee that I will be able to fix bugs or answer questions
-during that time.  However, my availability in July looks good!
-
 ## Installation
 
 You should be able to run simply by
