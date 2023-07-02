@@ -19,18 +19,14 @@ class ProjectView:
 
         self.volumes = {}
         for volume in project.volumes:
-            # self.volumes[volume] = VolumeView(self, volume)
             self.addVolumeView(volume)
 
         self.fragments = {}
         for fragment in project.fragments:
-            # self.fragments[fragment] = FragmentView(self, fragment)
             self.addFragmentView(fragment)
 
         self.cur_volume = None
         self.cur_volume_view = None
-        # self.cur_fragment = None
-        # self.cur_fragment_view = None
         self.nearby_node_index = -1
         self.nearby_node_fv = None
         project.project_views.append(self)
@@ -71,8 +67,6 @@ class ProjectView:
 
         info = {}
         prj = {}
-        # if self.cur_fragment is not None:
-        #     prj['cur_fragment'] = self.cur_fragment.name
         if self.cur_volume is not None:
             prj['cur_volume'] = self.cur_volume.name
         info['project'] = prj
@@ -155,9 +149,6 @@ class ProjectView:
             for fv in pv.fragments.values():
                 name = fv.fragment.name
                 created = fv.fragment.created
-                # if name not in finfos:
-                #     continue
-                # finfo = finfos[name]
                 finfo = None
                 if name in finfos:
                     finfo = finfos[name]
@@ -185,17 +176,8 @@ class ProjectView:
                 cfname = pinfo['cur_fragment']
                 for frag in pv.fragments.keys():
                     if frag.name == cfname:
-                        # pv.setCurrentFragment(frag)
                         pv.fragments[frag].active = True
                         break
-            '''
-            if 'active_fragments' in pinfo:
-                afs = pinfo['active_fragments']
-                for af in afs:
-                    fv = pv.findFragmentViewById(af)
-                    if fv is not None:
-                        pv.setActiveFragmentView(fv)
-            '''
 
         return pv
 
@@ -208,62 +190,18 @@ class ProjectView:
             fv.setLocalPoints(True)
 
 
-    '''
-    def update(self):
-        # self.volumes = {}
-        cur_volumess = set()
-        for volume in project.volumes:
-            cur_volumes.add(volume)
-            if volume not in self.volumes:
-                self.volumes[volume] = VolumeView(self, volume)
-            # vv = self.volumes[volume]
-
-        nv = {vol, self.volumes[vol] for vol in cur_volumes}
-        self.volumes = nv
-
-        self.fragments = {}
-        cur_fragments = set()
-        for fragment in project.fragments:
-            cur_fragments.add(fragment)
-            if fragment not in self.fragments:
-                self.fragments[fragment] = FragmentView(self, fragment)
-            fv = self.fragments[fragment]
-
-        nf = {frag, self.fragments[frag] for frag in cur_fragments}
-        self.fragments = nf
-    '''
-
-
     def setCurrentVolume(self, volume):
-        # cur_frag = None
-        # if self.cur_volume is not None:
-        #     cur_frag = self.cur_fragment
         if self.cur_volume != volume:
             if self.cur_volume is not None:
                 self.cur_volume.unloadData(self)
             if volume is not None:
                 volume.loadData(self)
-        # if self.volume is not None and self.volume != volume:
-            # vol = self.volume
-            # unloadData checks if any ProjectViews still refer
-            # to the volume, so need to remove reference before
-            # calling unloadData
-            # self.volume = None
-            # vol.unloadData()
-        # if volume is not None and self.volume != volume:
-        #     volume.loadData()
         self.cur_volume = volume
         if volume is None:
             self.cur_volume_view = None
         else:
             self.cur_volume_view = self.volumes[volume]
             self.cur_volume_view.dataLoaded()
-        # self.direction = direction
-        # make sure volume is in volumes
-        # save direction in volume view
-
-        # will unset cur_fragment if direction is not compatible
-        # self.setCurrentFragment(self.cur_fragment)
 
     def setDirection(self, volume, direction):
         if volume == self.cur_volume:
@@ -279,23 +217,6 @@ class ProjectView:
         self.cur_volume_view.setDirection(direction)
         for fv in self.fragments.values():
             fv.setVolumeViewDirection(direction)
-        # self.setCurrentFragment(None)
-
-    '''
-    def setCurrentFragment(self, fragment):
-        self.cur_fragment = fragment
-        if fragment is None:
-            self.cur_fragment_view = None
-        else:
-            fv = self.fragments[fragment]
-            cvv = self.cur_volume_view
-            if cvv is None or cvv.direction != fv.fragment.direction:
-                print("cannot set current fragment")
-                self.cur_fragment_view = None
-            else:
-                # print("%s set as cur fragment"%fv.fragment.name)
-                self.cur_fragment_view = fv
-    '''
 
     def clearActiveFragmentViews(self):
         for fv in self.fragments.values():
@@ -320,25 +241,6 @@ class ProjectView:
         return fvs
 
 
-    '''
-    def setActiveFragmentView(self, fv, unique=False):
-        if unique:
-            for fv in self.fragments.values():
-                fv.active = False
-        if fv is None:
-            return
-        cvv = self.cur_volume_view
-        if cvv is None or cvv.direction != fv.fragment.direction:
-            print("cannot set current fragment view")
-        else:
-            fv.active = True
-
-    def unsetActiveFragmentView(self, fv):
-        if fv is None:
-            return
-        fv.active = False
-    '''
-
 class Project:
 
     suffix = ".khprj"
@@ -352,13 +254,6 @@ class Project:
         self.project_views = []
         self.valid = False
         self.error = "no error message set"
-
-    '''
-    def timestamp():
-        t = time.gmtime()
-        txt = time.strftime("%Y-%m-%dT%H:%M:%SZ", t)
-        return txt
-    '''
 
     def createErrorProject(err):
         prj = Project()
@@ -433,9 +328,6 @@ class Project:
 
     def save(self):
         print("called project save")
-        # for frag in self.fragments:
-        #     print("saving frag", frag.name)
-        #     frag.save(self.fragments_path)
         files = list(self.fragments_path.glob("*.json"))
         # print("glob files", files)
         for file in files:

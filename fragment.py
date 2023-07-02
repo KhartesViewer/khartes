@@ -46,8 +46,6 @@ class FragmentsModel(QtCore.QAbstractTableModel):
     
     def flags(self, index):
         col = index.column()
-        # if col in (0,1,2):
-        #     return Qt.ItemIsEditable|Qt.ItemIsEnabled
         oflags = super(FragmentsModel, self).flags(index)
         if col == 0:
             nflags = Qt.ItemNeverHasChildren
@@ -68,7 +66,6 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             return nflags
         elif col== 2:
             nflags = Qt.ItemNeverHasChildren
-            # nflags |= Qt.ItemIsUserCheckable
             nflags |= Qt.ItemIsEnabled
             nflags |= Qt.ItemIsEditable
             return nflags
@@ -124,9 +121,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         fragments = self.project_view.fragments
         fragment = list(fragments.keys())[row]
         fragment_view = fragments[fragment]
-        # selected = (self.project_view.cur_fragment == fragment)
         if column == 0:
-            # if selected:
             if fragment_view.active:
                 return Qt.Checked
             else:
@@ -138,9 +133,6 @@ class FragmentsModel(QtCore.QAbstractTableModel):
                 return Qt.Unchecked
 
     def dataAlignmentRole(self, index, role):
-        # column = index.column()
-        # if column >= 4:
-        #     return Qt.AlignVCenter + Qt.AlignRight
         return Qt.AlignVCenter + Qt.AlignRight
 
     def dataBackgroundRole(self, index, role):
@@ -148,9 +140,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         fragments = self.project_view.fragments
         fragment = list(fragments.keys())[row]
         fragment_view = fragments[fragment]
-        # if self.project_view.cur_fragment == fragment:
         if self.project_view.mainActiveFragmentView() == fragment_view:
-            # return QtGui.QColor('lightgray')
             return QtGui.QColor('beige')
 
     def dataDisplayRole(self, index, role):
@@ -159,20 +149,12 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         fragments = self.project_view.fragments
         fragment = list(fragments.keys())[row]
         fragment_view = fragments[fragment]
-        # selected = (self.project_view.cur_fragment == fragment)
-        # if column == 0:
-        #     if selected:
-        #         return Qt.Checked
-        #     else:
-        #         return Qt.Unchecked
-        #     # return selected
         if column == 2:
             return fragment.name
         elif column == 3:
             # print("ddr", row, volume_view.color.name())
             return fragment.color.name()
         elif column == 4:
-            # return "%s"%(('X','Y')[volume_view.direction])
             # print("data display role", row, volume_view.direction)
             return ('X','Y')[fragment.direction]
         elif column == 5:
@@ -184,19 +166,11 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         row = index.row()
         column = index.column()
         # print("setdata", row, column, value, role)
-        # if role != Qt.EditRole:
-        #     return False
         if role == Qt.CheckStateRole and column == 0:
             # print("check", row, value)
             fragments = self.project_view.fragments
             fragment = list(fragments.keys())[row]
             fragment_view = fragments[fragment]
-            '''
-            if value != Qt.Checked:
-                self.main_window.setCurrentFragment(None)
-            else:
-                self.main_window.setCurrentFragment(fragment)
-            '''
             exclusive = True
             # print(self.main_window.app.keyboardModifiers())
             if ((self.main_window.app.keyboardModifiers() & Qt.ControlModifier) 
@@ -226,9 +200,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             # print("sd color", value)
             fragments = self.project_view.fragments
             fragment = list(fragments.keys())[row]
-            # fragment_view = fragments[fragment]
             # print("setdata", row, color.name())
-            # fragment.setColor(color)
             self.main_window.setFragmentColor(fragment, value)
 
         return False
@@ -244,13 +216,6 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             return
         self.scrollToRow(row)
 
-
-    '''
-    def setProjectView(pv):
-        self.beginResetModel()
-        project_view = pv
-        self.endResetModel()
-    '''
 
 # note that FragmentView is defined after Fragment
 class Fragment:
@@ -283,16 +248,6 @@ class Fragment:
 
     # TODO: need "created" and "modified" timestamps
     def save(self, path):
-        '''
-        info = {}
-        info['name'] = self.name
-        info['direction'] = self.direction
-        info['color'] = self.color.name()
-        info['gpoints'] = self.gpoints.tolist()
-        if self.params.get('echo', '') != '':
-            info['gpoints'] = []
-        info['params'] = self.params
-        '''
         info = self.toDict()
         # print(info)
         info_txt = json.dumps(info, indent=4)
@@ -373,30 +328,6 @@ class Fragment:
 
         frags = []
         for info in infos:
-            '''
-            for attr in ['name', 'direction', 'gpoints']:
-                if attr not in info:
-                    err = "file %s missing parameter %s"%(json_file, attr)
-                    print(err)
-                    return [Fragment.createErrorFragment(err)]
-
-            if 'color' in info:
-                color = QColor(info['color'])
-            else:
-                color = Utils.getNextColor()
-            name = info['name']
-            direction = info['direction']
-            gpoints = info['gpoints']
-            frag = Fragment(name, direction)
-            frag.setColor(color)
-            frag.valid = True
-            if len(gpoints) > 0:
-                frag.gpoints = np.array(gpoints, dtype=np.int32)
-            if 'params' in info:
-                frag.params = info['params']
-            else:
-                frag.params = {}
-            '''
             frag = Fragment.fragFromDict(info)
             if not frag.valid:
                 return [frag]
@@ -461,12 +392,9 @@ class Fragment:
         # print("bads", bads)
         badbool = np.zeros((len(tri.simplices),), dtype=np.bool8)
         badbool[bads] = True
-        # badtrgls = tri.simplices[bads]
-        # badneighbors = tri.neighbors[bads]
         borderlist = np.array((-1,), dtype=np.int32)
         lbl = len(borderlist)
         while True:
-            # = np.where(np.isin(tri.neighbors, borderlist).any(axis=1))[0]
             borderbool = np.isin(tri.neighbors, borderlist).any(axis=1)
             badbordertrgls = np.where(np.logical_and(borderbool, badbool))[0]
             # print("bad on border", len(badbordertrgls))
@@ -675,6 +603,7 @@ class Fragment:
 
         return err
 
+    '''
     # return empty string for success, non-empty error string on error
     def saveAsObjMesh(self, filename, infill):
         print("saom", filename, infill)
@@ -719,6 +648,7 @@ class Fragment:
             # print("f %d %d %d"%(trg[1]+1,trg[0]+1,trg[2]+1), file=of)
 
         return err
+    '''
 
 
 class FragmentView:
@@ -997,7 +927,6 @@ class FragmentView:
             self.clearZsliceCache()
         self.osurf = None
         if self.tri is not None:
-            # interp = LinearNDInterpolator(self.tri, self.lpoints[:,2])
             inttype = ""
             inttype = self.fragment.params.get('interpolation', '')
             if inttype == "linear":
@@ -1024,7 +953,6 @@ class FragmentView:
                 # print("shapes", self.zsurf.shape, local_zsurf.shape)
                 self.zsurf[miny:maxy,minx:maxx] = local_zsurf
                 self.clearZsliceCache()
-            # pts = pts.transpose()
             timer.time("zsurf")
             overlay = self.fragment.params.get('overlay', '')
             if overlay == "diff":
@@ -1063,25 +991,14 @@ class FragmentView:
                 # print("dmax shape", dmax.shape)
                 dmax = np.insert(dmax, 0, 0.)
                 # print("dmax shape", dmax.shape)
-                # d01 = (v0*v1).sum(1)
-                # d02 = (v0*v2).sum(1)
-                # d12 = (v1*v2).sum(1)
                 simpar = self.tri.find_simplex(pts)
                 # print("simpar shape", simpar.shape)
                 maxes = dmax[simpar+1]
                 # print("maxes shape", maxes.shape)
 
-                # self.osurf = 1.0*self.tri.find_simplex(pts)
-                # self.osurf = 1.0*simpar
-                # self.osurf[self.osurf==-1] = np.nan
                 maxes[maxes == -1] = np.nan
                 self.osurf = maxes*maxes*maxes*maxes
                 self.osurf -= .5
-                # amin = np.nanmin(self.osurf)
-                # amax = np.nanmax(self.osurf)
-                # print(amin, amax)
-                # self.osurf[amax-self.osurf<5] *= 2.
-                # self.osurf[self.osurf-amin<5] *= 2.
                 timer.time("simplex")
                 # TODO for testing only
                 # self.osurf = None
@@ -1130,10 +1047,6 @@ class FragmentView:
             ssi = np.indices((ni, nj))
         else:
             minx, miny, maxx, maxy = changed_rect
-            # minx = int(max(minx, 0))
-            # miny = int(max(miny, 0))
-            # maxx = int(min(maxx+1, ni))
-            # maxy = int(min(maxy+1, nj))
             nx = maxx-minx
             ny = maxy-miny
             ssi = np.indices((nx, ny))
@@ -1168,7 +1081,6 @@ class FragmentView:
             self.ssurf = np.zeros((nj,ni), dtype=np.uint16)
         else:
             self.ssurf[miny:maxy,minx:maxx] = np.zeros((maxy-miny,maxx-minx), dtype=np.uint16)
-        # self.ssurf = np.zeros((nj,ni), dtype=np.uint16)
         # print ("ssurf shape", self.ssurf.shape, self.ssurf.dtype)
         # print ("trdata shape", self.cur_volume_view.trdata.shape, self.cur_volume_view.trdata.dtype)
         ## print("ssurf",self.ssurf.shape)
@@ -1176,19 +1088,6 @@ class FragmentView:
         # recall that index order is k,j,i
         ixyzs = ixyzs[:,ixyzs[0,:]<ftrdata.shape[0]]
         ixyzs = ixyzs[:,ixyzs[0,:]>=0]
-        '''
-        if changed_rect is not None:
-            minx, miny, maxx, maxy = changed_rect
-            print("cr", changed_rect)
-            print("ixyzs before",ixyzs.shape)
-            print(np.min(ixyzs[2,:]), np.max(ixyzs[2,:]), np.min(ixyzs[1,:]),np.max(ixyzs[1,:]))
-            ixyzs = ixyzs[:,ixyzs[2,:]>=minx]
-            ixyzs = ixyzs[:,ixyzs[2,:]<=maxx]
-            ixyzs = ixyzs[:,ixyzs[1,:]>=miny]
-            ixyzs = ixyzs[:,ixyzs[1,:]<=maxy]
-            print("ixyzs after",ixyzs.shape)
-            print(np.min(ixyzs[2,:]), np.max(ixyzs[2,:]), np.min(ixyzs[1,:]),np.max(ixyzs[1,:]))
-        '''
         self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = ftrdata[(ixyzs[0,:], ixyzs[1,:], ixyzs[2,:])]
         timer.time("ssurf")
 
