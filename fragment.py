@@ -564,9 +564,47 @@ class Fragment:
             self.vrts = gpoints
 
     # class function
-    def saveListAsObjMesh(frags, filename, infill):
+    # takes a list of FragmentView's as input
+    # texture is taken from current volume, which may not
+    # be full resolution
+    def saveListAsObjMesh(fvs, filename, infill):
+        frags = [fv.fragment for fv in fvs]
         print("slaom", len(frags), filename, infill)
         err = ""
+
+        rects = []
+
+        for fv in fvs:
+            frag = fv.fragment
+            if fv.zsurf is None or fv.ssurf is None:
+                print("Zsurf or ssurf missing for", frag.name)
+                continue
+            # True if not nan
+            b = ~np.isnan(fv.zsurf)
+            # True if row or col has at least one not-nan
+            b0 = np.any(b, axis=0)
+            b1 = np.any(b, axis=1)
+            b0t = b0.nonzero()[0]
+            b1t = b1.nonzero()[0]
+            # print(b.shape, b0.shape, len(b0t))
+            # print(frag.name, b0t)
+            # print(b.name, b1t)
+            if len(b0t) == 0:
+                b0min = -1
+                b0max = -1
+            else:
+                b0min = min(b0t)
+                b0max = max(b0t)
+            if len(b1t) == 0:
+                b1min = -1
+                b1max = -1
+            else:
+                b1min = min(b1t)
+                b1max = max(b1t)
+
+            # print(b.shape, b0.shape, len(b0t), len(b0min))
+            print(frag.name, b0min, b0max, b1min, b1max)
+
 
         ems = []
         for frag in frags:

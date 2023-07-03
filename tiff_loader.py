@@ -173,7 +173,10 @@ class TiffLoader(QMainWindow):
         self.nameedit = QLineEdit()
         self.nameedit.textEdited.connect(self.onNameEdited)
         hbox.addWidget(self.nameedit)
+        self.vcrender = QCheckBox("TIFFs are from vc_render")
+        self.vcrender.setCheckState(Qt.Unchecked)
         hbox.addStretch()
+        hbox.addWidget(self.vcrender)
         vbox.addLayout(hbox)
         hbox = QHBoxLayout()
         self.gobutton = QPushButton("Create")
@@ -482,8 +485,9 @@ class TiffLoader(QMainWindow):
         volume_name = self.name
         filenames = self.filepathdict
         callback = self.readerCallback
+        vcrender = self.vcrender.isChecked()
 
-        new_volume = Volume.createFromTiffs(project, tiff_directory, volume_name, ranges, "", filenames, callback)
+        new_volume = Volume.createFromTiffs(project, tiff_directory, volume_name, ranges, "", filenames, callback, vcrender)
 
         self.reading = False
         self.cancel = False

@@ -611,9 +611,11 @@ class MainWindow(QMainWindow):
             print("No project currently loaded")
             return
         frags = []
+        fvs = []
         for frag, fv in self.project_view.fragments.items():
             if fv.active:
                 frags.append(frag)
+                fvs.append(fv)
         if len(frags) == 0:
             print("No active fragment")
             return
@@ -637,7 +639,8 @@ class MainWindow(QMainWindow):
 
         # TODO: allow the user to set the infill
         # TODO: save all active fragments
-        err = Fragment.saveListAsObjMesh(frags, pname, 16)
+        # err = Fragment.saveListAsObjMesh(frags, pname, 16)
+        err = Fragment.saveListAsObjMesh(fvs, pname, 16)
 
         if err != "":
             msg = QMessageBox()
@@ -897,7 +900,7 @@ class MainWindow(QMainWindow):
         self.setProjectView(project_view)
         self.setVolume(None)
         self.setFragments()
-        self.setCurrentFragment(None)
+        # self.setCurrentFragment(None)
         self.drawSlices()
 
     def resizeEvent(self, e):
