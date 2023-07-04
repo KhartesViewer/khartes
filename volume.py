@@ -510,6 +510,7 @@ class Volume():
         self.valid = False
         self.error = "no error message set"
         self.active_project_views = set()
+        self.from_vc_render = False
 
     def createErrorVolume(err):
         vol = Volume()
@@ -678,6 +679,7 @@ class Volume():
                 "khartes_version": "1.0",
                 "khartes_created": timestamp,
                 "khartes_modified": timestamp,
+                "khartes_from_vc_render": from_vc_render,
                 # turns off the default gzip compression (scroll images
                 # don't compress well, so compression only slows down
                 # the I/O speed)
@@ -784,6 +786,7 @@ class Volume():
                 return Volume.createErrorVolume(err)
             created = data_header.get("khartes_created", "")
             modified = data_header.get("khartes_modified", "")
+            from_vc_render = data_header.get("khartes_from_vc_render", False)
         except Exception as e:
             err = "Failed to read nrrd file %s: %s"%(filename,e)
             print(err)
@@ -795,6 +798,7 @@ class Volume():
         volume.version = version
         volume.created = created
         volume.modified = modified
+        volume.from_vc_render = from_vc_render
         volume.valid = True
         volume.path = filename
         volume.name = filename.stem

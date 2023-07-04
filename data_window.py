@@ -287,11 +287,16 @@ class DataWindow(QLabel):
             return
         gijk = self.volume_view.transposedIjkToGlobalPosition(ijk)
         gi,gj,gk = gijk
+        vol = self.volume_view.volume
 
         labels = ["X", "Y", "Img"]
-        ranges = self.volume_view.volume.getGlobalRanges()
+        axes = (2,0,1)
+        if vol.from_vc_render:
+            labels = ["X", "Img", "Y"]
+            axes = (1,0,2)
+        ranges = vol.getGlobalRanges()
         stxt = ""
-        for i in (2,0,1):
+        for i in axes:
             g = gijk[i]
             dtxt = "%d"%g
             mn = ranges[i][0]
@@ -442,6 +447,8 @@ class DataWindow(QLabel):
     def sliceGlobalLabel(self):
         gaxis = self.volume_view.globalAxisFromTransposedAxis(self.axis)
         labels = ["X", "Y", "IMG"]
+        if self.volume_view.volume.from_vc_render:
+            labels = ["X", "IMG", "Y"]
         return labels[gaxis]
 
     def sliceGlobalPosition(self):
