@@ -2,6 +2,8 @@ import json
 import time
 import math
 import numpy as np
+import cv2
+import rectpack
 from scipy.spatial import Delaunay
 from scipy.spatial.qhull import QhullError
 from scipy.interpolate import (
@@ -533,16 +535,20 @@ class Fragment:
 
         return ngijks
 
-    class ExportMesh:
-        def __init__(self, igpoints, infill, frag):
-            gpoints = np.copy(igpoints)
+    class ExportFrag:
+        def __init__(self, fv, infill):
+            frag = fv.fragment
+            gpoints = frag.gpoints
             fname = frag.name
             self.err = ""
+            self.fv = fv
             self.frag = frag
+            self.has_ssurf = False
             print(fname,"gpoints before", len(gpoints))
             newgps = frag.createInfillPoints(infill)
             gpoints = np.append(gpoints, newgps, axis=0)
             print(fname,"gpoints after", len(gpoints))
+            self.vrts = gpoints
             tgps = Volume.globalIjksToTransposedGlobalIjks(gpoints, frag.direction)
             try:
                 # triangulate the new gpoints
@@ -551,6 +557,7 @@ class Fragment:
                 self.err = "%s triangulation error: %s"%(fname,err)
                 self.err = self.err.splitlines()[0]
                 print(self.err)
+                return
 
             bads = frag.badBorderTrgls(tri, frag.badTrglsByNormal(tri, tgps))
             badlist = bads.tolist()
@@ -561,7 +568,106 @@ class Fragment:
                 trgs.append(trg)
             self.trgs = trgs
             print("all",len(tri.simplices),"good",len(trgs))
-            self.vrts = gpoints
+
+            if fv.zsurf is not None and fv.ssurf is not None:
+                self.has_ssurf = True
+                self.data_rect = Fragment.ExportFrag.dataBounds(fv.zsurf)
+                self.shape = fv.zsurf.shape
+
+
+        # class function
+        # returns (x,y,w,h) of bounding box that contains
+        # all the data (data that is not NaN).  
+        # w,h = 0 if nothing found.
+        # Note that if non-NaN data is found, w and h will be at least 1.
+        def dataBounds(arr):
+            # True if not nan
+            b = ~np.isnan(arr)
+            # True if row or col has at least one not-nan
+            b0 = np.any(b, axis=0)
+            b1 = np.any(b, axis=1)
+            b0t = b0.nonzero()[0]
+            b1t = b1.nonzero()[0]
+            if len(b0t) == 0:
+                b0min = -1
+                b0max = 0
+            else:
+                b0min = min(b0t)
+                b0max = max(b0t)
+            if len(b1t) == 0:
+                b1min = -1
+                b1max = 0
+            else:
+                b1min = min(b1t)
+                b1max = max(b1t)
+    
+            x = b0min
+            w = b0max-b0min+1
+            y = b1min
+            h = b1max-b1min+1
+            # print(b.shape, b0.shape, len(b0t), len(b0min))
+            # print(frag.name, b0min, b0max, b1min, b1max)
+            return x,y,w,h
+
+        def addTexture(self, arr):
+            if not self.has_ssurf:
+                return
+            xt,yt = self.tex_orig
+            x0,y0 = self.data_rect[:2]
+            w,h = self.data_rect[2:]
+            x1 = x0+w
+            y1 = y0+h
+            arr[yt:yt+h,xt:xt+w] = self.fv.ssurf[y0:y1,x0:x1]
+
+        # class function
+        def pack(efs):
+            packer = rectpack.newPacker(
+                    rotation=False, pack_algo=rectpack.MaxRectsBlsf)
+            pad = 1
+            incount = 0
+            for ef in efs:
+                if not ef.has_ssurf:
+                    continue
+                dr = ef.data_rect
+                packer.add_rect(dr[2]+2*pad, dr[3]+2*pad)
+                incount += 1
+            ibin = (20000, 20000)
+            packer.add_bin(*ibin)
+            packer.pack()
+            obin = packer[0]
+            if incount != len(obin):
+                err = "Have %d valid efs but only %d rects in obin"%(incount,len(obin))
+                print(err)
+                return
+
+            maxx = 0
+            maxy = 0
+            used = set()
+            for rect in obin:
+                (x, y, w, h) = rect.x, rect.y, rect.width, rect.height
+                found = False
+                for ef in efs:
+                    if not ef.has_ssurf:
+                        continue
+                    if ef in used:
+                        continue
+                    dr = ef.data_rect
+                    if w != dr[2]+2*pad or h != dr[3]+2*pad:
+                        continue
+                    ef.tex_orig = (x+pad,y+pad)
+                    used.add(ef)
+                    found = True
+                if not found:
+                    self.err = "Could not find rect %d %d %d %d in efs"%(x,y,w,d)
+                    print(err)
+                    return
+                mx = x+w
+                maxx = max(maxx, mx)
+                my = y+h
+                maxy = max(maxy, my)
+            return (maxx, maxy)
+            
+            
 
     # class function
     # takes a list of FragmentView's as input
@@ -574,48 +680,38 @@ class Fragment:
 
         rects = []
 
+        '''
+        # diagnostics only
         for fv in fvs:
             frag = fv.fragment
             if fv.zsurf is None or fv.ssurf is None:
                 print("Zsurf or ssurf missing for", frag.name)
                 continue
-            # True if not nan
-            b = ~np.isnan(fv.zsurf)
-            # True if row or col has at least one not-nan
-            b0 = np.any(b, axis=0)
-            b1 = np.any(b, axis=1)
-            b0t = b0.nonzero()[0]
-            b1t = b1.nonzero()[0]
-            # print(b.shape, b0.shape, len(b0t))
-            # print(frag.name, b0t)
-            # print(b.name, b1t)
-            if len(b0t) == 0:
-                b0min = -1
-                b0max = -1
-            else:
-                b0min = min(b0t)
-                b0max = max(b0t)
-            if len(b1t) == 0:
-                b1min = -1
-                b1max = -1
-            else:
-                b1min = min(b1t)
-                b1max = max(b1t)
-
-            # print(b.shape, b0.shape, len(b0t), len(b0min))
-            print(frag.name, b0min, b0max, b1min, b1max)
+            x,y,w,h = Fragment.ExportFrag.dataBounds(fv.zsurf)
+            print(frag.name, x, y, w, h)
+        '''
 
 
-        ems = []
-        for frag in frags:
-            em = Fragment.ExportMesh(frag.gpoints, infill, frag)
-            if em.err != "":
-                err += em.err + '\n'
-                continue
-            ems.append(em)
+        # TODO: what to do if ef has fragments but 
+        # no ssurf?  Probably should not append ef in that case
+        efs = []
+        for fv in fvs:
+            ef = Fragment.ExportFrag(fv, infill)
+            if ef.err != "":
+                print("Fragment",ef.frag.name,"error",ef.err)
+                # err += ef.err + '\n'
+                # continue
+            efs.append(ef)
 
-        if len(ems) == 0:
+        if len(efs) == 0:
+            err = "No exportable fragments"
+            print(err)
             return err
+
+        # TODO: will this prematurely return if ef has
+        # a fragment with no ssurf?
+        # if err != "":
+        #     return err
 
         try:
             of = filename.open("w")
@@ -624,20 +720,94 @@ class Fragment:
             print(err)
             return err
 
+        mfilename = filename.with_suffix(".mtl")
         print("# khartes .obj file", file=of)
         print("#", file=of)
-        for em in ems:
-            print("# fragment", em.frag.name, file=of)
-            for vrt in em.vrts:
+        print("mtllib %s"%mfilename.name, file=of)
+        print("# vertices", file=of)
+        for ef in efs:
+            print("# fragment", ef.frag.name, file=of)
+            for vrt in ef.vrts:
                 print("v %d %d %d"%(vrt[0],vrt[1],vrt[2]), file=of)
 
+        tex_rect = Fragment.ExportFrag.pack(efs)
+        if tex_rect is None:
+            err = "Could not pack textures (see console message)"
+            print(err)
+            return err
+
+
+        for ef in efs:
+            if not ef.has_ssurf:
+                continue
+            print("  ", ef.frag.name, ef.data_rect, ef.tex_orig)
+
+        print("texture size", tex_rect)
+        tw,th = tex_rect
+        tex_out = np.zeros((th,tw), dtype=np.uint16)
+        for ef in efs:
+            ef.addTexture(tex_out)
+
+        tfilename = filename.with_suffix(".tif")
+        cv2.imwrite(str(tfilename), tex_out)
+
+        # TODO: handle case where frag has no ssurf
+        # (because all vertices are in a line, for ex)
+
+        print("# texture vertices", file=of)
+        for ef in efs:
+            print("# fragment", ef.frag.name, file=of)
+            if not ef.has_ssurf:
+                for i in range(len(ef.vrts)):
+                    print("vt %f %f"%(0.,0.), file=of)
+                continue
+
+            x0, y0 = ef.tex_orig
+            dx, dy, dw, dh = ef.data_rect
+            # for vrt in ef.vrts:
+            frag = ef.frag
+            fv = ef.fv
+            # tgps = Volume.globalIjksToTransposedGlobalIjks(ef.vrts, frag.direction)
+            tgps = fv.cur_volume_view.volume.globalPositionsToTransposedIjks(ef.vrts, frag.direction)
+            for fpt in tgps:
+                # print("v %d %d %d"%(vrt[0],vrt[1],vrt[2]), file=of)
+                vx, vy = fpt[0:2]
+                tx = (vx+x0-dx)/(tw-1)
+                ty = (vy+y0-dy)/(th-1)
+                ty = 1.-ty
+                print("vt %f %f"%(tx, ty), file=of)
+
+        print("# trgls", file=of)
         i0 = 1
-        for em in ems:
-            print("# fragment", em.frag.name, file=of)
-            for trg in em.trgs:
-                print("f %d %d %d"%(trg[0]+i0,trg[1]+i0,trg[2]+i0), 
-                        file=of)
-            i0 += len(em.vrts)
+        for i,ef in enumerate(efs):
+            print("# fragment", ef.frag.name, file=of)
+            print("usemtl frag%d"%i, file=of)
+            if ef.has_ssurf:
+                for trg in ef.trgs:
+                    v0 = trg[0]+i0
+                    v1 = trg[1]+i0
+                    v2 = trg[2]+i0
+                    print("f %d/%d %d/%d %d/%d"%(v0,v0,v1,v1,v2,v2), file=of)
+            i0 += len(ef.vrts)
+
+        try:
+            ofm = mfilename.open("w")
+        except Exception as e:
+            err = "Could not open %s: %s"%(str(mfilename), e)
+            print(err)
+            return err
+
+        for i,ef in enumerate(efs):
+            frag = ef.frag
+            rgba = frag.color.getRgbF()
+            print("newmtl frag%d"%i, file=ofm)
+            print("Ka %f %f %f"%(rgba[0],rgba[1],rgba[2]), file=ofm)
+            print("Kd %f %f %f"%(rgba[0],rgba[1],rgba[2]), file=ofm)
+            print("Ks 0.0 0.0 0.0", file=ofm)
+            print("illum 2", file=ofm)
+            print("d 1.0", file=ofm)
+            print("map_Kd %s"%tfilename.name, file=ofm)
+
 
         return err
 
