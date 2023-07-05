@@ -52,8 +52,11 @@ class DataWindow(QLabel):
         self.volume_view = vv
         if vv is None:
             return
-        else:
+        elif not self.has_had_volume_view:
             self.has_had_volume_view = True
+            palette = self.palette()
+            palette.setColor(QPalette.Window, QColor("black"))
+            self.setPalette(palette)
         # print("axis", axis)
         (self.iIndex, self.jIndex) = vv.volume.ijIndexesInPlaneOfSlice(self.axis)
         self.kIndex = self.axis
