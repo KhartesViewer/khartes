@@ -25,6 +25,7 @@ class DataWindow(QLabel):
         self.resetText()
 
         self.volume_view = None
+        self.has_had_volume_view = False
         self.mouseStartPoint = None
         self.isPanning = False
         self.isMovingNode = False
@@ -51,6 +52,8 @@ class DataWindow(QLabel):
         self.volume_view = vv
         if vv is None:
             return
+        else:
+            self.has_had_volume_view = True
         # print("axis", axis)
         (self.iIndex, self.jIndex) = vv.volume.ijIndexesInPlaneOfSlice(self.axis)
         self.kIndex = self.axis
@@ -59,7 +62,7 @@ class DataWindow(QLabel):
         return self.window.project_view.fragments.values()
 
     def currentFragmentView(self):
-        return self.window.project_view.mainActiveFragmentView()
+        return self.window.project_view.mainActiveVisibleFragmentView()
 
     def positionOnAxis(self):
         return self.volume_view.ijktf[self.kIndex]
@@ -639,9 +642,10 @@ into and out of the viewing plane.
     def drawSlice(self):
         timera = Utils.Timer(False)
         volume = self.volume_view
-        if volume is None:
+        if volume is None :
             self.clear()
-            self.resetText()
+            if not self.has_had_volume_view:
+                self.resetText()
             return
         self.setMargin(0)
         self.window.setFocus()
@@ -858,8 +862,10 @@ class SurfaceWindow(DataWindow):
         timera = Utils.Timer(False)
         volume = self.volume_view
         if volume is None:
-            self.resetText(True)
-            self.window.edit.show()
+            self.clear()
+            if not self.has_had_volume_view:
+                self.resetText(True)
+                self.window.edit.show()
             return
         self.window.edit.hide()
         self.setMargin(0)

@@ -487,6 +487,9 @@ class TiffLoader(QMainWindow):
         callback = self.readerCallback
         vcrender = self.vcrender.isChecked()
 
+        old_volume = self.main_window.project_view.cur_volume
+        # unloads old volume
+        self.main_window.setVolume(None)
         new_volume = Volume.createFromTiffs(project, tiff_directory, volume_name, ranges, "", filenames, callback, vcrender)
 
         self.reading = False
@@ -498,6 +501,7 @@ class TiffLoader(QMainWindow):
             msg.setIcon(QMessageBox.Critical)
             msg.setText("Failed to create new volume from TIFF files: %s"%new_volume.error)
             msg.exec()
+            self.main_window.setVolume(old_volume)
         else:
             self.main_window.setVolume(new_volume)
             self.hide()

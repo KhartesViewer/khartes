@@ -308,7 +308,7 @@ class MainWindow(QMainWindow):
             name = frag.name
             names.add(name)
         stem = "frag"
-        mfv = self.project_view.mainActiveFragmentView(unaligned_ok=True)
+        mfv = self.project_view.mainActiveVisibleFragmentView(unaligned_ok=True)
         if mfv is not None:
             stem = mfv.fragment.name
         for i in range(1,1000):
@@ -347,7 +347,7 @@ class MainWindow(QMainWindow):
 
     def addPointToCurrentFragment(self, tijk):
         # cur_frag_view = self.project_view.cur_fragment_view
-        cur_frag_view = self.project_view.mainActiveFragmentView()
+        cur_frag_view = self.project_view.mainActiveVisibleFragmentView()
         if cur_frag_view is None:
             print("no current fragment view set")
             return
@@ -870,7 +870,8 @@ class MainWindow(QMainWindow):
             self.project_view.clearActiveFragmentViews()
         fragment_view.active = active
         self.fragments_table.model().endResetModel()
-        self.export_mesh_action.setEnabled(self.project_view.mainActiveFragmentView() is not None)
+        # self.export_mesh_action.setEnabled(self.project_view.mainActiveVisibleFragmentView() is not None)
+        self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
         self.drawSlices()
 
     def setFragmentColor(self, fragment, color):
@@ -893,7 +894,8 @@ class MainWindow(QMainWindow):
         self.save_project_as_action.setEnabled(True)
         self.import_nrrd_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
-        self.export_mesh_action.setEnabled(project_view.mainActiveFragmentView() is not None)
+        # self.export_mesh_action.setEnabled(project_view.mainActiveFragmentView() is not None)
+        self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
 
     def setProject(self, project):
         project_view = ProjectView(project)

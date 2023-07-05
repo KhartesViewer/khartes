@@ -55,9 +55,13 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             fragments = self.project_view.fragments
             fragment = list(fragments.keys())[row]
             fragment_view = fragments[fragment]
+            '''
             if self.project_view.cur_volume_view.direction == fragment.direction:
                 nflags |= Qt.ItemIsUserCheckable
                 nflags |= Qt.ItemIsEnabled
+            '''
+            nflags |= Qt.ItemIsUserCheckable
+            nflags |= Qt.ItemIsEnabled
             return nflags
         elif col == 1:
             # print(col, int(oflags))
@@ -142,7 +146,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         fragments = self.project_view.fragments
         fragment = list(fragments.keys())[row]
         fragment_view = fragments[fragment]
-        if self.project_view.mainActiveFragmentView() == fragment_view:
+        if self.project_view.mainActiveVisibleFragmentView() == fragment_view:
             return QtGui.QColor('beige')
 
     def dataDisplayRole(self, index, role):
@@ -543,6 +547,7 @@ class Fragment:
             self.err = ""
             self.fv = fv
             self.frag = frag
+            self.trgs = []
             self.has_ssurf = False
             print(fname,"gpoints before", len(gpoints))
             newgps = frag.createInfillPoints(infill)
@@ -561,14 +566,13 @@ class Fragment:
 
             bads = frag.badBorderTrgls(tri, frag.badTrglsByNormal(tri, tgps))
             badlist = bads.tolist()
-            trgs = []
             for i,trg in enumerate(tri.simplices):
                 if i in badlist:
                     continue
-                trgs.append(trg)
-            self.trgs = trgs
-            print("all",len(tri.simplices),"good",len(trgs))
+                self.trgs.append(trg)
+            print("all",len(tri.simplices),"good",len(self.trgs))
 
+            fv.createZsurf()
             if fv.zsurf is not None and fv.ssurf is not None:
                 self.has_ssurf = True
                 self.data_rect = Fragment.ExportFrag.dataBounds(fv.zsurf)
@@ -692,8 +696,6 @@ class Fragment:
         '''
 
 
-        # TODO: what to do if ef has fragments but 
-        # no ssurf?  Probably should not append ef in that case
         efs = []
         for fv in fvs:
             ef = Fragment.ExportFrag(fv, infill)
@@ -707,11 +709,6 @@ class Fragment:
             err = "No exportable fragments"
             print(err)
             return err
-
-        # TODO: will this prematurely return if ef has
-        # a fragment with no ssurf?
-        # if err != "":
-        #     return err
 
         try:
             of = filename.open("w")
@@ -751,9 +748,6 @@ class Fragment:
         tfilename = filename.with_suffix(".tif")
         cv2.imwrite(str(tfilename), tex_out)
 
-        # TODO: handle case where frag has no ssurf
-        # (because all vertices are in a line, for ex)
-
         print("# texture vertices", file=of)
         for ef in efs:
             print("# fragment", ef.frag.name, file=of)
@@ -782,12 +776,11 @@ class Fragment:
         for i,ef in enumerate(efs):
             print("# fragment", ef.frag.name, file=of)
             print("usemtl frag%d"%i, file=of)
-            if ef.has_ssurf:
-                for trg in ef.trgs:
-                    v0 = trg[0]+i0
-                    v1 = trg[1]+i0
-                    v2 = trg[2]+i0
-                    print("f %d/%d %d/%d %d/%d"%(v0,v0,v1,v1,v2,v2), file=of)
+            for trg in ef.trgs:
+                v0 = trg[0]+i0
+                v1 = trg[1]+i0
+                v2 = trg[2]+i0
+                print("f %d/%d %d/%d %d/%d"%(v0,v0,v1,v1,v2,v2), file=of)
             i0 += len(ef.vrts)
 
         try:
@@ -915,21 +908,23 @@ class FragmentView:
     # fragment views have had their current volume view set.
     def setLocalPoints(self, recursion_ok):
         # print("set local points", self.cur_volume_view.volume.name)
+        if self.cur_volume_view is None:
+            self.fpoints = np.zeros((0,4), dtype=np.float32)
+            self.vpoints = np.zeros((0,4), dtype=np.float32)
+            return
         self.fpoints = self.cur_volume_view.volume.globalPositionsToTransposedIjks(self.fragment.gpoints, self.fragment.direction)
         npts = self.fpoints.shape[0]
         if npts > 0:
             indices = np.reshape(np.arange(npts), (npts,1))
             self.fpoints = np.concatenate((self.fpoints, indices), axis=1)
 
-        if self.cur_volume_view is None:
-            self.vpoints = None
-        else:
-            self.vpoints = self.cur_volume_view.volume.globalPositionsToTransposedIjks(self.fragment.gpoints, self.cur_volume_view.direction)
-            if npts > 0:
-                indices = np.reshape(np.arange(npts), (npts,1))
-                # print(self.vpoints.shape, indices.shape)
-                self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
-                # print(self.vpoints[0])
+        self.vpoints = self.cur_volume_view.volume.globalPositionsToTransposedIjks(self.fragment.gpoints, self.cur_volume_view.direction)
+        npts = self.vpoints.shape[0]
+        if npts > 0:
+            indices = np.reshape(np.arange(npts), (npts,1))
+            # print(self.vpoints.shape, indices.shape)
+            self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
+            # print(self.vpoints[0])
         self.createZsurf()
         if not recursion_ok:
             return
@@ -1065,9 +1060,9 @@ class FragmentView:
                 nnidxs = self.nodesNeighbors(self.tri, nidxs)
                 # print("next neighbors", nnidxs)
                 (ominx, ominy, omaxx, omaxy) = self.nodesBoundingBox(oldtri, nnidxs)
-                # print(ominx, ominy, omaxx, omaxy)
+                # print("o",ominx, ominy, omaxx, omaxy)
                 (nminx, nminy, nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nnidxs)
-                # print(nminx, nminy, nmaxx, nmaxy)
+                # print("n",nminx, nminy, nmaxx, nmaxy)
                 minx = min(ominx, nminx)
                 miny = min(ominy, nminy)
                 maxx = max(omaxx, nmaxx)
@@ -1115,7 +1110,10 @@ class FragmentView:
                     # print("nulling changed_rect")
                     changed_rect = None
                 else:
+                    # nk,nj,ni = self.cur_volume_view.trdata.shape
                     nk,nj,ni = self.cur_volume_view.trdata.shape
+                    if self.fragment.direction != self.cur_volume_view.direction:
+                        ni,nj,nk = nk,nj,ni
                     minx = int(max(minx-1, 0))
                     miny = int(max(miny-1, 0))
                     maxx = int(min(maxx+1, ni))
@@ -1151,6 +1149,7 @@ class FragmentView:
                 self.clearZsliceCache()
             else:
                 minx, miny, maxx, maxy = changed_rect
+                # print("cr",minx,miny,maxx,maxy)
                 nx = maxx-minx
                 ny = maxy-miny
                 pts = np.indices((nx, ny))
@@ -1242,9 +1241,10 @@ class FragmentView:
                 self.clearZsliceCache()
             # print(ys)
 
-        if self.fragment.direction != self.cur_volume_view.direction:
-            self.ssurf = None
-            return
+        # TODO: This shouldn't be a problem!
+        # if self.fragment.direction != self.cur_volume_view.direction:
+        #     self.ssurf = None
+        #     return
 
         # can happen when initializing an "echo" fragment
         # while switching to a different volume

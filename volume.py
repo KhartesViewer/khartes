@@ -320,12 +320,13 @@ tiff files is aligned with the slice vertical axes""",
         if role == Qt.CheckStateRole and column == 0:
             # print(row, value)
             if value != Qt.Checked:
+                self.main_window.setVolume(None)
                 return False
             volumes = self.project_view.volumes
             volume = list(volumes.keys())[row]
             volume_view = volumes[volume]
             self.main_window.setVolume(volume)
-            return True
+            # return True
         if role == Qt.EditRole and column == 2:
             color = value
             volumes = self.project_view.volumes

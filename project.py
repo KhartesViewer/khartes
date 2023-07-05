@@ -222,13 +222,14 @@ class ProjectView:
         for fv in self.fragments.values():
             fv.active = False
 
-    def mainActiveFragmentView(self, unaligned_ok=False):
+    def mainActiveVisibleFragmentView(self, unaligned_ok=False):
         last = None
         for fv in self.fragments.values():
-            if fv.activeAndAligned():
-                last = fv
-            elif fv.active and unaligned_ok:
-                last = fv
+            if fv.visible:
+                if fv.activeAndAligned():
+                    last = fv
+                elif fv.active and unaligned_ok:
+                    last = fv
         return last
 
     def activeFragmentViews(self, unaligned_ok=False):
