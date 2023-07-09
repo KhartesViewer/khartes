@@ -10,6 +10,7 @@ from scipy.interpolate import (
         LinearNDInterpolator, 
         NearestNDInterpolator, 
         CloughTocher2DInterpolator,
+        RegularGridInterpolator,
         )
 from scipy.interpolate import CubicSpline
 from utils import Utils
@@ -181,7 +182,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             # print(self.main_window.app.keyboardModifiers())
             if ((self.main_window.app.keyboardModifiers() & Qt.ControlModifier) 
                or 
-               len(self.main_window.project_view.activeFragmentViews()) > 1):
+               len(self.main_window.project_view.activeFragmentViews(unaligned_ok=True)) > 1):
                 exclusive = False
             self.main_window.setFragmentActive(fragment, value==Qt.Checked, exclusive)
             return True
@@ -889,14 +890,17 @@ class FragmentView:
         if vol_view is not None:
             self.setLocalPoints(False)
 
-    def activeAndAligned(self):
-        if not self.active:
-            return False
+    def aligned(self):
         if self.cur_volume_view is None:
             return False
         if self.cur_volume_view.direction != self.fragment.direction:
             return False
         return True
+
+    def activeAndAligned(self):
+        if not self.active:
+            return False
+        return self.aligned()
 
     # direction is not used here, but this notifies fragment view
     # to recompute things
@@ -1112,7 +1116,8 @@ class FragmentView:
                 else:
                     # nk,nj,ni = self.cur_volume_view.trdata.shape
                     nk,nj,ni = self.cur_volume_view.trdata.shape
-                    if self.fragment.direction != self.cur_volume_view.direction:
+                    # if self.fragment.direction != self.cur_volume_view.direction:
+                    if not self.aligned():
                         ni,nj,nk = nk,nj,ni
                     minx = int(max(minx-1, 0))
                     miny = int(max(miny-1, 0))
@@ -1124,7 +1129,8 @@ class FragmentView:
         self.oldzs = np.copy(self.fpoints[:,2])
         timer.time("diff")
         nk,nj,ni = self.cur_volume_view.trdata.shape
-        if self.fragment.direction != self.cur_volume_view.direction:
+        # if self.fragment.direction != self.cur_volume_view.direction:
+        if not self.aligned():
             ni,nj,nk = nk,nj,ni
         ns = (ni,nj,nk)
         if changed_rect is None or self.tri is None:
@@ -1296,7 +1302,21 @@ class FragmentView:
         # recall that index order is k,j,i
         ixyzs = ixyzs[:,ixyzs[0,:]<ftrdata.shape[0]]
         ixyzs = ixyzs[:,ixyzs[0,:]>=0]
-        self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = ftrdata[(ixyzs[0,:], ixyzs[1,:], ixyzs[2,:])]
+        use_linear_interpolation = True
+        if use_linear_interpolation:
+            z0s = ixyzs[0,:]
+            ss0 = ftrdata[(z0s, ixyzs[1,:], ixyzs[2,:])]
+            z1s = np.minimum(ixyzs[0,:]+1, ftrdata.shape[0]-1)
+            ss1 = ftrdata[(z1s, ixyzs[1,:], ixyzs[2,:])]
+            xyzsn = xyzsn[:,xyzsn[0,:]<ftrdata.shape[0]]
+            xyzsn = xyzsn[:,xyzsn[0,:]>=0]
+            zfs = xyzsn[0]-z0s
+            ssi = ss0*(1.-zfs)+ss1*(zfs)
+            self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = np.minimum(ssi, 65535)
+        else: # nearest neighbor
+            self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = ftrdata[(ixyzs[0,:], ixyzs[1,:], ixyzs[2,:])]
+
+
         timer.time("ssurf")
 
     # returns zsurf points, as array of [ipos, jpos] values
@@ -1305,7 +1325,8 @@ class FragmentView:
     def getZsurfPoints(self, vaxis, vaxisPosition):
         if self.zsurf is None:
             return
-        if self.fragment.direction == self.cur_volume_view.direction:
+        # if self.fragment.direction == self.cur_volume_view.direction:
+        if self.aligned():
             nk,nj,ni = self.cur_volume_view.trdata.shape
             if vaxis == 0:
                 ivec = np.arange(nj)
@@ -1424,14 +1445,16 @@ class FragmentView:
         return matches
 
     def vijkToFijk(self, vijk):
-        if self.cur_volume_view.direction == self.fragment.direction:
+        # if self.cur_volume_view.direction == self.fragment.direction:
+        if self.aligned():
             fijk = vijk
         else:
             fijk = (vijk[2], vijk[1], vijk[0])
         return fijk
 
     def fijkToVijk(self, fijk):
-        if self.cur_volume_view.direction == self.fragment.direction:
+        # if self.cur_volume_view.direction == self.fragment.direction:
+        if self.aligned():
             vijk = fijk
         else:
             vijk = (fijk[2], fijk[1], fijk[0])

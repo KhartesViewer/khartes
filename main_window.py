@@ -326,6 +326,7 @@ class MainWindow(QMainWindow):
         self.setFragments()
         fv = self.project_view.fragments[frag]
         fv.active = True
+        self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
         # need to make sure new fragment is added to table
         # before calling scrollToRow
         self.app.processEvents()

@@ -149,6 +149,7 @@ class VolumesModel(QtCore.QAbstractTableModel):
             "Z min",
             "Z max",
             "dZ",
+            "Gb",
             ]
 
     ctips = [
@@ -170,6 +171,7 @@ tiff files is aligned with the slice vertical axes""",
             "Minimum Z coordinate (image number) of the volume",
             "Maximum Z coordinate (image number) of the volume",
             "Z step (number of tiff images stepped for each slice image)",
+            "Data size in Gb (10^9 bytes)",
             ]
     
     def flags(self, index):
@@ -295,7 +297,7 @@ tiff files is aligned with the slice vertical axes""",
             # print("data display role", row, volume_view.direction)
             return (0,1)[volume_view.direction]
 
-        elif column >= 5:
+        elif column >= 5 and column < 14:
             i3 = column-5
             i = i3//3
             j = i3 %3
@@ -308,6 +310,10 @@ tiff files is aligned with the slice vertical axes""",
                 return x0+dx*(nx-1)
             else:
                 return dx
+        elif column == 14:
+            gb = volume.dataSize()/1000000000
+            # print(volume.name,gb)
+            return "%0.1f"%gb
         else:
             return None
 
@@ -517,6 +523,14 @@ class Volume():
         vol = Volume()
         vol.error = err
         return vol
+
+    # return size of data in bytes
+    def dataSize(self):
+        if self.data_header is None:
+            return 0
+        sz = self.sizes
+        # assumes that each data word is 2 bytes
+        return 2*sz[0]*sz[1]*sz[2]
 
     # class function
     def sliceSize(start, stop, step):
