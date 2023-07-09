@@ -742,7 +742,7 @@ into and out of the viewing plane.
                 color = (0,m,0,65535)
                 color = frag.fragment.cvcolor
                 # if frag == self.currentFragmentView():
-                if frag.activeAndAligned():
+                if frag.active:
                     # color = self.splineLineColor
                     size = self.splineLineSize
                     if len(pts) == 1:
@@ -766,7 +766,7 @@ into and out of the viewing plane.
                 self.cur_frag_pts_fv.append(frag)
                 # print("circle at",ij, xy)
                 color = self.nodeColor
-                if not frag.activeAndAligned():
+                if not frag.active:
                     color = self.inactiveNodeColor
                 # print(pt, self.volume_view.nearbyNode)
                 if (frag, pt[3]) == nearbyNode:
@@ -892,9 +892,10 @@ class SurfaceWindow(DataWindow):
         # alpha, but always has the value 65535)
         outrgbx = np.zeros((wh,ww,4), dtype=np.uint16)
         for frag in self.fragmentViews():
-            if not frag.activeAndAligned():
+            # if not frag.activeAndAligned():
+            if not frag.active:
                 continue
-            if frag.ssurf is not None:
+            if frag.aligned() and frag.ssurf is not None:
                 slc = frag.ssurf
                 sw = slc.shape[1]
                 sh = slc.shape[0]
@@ -988,7 +989,8 @@ class SurfaceWindow(DataWindow):
         xypts = []
 
         for frag in self.fragmentViews():
-            if not frag.activeAndAligned():
+            # if not frag.activeAndAligned():
+            if not frag.active:
                 continue
             if not frag.visible:
                 continue
@@ -997,7 +999,8 @@ class SurfaceWindow(DataWindow):
             timer_active = False
             timer = Utils.Timer(timer_active)
             if frag.tri is not None:
-                pts = frag.tri.points
+                # pts = frag.tri.points
+                pts = frag.vpoints[:, 0:2]
                 trgs = frag.tri.simplices
                 vrts = pts[trgs]
                 vrts = self.ijsToXys(vrts)
@@ -1008,8 +1011,9 @@ class SurfaceWindow(DataWindow):
                 timer.time("draw lines")
 
                 color = self.nodeColor
-                if not frag.activeAndAligned():
-                    color = self.inactiveNodeColor
+                # test not needed, by this point all frags are active
+                # if not frag.activeAndAligned():
+                #     color = self.inactiveNodeColor
                 timer.time("compute points")
                 vrts = self.ijsToXys(pts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
@@ -1038,19 +1042,22 @@ class SurfaceWindow(DataWindow):
                 for i,pt in enumerate(pts):
                     xy = self.ijToXy(pt[0:2])
                     color = self.nodeColor
-                    if not frag.activeAndAligned():
-                        color = self.inactiveNodeColor
+                    # all frags are active at this point
+                    # if not frag.activeAndAligned():
+                    #     color = self.inactiveNodeColor
                     ijk = frag.vpoints[i]
                     if frag == pv.nearby_node_fv and i == pv.nearby_node_index:
                         color = self.highlightNodeColor
                     self.drawNodeAtXy(outrgbx, xy, color)
 
             else:
-                pts = frag.fpoints[:, 0:2]
+                # pts = frag.fpoints[:, 0:2]
+                pts = frag.vpoints[:, 0:2]
                 # print("pts shape", pts.shape)
                 color = self.nodeColor
-                if not frag.activeAndAligned():
-                    color = self.inactiveNodeColor
+                # all frags are active at this point
+                # if not frag.activeAndAligned():
+                #     color = self.inactiveNodeColor
                 vrts = self.ijsToXys(pts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
                 cv2.polylines(outrgbx, vrts, True, color, 10)
@@ -1060,7 +1067,7 @@ class SurfaceWindow(DataWindow):
                     color = self.highlightNodeColor
                     self.drawNodeAtXy(outrgbx, xy, color)
 
-            if frag.activeAndAligned():
+            if frag.active:
                 i0 = len(xypts)
                 for i,pt in enumerate(frag.vpoints):
                     ij = self.tijkToIj(pt)
