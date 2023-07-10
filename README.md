@@ -57,7 +57,7 @@ which it does even before the first time you invoke "Save".
 In order to perform at interactive speeds, khartes loads data
 volumes (3D volumes of data) rather than individual TIFF files.
 The process of creating a data volume from TIFF files
-is called "importing" the TIFF files.  Note that this process
+is called "importing" the TIFF files.  This process
 assumes that the TIFF files are already somewhere on your disk;
 khartes does not download TIFF files over the internet.
 
@@ -65,7 +65,7 @@ The `File /Import TIFF files...` menu brings up a dialog box where
 you can specify which TIFF files you want to include in your
 data volume, and the x and y ranges of the pixels within each TIFF
 file that you want to include.  The dialog box shows how large the
-resulting data volume will be, in gigabytes.  Note that the entire
+resulting data volume will be, in gigabytes.  Be aware that the entire
 data volume will be read into the physical memory (RAM) of your
 computer, so be careful how large you make the volume.
 
@@ -238,23 +238,23 @@ a regular basis to save your latest work.
 
 ## Fragment: Visible, Active, accepting nodes
 
-In the lower right corner, the `Fragments` tab allows
+The `Fragments` tab in the lower right corner allows
 you to control certain aspects of your fragments.
 The two main visibility controls are `Active` and `Visible`.
 
 If a fragment is `Visible`, this means that the fragment's
-mesh and nodes will be drawn on the slices in the left column.
+mesh and nodes will be drawn on the data slices in the left column.
 
 If a fragment is `Active`, this means that the data that
 the fragment passes through (also called the fragment's texture)
-is displayed in the fragment display in the upper right.  
-(One exception: if the direction (Which can be either X or Y)
-of the fragment is different than the direction of the current
-volume, then that fragment's texture will not be displayed.
+is displayed in the fragment display in the upper right.
+(One exception: if a fragment's direction, which can be either X or Y,
+is different than the current volume's direction,
+then that fragment's texture will not be displayed.)
 
 If a fragment is set to be both `Active` and `Visible`, the
 mesh and nodes will be overlaid on the fragment texture in the fragment
-display.  
+display.
 In other words, if you want to view a fragment's texture without
 the overlying mesh, turn `Visible` off.
 
@@ -267,7 +267,7 @@ to maintain alphabetical order.
 Finally, the `Fragment` tab lets you see which fragment is
 currently accepting nodes: that is, the fragment that will have
 a new node added to it every time you click in a data window using 
-shift-left-mouse-button.  
+shift-left-mouse-button.
 The row in the `Fragment` tab that has a light beige background 
 is the fragment accepting nodes.
 
@@ -289,6 +289,10 @@ However, if you hold down the Ctrl key when checking an `Active`
 checkbox, that fragment will be made active, while any previous
 fragments will remain active.  So use Ctrl-click in the `Active`
 checkbox to allow mutiple active fragments.
+
+As before, the beige row denotes the fragment that is accepting
+new nodes.  When there are multiple active fragments, the
+"accepting" row will be the one closest to the bottom of the list.
 
 ## Exporting fragments
 
