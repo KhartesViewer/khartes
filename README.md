@@ -42,14 +42,54 @@ by reading TIFF files that you already have somewhere on disk.
 You simply need to point the import-TIFF dialog to the folder
 that contains these files.
 
-The import-TIFF function uses more memory than it should 
+## Creating a project
+
+If you are running khartes for the first time, or
+if you are starting a new project, select `File / New Project...`
+to create a new project.  When you create a new project, you will
+immediately be asked for the name of your project, and the location
+on disk where you wish it to be created.  This is so that khartes
+can begin to store data there, 
+which it does even before the first time you invoke "Save".
+
+## Converting TIFF files to khartes data volumes
+
+In order to perform at interactive speeds, khartes loads data
+volumes (3D volumes of data) rather than individual TIFF files.
+The process of creating a data volume from TIFF files
+is called "importing" the TIFF files.  Note that this process
+assumes that the TIFF files are already somewhere on your disk;
+khartes does not download TIFF files over the internet.
+
+The `File /Import TIFF files...` menu brings up a dialog box where
+you can specify which TIFF files you want to include in your
+data volume, and the x and y ranges of the pixels within each TIFF
+file that you want to include.  The dialog box shows how large the
+resulting data volume will be, in gigabytes.  Note that the entire
+data volume will be read into the physical memory (RAM) of your
+computer, so be careful how large you make the volume.
+
+You can import multiple data volumes into your project,
+and then view each volume, one at a time.  Khartes keeps track of
+the origin point of each volume, so that coordinate systems remain
+consistent as you switch from volume to volume.
+
+There is **new functionality** in the import-TIFF function:
+you are now able to import the set of TIFF files created by
+`vc_layers` (you could import them before, but they would be transposed
+in a way that made them practically unusable).  
+In the import-TIFF dialog,
+simply check the box labeled "TIFFs are from vc_layers".
+
+Unfortunately, the import-TIFF function 
+currently uses more memory than it should 
 (it unnecessarily duplicates the data volume in memory during
 the import process).  This means that at the current time you
 should be sparing of memory, creating data volumes that are no
 larger than half the size of your physical memory,
 if you want to avoid memory swapping.
 
-## General workflow
+## General segmentation workflow
 
 As the programmer of khartes, I am very familiar with
 how it works internally.
@@ -196,6 +236,60 @@ sheet of the scroll in difficult areas.
 Remember that khartes does not have auto-save; use Ctrl-S on
 a regular basis to save your latest work.
 
+## Fragment: Visible, Active, accepting nodes
+
+In the lower right corner, the `Fragments` tab allows
+you to control certain aspects of your fragments.
+The two main visibility controls are `Active` and `Visible`.
+
+If a fragment is `Visible`, this means that the fragment's
+mesh and nodes will be drawn on the slices in the left column.
+
+If a fragment is `Active`, this means that the data that
+the fragment passes through (also called the fragment's texture)
+is displayed in the fragment display in the upper right.  
+(One exception: if the direction (Which can be either X or Y)
+of the fragment is different than the direction of the current
+volume, then that fragment's texture will not be displayed.
+
+If a fragment is set to be both `Active` and `Visible`, the
+mesh and nodes will be overlaid on the fragment texture in the fragment
+display.  
+In other words, if you want to view a fragment's texture without
+the overlying mesh, turn `Visible` off.
+
+The `Fragments` tab also allows you to change the name of any
+fragment.  Simpy double-click on the name that you want to change,
+type the new name, and hit the `Enter` key.
+The name will change, and the list of fragments will re-sort itself
+to maintain alphabetical order.
+
+Finally, the `Fragment` tab lets you see which fragment is
+currently accepting nodes: that is, the fragment that will have
+a new node added to it every time you click in a data window using 
+shift-left-mouse-button.  
+The row in the `Fragment` tab that has a light beige background 
+is the fragment accepting nodes.
+
+**For advanced users:** There are times when you may want to 
+have more than one active fragment at a time.  One scenario is
+where each fragment represents a papyrus fiber rather than an
+entire sheet of a scroll; in this case it is convenient to
+be able to display all the fibers in the fragment view window.
+Another scenario is where a single sheet is divided into more
+than one fragment in order to work around khartes' requirement
+that each fragment be single-valued in either X or Y.
+
+Normally, if you click on a checkbox in the `Active` column in
+order to make a fragment active, the currently active fragment
+will be made inactive.  In other words, normally only one fragment
+can be active at a time.
+
+However, if you hold down the Ctrl key when checking an `Active`
+checkbox, that fragment will be made active, while any previous
+fragments will remain active.  So use Ctrl-click in the `Active`
+checkbox to allow mutiple active fragments.
+
 ## Exporting fragments
 
 Khartes allows you to export your fragments to `vc_render` and `vc_layers_from_ppm`.
@@ -207,9 +301,18 @@ in the right-hand window.
 2. In the File menu, select `Export file as mesh...`.
 
 This will create a .obj file, which contains a mesh representing your
-fragment.
+fragment.  It also creates a .tif file and a .mtl file.  
+These three files are used by the meshlab 3D viewer to render
+a 3D view of your surface, with the volume data textured onto
+the surface.
 
-You can import this mesh directly into `vc_render`.  Here is how.
+In addition,
+you can import this mesh directly into `vc_render`.  Here is how.
+
+(Note for advanced users: If multiple fragments are active,
+all the active fragments will be saved into a single .obj file.
+This is convenient for viewing in meshlab, but beware! Multi-fragment
+.obj files cannot be imported into `vc_render`.)
 
 First, you need to make sure you know where the following files and
 directories are located:
@@ -232,7 +335,6 @@ You might need to use --volume to specify your volume as well, if your volpkg ha
 
 As already mentioned, the .ppm file that `vc_render` creates can be used in `vc_layers_from_ppm` to create a 
 flattened surface volume.
-
 
 ## Things to fix
 

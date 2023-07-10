@@ -173,7 +173,7 @@ class TiffLoader(QMainWindow):
         self.nameedit = QLineEdit()
         self.nameedit.textEdited.connect(self.onNameEdited)
         hbox.addWidget(self.nameedit)
-        self.vcrender = QCheckBox("TIFFs are from vc_render")
+        self.vcrender = QCheckBox("TIFFs are from vc_layers")
         self.vcrender.setCheckState(Qt.Unchecked)
         hbox.addStretch()
         hbox.addWidget(self.vcrender)
