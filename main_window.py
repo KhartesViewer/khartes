@@ -641,7 +641,8 @@ class MainWindow(QMainWindow):
         # TODO: allow the user to set the infill
         # TODO: save all active fragments
         # err = Fragment.saveListAsObjMesh(frags, pname, 16)
-        err = Fragment.saveListAsObjMesh(fvs, pname, 16)
+        infill = 16
+        err = Fragment.saveListAsObjMesh(fvs, pname, infill)
 
         if err != "":
             msg = QMessageBox()
