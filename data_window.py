@@ -24,18 +24,16 @@ class DataWindow(QLabel):
 
         self.resetText()
 
-        # self.volume = None
         self.volume_view = None
+        self.has_had_volume_view = False
         self.mouseStartPoint = None
         self.isPanning = False
         self.isMovingNode = False
-        # self.nearbyNode = -1
         self.localNearbyNodeIndex = -1
         self.tfStartPoint = None
         self.nnStartPoint = None
-        # self.fragment_views = []
-        # self.cur_fragment_view = None
         self.cur_frag_pts_xyijk = None
+        self.cur_frag_pts_fv = None
         self.setMouseTracking(True)
         self.zoomMult = 1.
         m = 65535
@@ -54,27 +52,20 @@ class DataWindow(QLabel):
         self.volume_view = vv
         if vv is None:
             return
+        elif not self.has_had_volume_view:
+            self.has_had_volume_view = True
+            palette = self.palette()
+            palette.setColor(QPalette.Window, QColor("black"))
+            self.setPalette(palette)
         # print("axis", axis)
         (self.iIndex, self.jIndex) = vv.volume.ijIndexesInPlaneOfSlice(self.axis)
         self.kIndex = self.axis
-
-    '''
-    def setFragments(self, fragments, cur_frag):
-        self.fragments = fragments
-        self.cur_frag = cur_frag
-    '''
-
-    # def setFragmentViews(self, fragment_views):
-    #     self.fragment_views = fragment_views
-
-    # def setCurrentFragmentView(self, cur_fragment_view):
-    #     self.cur_fragment_view = cur_fragment_view
 
     def fragmentViews(self):
         return self.window.project_view.fragments.values()
 
     def currentFragmentView(self):
-        return self.window.project_view.cur_fragment_view
+        return self.window.project_view.mainActiveVisibleFragmentView()
 
     def positionOnAxis(self):
         return self.volume_view.ijktf[self.kIndex]
@@ -158,14 +149,14 @@ class DataWindow(QLabel):
         if nearbyNode >= 0 and xyijks is not None and xyijks.shape[0] != 0:
             tijk = xyijks[nearbyNode, 2:5]
             index = int(xyijks[nearbyNode, 5])
+            fv = self.cur_frag_pts_fv[nearbyNode]
             new_tijk = list(tijk)
             i,j,k = ijk
             new_tijk[self.iIndex] = i
             new_tijk[self.jIndex] = j
             new_tijk[self.axis] = k
             # True if successful
-            # if self.cur_fragment_view.movePoint(tijk, new_tijk):
-            if self.currentFragmentView().movePoint(index, new_tijk):
+            if fv.movePoint(index, new_tijk):
                 # wpos = e.localPos()
                 # wxy = (wpos.x(), wpos.y())
                 # nearbyNode = self.findNearbyNode(wxy)
@@ -178,47 +169,30 @@ class DataWindow(QLabel):
 
     # return True if nearby node changed, False otherwise
     def setNearbyNode(self, nearbyNode):
-        # if self.nearbyNode != nearbyNode:
-        if self.currentFragmentView() is None:
-            return False
-        # TODO: this isn't right; clause after "or" throws error
-        # if not (self.curNearbyNode() is None and nearbyNode is None) or (self.curNearbyNode() != nearbyNode).all():
-        old_global_node_index = self.globalNearbyNodeIndex()
+        pv = self.window.project_view
+        old_global_node_index = pv.nearby_node_index
+        old_global_node_fv = pv.nearby_node_fv
         new_global_node_index = -1
+        new_global_node_fv = None
         xyijks = self.cur_frag_pts_xyijk
         xyijks_valid = (xyijks is not None and xyijks.shape[0] != 0)
         if nearbyNode >= 0 and xyijks_valid:
             new_global_node_index = int(xyijks[nearbyNode, 5])
+            new_global_node_fv = self.cur_frag_pts_fv[nearbyNode]
         
-        # if self.localNearbyNodeIndex != nearbyNode:
-        if old_global_node_index != new_global_node_index:
+        if old_global_node_index != new_global_node_index or old_global_node_fv != new_global_node_fv:
             # print("snn", self.curNearbyNode(), nearbyNode)
-            # if self.nearbyNode >= 0:
-            #     self.unhighlightNearbyNode()
-            # self.nearbyNode = nearbyNode
-            # self.volume_view.nearbyNode = nearbyNode
-            # if nearbyNode >= 0 and xyijks is not None and xyijks.shape[0] != 0:
             if nearbyNode >= 0 and xyijks_valid:
-                # ijk = xyijks[nearbyNode, 2:]
-                # index = xyijks[nearbyNode, 5]
-                # self.cur_fragment_view.nearbyNode = ijk
-                self.currentFragmentView().nearbyNode = new_global_node_index
+                pv.nearby_node_fv = new_global_node_fv
+                pv.nearby_node_index = new_global_node_index
             else:
-                # self.cur_fragment_view.nearbyNode = None
-                self.currentFragmentView().nearbyNode = -1
+                pv.nearby_node_fv = None
+                pv.nearby_node_index = -1
             self.localNearbyNodeIndex = nearbyNode
-            # if (nearbyNode >= 0):
-            #     self.highlightNearbyNode()
-            # self.drawSlice()
             self.window.drawSlices()
             return True
         else:
             return False
-
-    def globalNearbyNodeIndex(self):
-        if self.currentFragmentView() is None:
-            return -1
-        return self.currentFragmentView().nearbyNode
 
     def findNearbyNode(self, xy):
         xyijks = self.cur_frag_pts_xyijk
@@ -227,6 +201,9 @@ class DataWindow(QLabel):
         if xyijks.shape[0] == 0:
             return -1
         xys = xyijks[:,0:2]
+        # print(xys.dtype)
+        # print("xy, xys, len", xy, xys, len(xys))
+        # print("xys minus", xys-np.array(xy))
         ds = npla.norm(xys-np.array(xy), axis=1)
         # print(ds)
         imin = np.argmin(ds)
@@ -234,13 +211,11 @@ class DataWindow(QLabel):
         if vmin > 10:
             return -1
 
-        # index = int(xyijks[imin, 5])
         # print("fnn", imin, index, xyijks[imin])
         # print("fnn", imin, index)
 
         # will be stored in self.localNearbyNodeIndex
         return imin
-        # return index
 
     def getZoom(self):
         return self.volume_view.zoom * self.zoomMult
@@ -263,7 +238,6 @@ class DataWindow(QLabel):
                 tijk = self.ijToTijk(ij)
                 # print("adding point at",tijk)
                 if self.currentFragmentView() is not None:
-                    # self.currentFragmentView().addPoint(tijk)
                     self.window.addPointToCurrentFragment(tijk)
                     nearbyNode = self.findNearbyNode(wxy)
                     if not self.setNearbyNode(nearbyNode):
@@ -291,7 +265,6 @@ class DataWindow(QLabel):
         # print("release", e.button())
         if e.button() | Qt.LeftButton:
             self.mouseStartPoint = QPoint()
-            # self.tfStartPoint = self.volume_view.ijktf
             self.tfStartPoint = None
             self.nnStartPoint = None
             self.isPanning = False
@@ -320,11 +293,16 @@ class DataWindow(QLabel):
             return
         gijk = self.volume_view.transposedIjkToGlobalPosition(ijk)
         gi,gj,gk = gijk
+        vol = self.volume_view.volume
 
         labels = ["X", "Y", "Img"]
-        ranges = self.volume_view.volume.getGlobalRanges()
+        axes = (2,0,1)
+        if vol.from_vc_render:
+            labels = ["X", "Img", "Y"]
+            axes = (1,0,2)
+        ranges = vol.getGlobalRanges()
         stxt = ""
-        for i in (2,0,1):
+        for i in axes:
             g = gijk[i]
             dtxt = "%d"%g
             mn = ranges[i][0]
@@ -338,13 +316,11 @@ class DataWindow(QLabel):
 
     def mouseMoveEvent(self, e):
         # print("move", e.localPos())
-        # if not self.mouseStartPoint.isNull():
         if self.volume_view is None:
             return
         mxy = (e.localPos().x(), e.localPos().y())
         ij = self.xyToIj(mxy)
         tijk = self.ijToTijk(ij)
-        # self.setStatusText(tijk)
         self.setStatusTextFromMousePosition()
         if self.isPanning:
             delta = e.localPos()-self.mouseStartPoint
@@ -390,11 +366,7 @@ class DataWindow(QLabel):
         # print(d, z)
         self.volume_view.setZoom(z)
         mxy = (e.position().x(), e.position().y())
-        # nearbyNode = self.findNearbyNode(mxy)
-        # if not self.setNearbyNode(nearbyNode):
-        #     self.window.drawSlices()
         self.window.drawSlices()
-        # z = min(2, max(z, .1))
         # print("wheel", e.position())
 
     # SurfaceWindow subclass overrides this
@@ -435,7 +407,6 @@ class DataWindow(QLabel):
                 tfijk[self.iIndex] += d[0]
                 tfijk[self.jIndex] += d[1]
                 tfijk[self.axis] += d[2]
-                # self.volume_view.ijktf = tuple(tfijk)
                 self.volume_view.setIjkTf(tfijk)
                 self.window.drawSlices()
             else:
@@ -482,6 +453,8 @@ class DataWindow(QLabel):
     def sliceGlobalLabel(self):
         gaxis = self.volume_view.globalAxisFromTransposedAxis(self.axis)
         labels = ["X", "Y", "IMG"]
+        if self.volume_view.volume.from_vc_render:
+            labels = ["X", "IMG", "Y"]
         return labels[gaxis]
 
     def sliceGlobalPosition(self):
@@ -490,7 +463,6 @@ class DataWindow(QLabel):
         return gxyz[gaxis]
 
     def drawScaleBar(self, outrgbx):
-        # pixPerMm = 1000./self.volume_view.voxelSizeUm
         pixPerMm = 1000./self.volume_view.apparentVoxelSize
         zoom = self.getZoom()
         length = zoom*pixPerMm
@@ -668,31 +640,15 @@ into and out of the viewing plane.
             text = ("χάρτης")
             ptsize = 36
             self.setAlignment(Qt.AlignCenter)
-            '''
-            font = QFont("Lucida", 36)
-            self.setFont(font)
-            text = ("χάρτης")
-            ptsize = 0
-            '''
         self.innerResetText(text, ptsize)
-        '''
-        font = self.font()
-        font.setPointSize(12)
-        self.setFont(font)
-        self.setMargin(10)
-        if self.axis == 1:
-            # print("setting", axis)
-            self.setAlignment(Qt.AlignCenter)
-            text = ("Hello\nThis is a test")
-            self.setText(text)
-        '''
 
     def drawSlice(self):
         timera = Utils.Timer(False)
         volume = self.volume_view
-        if volume is None:
+        if volume is None :
             self.clear()
-            self.resetText()
+            if not self.has_had_volume_view:
+                self.resetText()
             return
         self.setMargin(0)
         self.window.setFocus()
@@ -719,16 +675,6 @@ into and out of the viewing plane.
         # fi, fj = volume.ijInPlaneOfSlice(self.axis, volume.ijktf)
         fi, fj = self.tijkToIj(volume.ijktf)
 
-        # Pasting one image into another is easier with PIL:
-        # zslc = PIL.Image.fromarray(slc).resize((zsw, zsh))
-        # out = PIL.Image.new('I;16', (ww, wh))
-        # out.paste(zslc, (int(whw-z*fi), int(whh-z*fj)))
-        # npo = np.array(out)
-
-        # zoomed data slice
-        # zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
-        # timera.time("resize")
-        # viewing window
         out = np.zeros((wh,ww), dtype=np.uint16)
 
         # Pasting zoomed data slice into viewing-area array, taking
@@ -758,8 +704,6 @@ into and out of the viewing plane.
             zslc = cv2.resize(slc[y1s:y2s,x1s:x2s], (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
             out[y1:y2, x1:x2] = zslc
 
-            # zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
-            # out[y1:y2, x1:x2] = zslc[(y1-ay1):(y2-ay1),(x1-ax1):(x2-ax1)]
             timera.time("resize")
         # timera.time("fit rect")
 
@@ -769,8 +713,6 @@ into and out of the viewing plane.
         outrgbx[:,:,3] = 65535
         # draw a colored rectangle outline around the window, then
         # draw a thin black rectangle outline on top of that
-        # cv2.rectangle(outrgbx, (1,1), (ww-2,wh-2), self.axisColor(self.axis), 3)
-        # cv2.rectangle(outrgbx, (0,0), (ww-1,wh-1), (0,0,0,65536), 1)
         cv2.rectangle(outrgbx, (2,2), (ww-3,wh-3), self.axisColor(self.axis), 5)
         cv2.rectangle(outrgbx, (0,0), (ww-1,wh-1), (0,0,0,65536), 1)
 
@@ -784,6 +726,10 @@ into and out of the viewing plane.
         timera.time("draw cv2 underlay")
 
         self.cur_frag_pts_xyijk = None
+        self.cur_frag_pts_fv = []
+        xypts = []
+        pv = self.window.project_view
+        nearbyNode = (pv.nearby_node_fv, pv.nearby_node_index)
         for frag in self.fragmentViews():
             # if not frag.visible and frag != self.currentFragmentView():
             if not frag.visible:
@@ -794,25 +740,9 @@ into and out of the viewing plane.
                 # print(pts)
                 m = 65535
                 color = (0,m,0,65535)
-                '''
-                for pt in pts:
-                    xy = self.ijToXy(pt)
-                    try:
-                        color = frag.fragment.cvcolor
-                        if frag == self.currentFragmentView():
-                            # color = self.splineLineColor
-                            size = self.splineLineSize
-                            if len(pts) == 1:
-                                size += 2 
-                        else:
-                            size = self.inactiveSplineLineSize
-                            # color = self.inactiveSplineLineColor
-                        cv2.circle(outrgbx, xy, size, color, -1)
-                    except:
-                        print(pt, xy)
-                '''
                 color = frag.fragment.cvcolor
-                if frag == self.currentFragmentView():
+                # if frag == self.currentFragmentView():
+                if frag.active:
                     # color = self.splineLineColor
                     size = self.splineLineSize
                     if len(pts) == 1:
@@ -827,33 +757,26 @@ into and out of the viewing plane.
             pts = frag.getPointsOnSlice(self.axis, self.positionOnAxis())
             timera.time("get nodes on slice")
             m = 65535
-            # color = (m,0,0,65535)
-            # color = self.nodeColor
-            xypts = []
-            # nearbyNode = None
-            nearbyNode = -1
             self.nearbyNode = -1
-            if frag == self.currentFragmentView():
-                nearbyNode = self.currentFragmentView().nearbyNode
+            i0 = len(xypts)
             for i, pt in enumerate(pts):
                 ij = self.tijkToIj(pt)
                 xy = self.ijToXy(ij)
                 xypts.append((xy[0], xy[1], pt[0], pt[1], pt[2], pt[3]))
+                self.cur_frag_pts_fv.append(frag)
                 # print("circle at",ij, xy)
                 color = self.nodeColor
-                if frag != self.currentFragmentView():
+                if not frag.active:
                     color = self.inactiveNodeColor
                 # print(pt, self.volume_view.nearbyNode)
-                # if (pt == nearbyNode).all():
-                if pt[3] == nearbyNode:
+                if (frag, pt[3]) == nearbyNode:
                     color = self.highlightNodeColor
-                    self.nearbyNode = i
+                    self.nearbyNode = i0+i
                 self.drawNodeAtXy(outrgbx, xy, color)
             timera.time("draw nodes on slice")
             m = 65535
-            if frag == self.currentFragmentView():
-                self.cur_frag_pts_xyijk = np.array(xypts)
         timera.time("draw zsurf points")
+        self.cur_frag_pts_xyijk = np.array(xypts)
 
         if self.window.project_view.settings['slices']['vol_boxes_visible']:
             cur_vol_view = self.window.project_view.cur_volume_view
@@ -897,7 +820,6 @@ into and out of the viewing plane.
 
         bytesperline = 8*outrgbx.shape[1]
         qimg = QImage(outrgbx, outrgbx.shape[1], outrgbx.shape[0], 
-                # bytesperline, QImage.Format_RGBX64)
                 bytesperline, QImage.Format_RGBA64)
         pixmap = QPixmap.fromImage(qimg)
         self.setPixmap(pixmap)
@@ -908,12 +830,6 @@ class SurfaceWindow(DataWindow):
     def __init__(self, window):
         super(SurfaceWindow, self).__init__(window, 2)
         self.zoomMult = 1.5
-
-    # def ijToXy(self, ij):
-    #     return super(SurfaceWindow, self).ijToXy(ij, 2.)
-
-    # def keyPressEvent(self, e):
-    #    print("surface", e.key())
 
     # see comments for this function in DataWindow
     def nodeMovementAllowedInK(self):
@@ -929,12 +845,17 @@ class SurfaceWindow(DataWindow):
         i,j = ij
         tijk = [0,0,0]
         tijk[self.axis] = self.positionOnAxis()
-        if self.currentFragmentView() is not None and self.currentFragmentView().zsurf is not None:
-            zsurf = self.currentFragmentView().zsurf
+        afvs = self.window.project_view.activeFragmentViews()
+        afvs.reverse()
+        for fv in afvs:
+            zsurf = fv.zsurf
+            if zsurf is None:
+                continue
             if j >= 0 and j < zsurf.shape[0] and i >= 0 and i < zsurf.shape[1]:
-                z = self.currentFragmentView().zsurf[j,i]
+                z = zsurf[j,i]
                 if not np.isnan(z):
                     tijk[self.axis] = np.rint(z)
+                    break
         tijk[self.iIndex] = i
         tijk[self.jIndex] = j
         # print(ij, i, j, tijk)
@@ -943,20 +864,15 @@ class SurfaceWindow(DataWindow):
     def drawSlice(self):
         timera = Utils.Timer(False)
         volume = self.volume_view
-        # if volume is None:
-        #     return
         if volume is None:
-            # self.clear()
-            self.resetText(True)
-            self.window.edit.show()
+            self.clear()
+            if not self.has_had_volume_view:
+                self.resetText(True)
+                self.window.edit.show()
             return
         self.window.edit.hide()
         self.setMargin(0)
         curfv = self.currentFragmentView()
-        # Don't do this!  Even if curfv is None, still
-        # need to redraw window
-        # if curfv is None:
-        #     return
         # zoom by twice the usual amount
         z = self.getZoom()
         # viewing window width
@@ -975,65 +891,21 @@ class SurfaceWindow(DataWindow):
         # convert 16-bit (uint16) gray scale to 16-bit RGBX (X is like
         # alpha, but always has the value 65535)
         outrgbx = np.zeros((wh,ww,4), dtype=np.uint16)
-        if curfv is not None and curfv.zsurf is not None:
-            if self.currentFragmentView().ssurf is not None:
-                slc = self.currentFragmentView().ssurf
+        for frag in self.fragmentViews():
+            # if not frag.activeAndAligned():
+            if not frag.active:
+                continue
+            if frag.aligned() and frag.ssurf is not None:
+                slc = frag.ssurf
                 sw = slc.shape[1]
                 sh = slc.shape[0]
                 # zoomed slice width, height
                 zsw = max(int(z*sw), 1)
                 zsh = max(int(z*sh), 1)
-                # fi, fj = volume.ijInPlaneOfSlice(self.axis, volume.ijktf)
                 fi, fj = self.tijkToIj(volume.ijktf)
-        
-                # Pasting one image into another is easier with PIL:
-                # zslc = PIL.Image.fromarray(slc).resize((zsw, zsh))
-                # out = PIL.Image.new('I;16', (ww, wh))
-                # out.paste(zslc, (int(whw-z*fi), int(whh-z*fj)))
-                # npo = np.array(out)
         
                 # zoomed data slice
                 timera.time("prep")
-                # zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
-                '''
-                slc = self.currentFragmentView().ssurf
-                slcrgbx = np.stack(((slc,)*4), axis=-1)
-                timera.time("stack")
-                # print(outrgbx.shape)
-                slcrgbx[:,:,3] = 65535
-                ogrid = None
-                if hasattr(curfv, 'osurf'):
-                    ogrid = curfv.osurf
-                if ogrid is not None:
-                    slcrgbx[:,:,0:3] //= 4
-                    slcrgbx[:,:,0:3] *= 3
-                    gt0 = curfv.gt0
-                    lt0 = curfv.lt0
-                    ogt0 = curfv.ogt0 // 4
-                    olt0 = curfv.olt0 // 4
-
-                    slcrgbx[gt0,0] += ogt0
-                    slcrgbx[gt0,2] += ogt0
-                    slcrgbx[lt0,1] += olt0
-
-                sw = slcrgbx.shape[1]
-                sh = slcrgbx.shape[0]
-                # zoomed slice width, height
-                zsw = max(int(z*sw), 1)
-                zsh = max(int(z*sh), 1)
-                # fi, fj = volume.ijInPlaneOfSlice(self.axis, volume.ijktf)
-                fi, fj = self.tijkToIj(volume.ijktf)
-        
-                # Pasting one image into another is easier with PIL:
-                # zslc = PIL.Image.fromarray(slc).resize((zsw, zsh))
-                # out = PIL.Image.new('I;16', (ww, wh))
-                # out.paste(zslc, (int(whw-z*fi), int(whh-z*fj)))
-                # npo = np.array(out)
-        
-                # zoomed data slice
-                timera.time("prep")
-                zslc = cv2.resize(slcrgbx, (zsw, zsh), interpolation=cv2.INTER_AREA)
-                '''
                 # timera.time("resize")
                 # viewing window
         
@@ -1061,12 +933,9 @@ class SurfaceWindow(DataWindow):
                     # print(x1,y1,x2,y2)
                     # print(x1s,y1s,x2s,y2s)
                     zslc = cv2.resize(slc[y1s:y2s,x1s:x2s], (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
-                    out[y1:y2, x1:x2] = zslc
+                    out[y1:y2, x1:x2] = np.where(zslc==0,out[y1:y2, x1:x2], zslc)
 
-                    # zslc = cv2.resize(slc, (zsw, zsh), interpolation=cv2.INTER_AREA)
-                    # out[y1:y2, x1:x2] = zslc[(y1-ay1):(y2-ay1),(x1-ax1):(x2-ax1)]
                     timera.time("resize")
-                    # out[y1:y2, x1:x2] = zslc[(y1-ay1):(y2-ay1),(x1-ax1):(x2-ax1)]
                 ogrid = None
                 if hasattr(curfv, 'osurf'):
                     ogrid = curfv.osurf
@@ -1114,33 +983,25 @@ class SurfaceWindow(DataWindow):
         cv2.line(outrgbx, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
 
         self.cur_frag_pts_xyijk = None
+        self.cur_frag_pts_fv = []
+
+        pv = self.window.project_view
+        xypts = []
 
         for frag in self.fragmentViews():
-            if frag != curfv:
+            # if not frag.activeAndAligned():
+            if not frag.active:
                 continue
-            if not curfv.visible:
+            if not frag.visible:
                 continue
-            # nearbyNode = None
             lineColor = frag.fragment.cvcolor
-            nearbyNode = -1
             self.nearbyNode = -1
-            if frag == self.currentFragmentView():
-                nearbyNode = self.currentFragmentView().nearbyNode
             timer_active = False
             timer = Utils.Timer(timer_active)
             if frag.tri is not None:
-                pts = frag.tri.points
+                # pts = frag.tri.points
+                pts = frag.vpoints[:, 0:2]
                 trgs = frag.tri.simplices
-                # m = 65535
-                # color = (m,0,0,65535)
-                # xypts = []
-                '''
-                for trg in trgs:
-                    for i in range(0,3):
-                        xy0 = self.ijToXy(pts[trg[i%3]])
-                        xy1 = self.ijToXy(pts[trg[(i+1)%3]])
-                        cv2.line(outrgbx, xy0, xy1, lineColor, self.triLineSize)
-                '''
                 vrts = pts[trgs]
                 vrts = self.ijsToXys(vrts)
                 vrts = vrts.reshape(-1,3,1,2).astype(np.int32)
@@ -1149,46 +1010,23 @@ class SurfaceWindow(DataWindow):
                 cv2.polylines(outrgbx, vrts, True, lineColor, self.triLineSize)
                 timer.time("draw lines")
 
-
                 color = self.nodeColor
-                if frag != self.currentFragmentView():
-                    color = self.inactiveNodeColor
+                # test not needed, by this point all frags are active
+                # if not frag.activeAndAligned():
+                #     color = self.inactiveNodeColor
                 timer.time("compute points")
                 vrts = self.ijsToXys(pts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
                 cv2.polylines(outrgbx, vrts, True, color, 10)
                 timer.time("draw points")
 
-                if nearbyNode >= 0:
-                    self.nearbyNode = nearbyNode
-                    pt = pts[nearbyNode]
+                if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0:
+                    pt = pts[pv.nearby_node_index]
                     xy = self.ijToXy(pt)
                     color = self.highlightNodeColor
                     self.drawNodeAtXy(outrgbx, xy, color)
 
-
-                '''
-                for i,pt in enumerate(pts):
-                    xy = self.ijToXy(pt)
-                    color = self.nodeColor
-                    if frag != self.currentFragmentView():
-                        color = self.inactiveNodeColor
-                    # ijk = frag.vpoints[i]
-                    # xypts.append((xy[0], xy[1], pt[0], pt[1], pt[2]))
-                    # if (ijk == nearbyNode).all():
-                    if i == nearbyNode:
-                        color = self.highlightNodeColor
-                        self.nearbyNode = i
-                    self.drawNodeAtXy(outrgbx, xy, color)
-                    # cv2.circle(outrgbx, xy, 5, color, -1)
-                '''
-                # if frag == self.cur_frag:
-                #     self.cur_frag_pts_xyijk = np.array(xypts)
-                # m = 65535
-                # color = (0,m,0,65535)
-                # color = self.triLineColor
-                # color = frag.fragment.color
-            if frag.line is not None and frag.lineAxis > -1:
+            elif frag.line is not None and frag.lineAxis > -1:
                 line = frag.line
                 pts = np.zeros((line.shape[0],3), dtype=np.int32)
                 # print(line.shape, pts.shape)
@@ -1197,40 +1035,50 @@ class SurfaceWindow(DataWindow):
                 # print(pts.shape)
                 pts[:,axis] = frag.lineAxisPosition
                 pts[:,2] = line[:,2]
-                # m = 65535
-                # color = (0,m,0,65535)
                 for i in range(pts.shape[0]-1):
                     xy0 = self.ijToXy(pts[i,0:2])
                     xy1 = self.ijToXy(pts[i+1,0:2])
                     cv2.line(outrgbx, xy0, xy1, lineColor, self.triLineSize)
-                # m = 65535
-                # color = (m,0,0,65535)
-                # xypts = []
                 for i,pt in enumerate(pts):
                     xy = self.ijToXy(pt[0:2])
                     color = self.nodeColor
-                    if frag != self.currentFragmentView():
-                        color = self.inactiveNodeColor
+                    # all frags are active at this point
+                    # if not frag.activeAndAligned():
+                    #     color = self.inactiveNodeColor
                     ijk = frag.vpoints[i]
-                    # xypts.append((xy[0], xy[1], pt[0], pt[1], pt[2]))
-                    # if (ijk == nearbyNode).all():
-                    if pt[2] == nearbyNode:
+                    if frag == pv.nearby_node_fv and i == pv.nearby_node_index:
                         color = self.highlightNodeColor
-                        self.nearbyNode = i
                     self.drawNodeAtXy(outrgbx, xy, color)
 
-                # if frag == self.cur_fragment_view:
-                #     self.cur_frag_pts_xyijk = np.array(xypts)
+            else:
+                # pts = frag.fpoints[:, 0:2]
+                pts = frag.vpoints[:, 0:2]
+                # print("pts shape", pts.shape)
+                color = self.nodeColor
+                # all frags are active at this point
+                # if not frag.activeAndAligned():
+                #     color = self.inactiveNodeColor
+                vrts = self.ijsToXys(pts)
+                vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
+                cv2.polylines(outrgbx, vrts, True, color, 10)
+                if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0:
+                    pt = pts[pv.nearby_node_index]
+                    xy = self.ijToXy(pt)
+                    color = self.highlightNodeColor
+                    self.drawNodeAtXy(outrgbx, xy, color)
 
-            if frag == self.currentFragmentView():
-                xypts = []
-                for pt in frag.vpoints:
+            if frag.active:
+                i0 = len(xypts)
+                for i,pt in enumerate(frag.vpoints):
                     ij = self.tijkToIj(pt)
                     xy = self.ijToXy(ij)
                     xypts.append((xy[0], xy[1], pt[0], pt[1], pt[2], pt[3]))
-                self.cur_frag_pts_xyijk = np.array(xypts)
+                    self.cur_frag_pts_fv.append(frag)
+                    if frag == pv.nearby_node_fv and i == pv.nearby_node_index:
+                        self.nearbyNode = i+i0
             timer.time("compute cur_frag_pts")
         timera.time("draw frag")
+        self.cur_frag_pts_xyijk = np.array(xypts)
 
         self.drawScaleBar(outrgbx)
 

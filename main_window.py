@@ -21,8 +21,9 @@ from PyQt5.QtGui import QPalette, QColor, QCursor
 from tiff_loader import TiffLoader
 from data_window import DataWindow, SurfaceWindow
 from project import Project, ProjectView
+from fragment import Fragment, FragmentsModel
 from volume import (
-        Fragment, Volume, FragmentsModel, VolumesModel, 
+        Volume, VolumesModel, 
         DirectionSelectorDelegate,
         ColorSelectorDelegate)
 from utils import Utils
@@ -81,15 +82,8 @@ class MainWindow(QMainWindow):
             exit()
 
         self.setWindowTitle(MainWindow.appname)
-        # self.setWindowTitle(appname)
         self.setMinimumSize(QSize(750,600))
-        # self.setMinimumSize(QSize(1000,800))
-        # self.setMinimumSize(QSize(1000,800))
         self.settingsApplySizePos()
-
-        # self.test = QLabel("hello")
-        # self.test.setWindowFlags(Qt.CustomizeWindowHint)
-        # self.test.show()
 
         grid = QGridLayout()
 
@@ -106,7 +100,6 @@ class MainWindow(QMainWindow):
         self.surface = SurfaceWindow(self)
 
         # GUI panel
-        # self.panel = ColorBlock('gray', 'Panel')
         self.tab_panel = QTabWidget()
         self.tab_panel.setMinimumSize(QSize(200,200))
 
@@ -121,22 +114,6 @@ class MainWindow(QMainWindow):
         self.edit.setReadOnly(True)
         # self.edit.setMaximumSize(QSize(200,300))
         grid.addWidget(self.edit, 0, 2, 4, 3)
-
-        '''
-        grid.addWidget(self.xline, 0, 0, 2, 2)
-        grid.addWidget(self.inline, 2, 0, 2, 2)
-        grid.addWidget(self.depth, 4, 0, 1, 2)
-        grid.addWidget(self.surface, 0, 2, 4, 3)
-        grid.addWidget(self.panel, 4, 2, 1, 3)
-        '''
-
-        '''
-        grid.addWidget(self.xline, 0, 0, 1, 2)
-        grid.addWidget(self.inline, 1, 0, 1, 2)
-        grid.addWidget(self.depth, 2, 0, 2, 2)
-        grid.addWidget(self.surface, 0, 2, 3, 3)
-        grid.addWidget(self.panel, 3, 2, 1, 3)
-        '''
 
         self.addVolumesPanel()
         self.addFragmentsPanel()
@@ -194,21 +171,6 @@ class MainWindow(QMainWindow):
         self.next_volume_action = QAction("Next volume", self)
         self.next_volume_action.triggered.connect(self.onNextVolumeButtonClick)
 
-        '''
-        self.volume_menu = self.menu.addMenu("&Volume")
-        self.volume_menu.addAction(self.next_volume_action)
-        self.volume_menu.addAction(self.toggle_direction_action)
-
-        self.new_fragment_action = QAction("New fragment", self)
-        self.new_fragment_action.triggered.connect(self.onNewFragmentButtonClick)
-        self.next_current_fragment_action = QAction("Next current fragment", self)
-        self.next_current_fragment_action.triggered.connect(self.onNextCurrentFragmentButtonClick)
-
-        self.fragment_menu = self.menu.addMenu("&Fragment")
-        self.fragment_menu.addAction(self.new_fragment_action)
-        self.fragment_menu.addAction(self.next_current_fragment_action)
-        '''
-
         self.status_bar = QStatusBar(self)
         self.setStatusBar(self.status_bar)
 
@@ -219,22 +181,17 @@ class MainWindow(QMainWindow):
 
     def addFragmentsPanel(self):
         panel = QWidget()
-        # grid = QGridLayout()
-        # panel.setLayout(grid)
-        # label = QLabel("fragments panel")
         vlayout = QVBoxLayout()
         panel.setLayout(vlayout)
         hlayout = QHBoxLayout()
         label = QLabel("Hover mouse over column headings for more information")
         label.setAlignment(Qt.AlignCenter)
         hlayout.addWidget(label)
-        # grid.addWidget(label, 0, 0, 1, 1)
         create_frag = CreateFragmentButton(self)
         create_frag.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
         hlayout.addWidget(create_frag)
         hlayout.addStretch()
         vlayout.addLayout(hlayout)
-        # grid.addWidget(create_frag, 0, 1, 1, 1)
         self.fragments_table = QTableView()
         hh = self.fragments_table.horizontalHeader()
         # print("mss", hh.minimumSectionSize())
@@ -253,20 +210,16 @@ class MainWindow(QMainWindow):
 
         self.fragments_table.setModel(FragmentsModel(None, self))
         self.fragments_table.resizeColumnsToContents()
-        # grid.addWidget(self.fragments_table, 1,0,1,2)
         vlayout.addWidget(self.fragments_table)
         self.tab_panel.addTab(panel, "Fragments")
 
     def addVolumesPanel(self):
         panel = QWidget()
-        # grid = QGridLayout()
-        # panel.setLayout(grid)
         vlayout = QVBoxLayout()
         panel.setLayout(vlayout)
         hlayout = QHBoxLayout()
         label = QLabel("Hover mouse over column headings for more information")
         label.setAlignment(Qt.AlignCenter)
-        # grid.addWidget(label, 0, 0, 1, 1)
         hlayout.addWidget(label)
         vbv = VolBoxesVisibleCheckBox(self)
         self.settings_vol_boxes_visible2 = vbv
@@ -305,16 +258,6 @@ class MainWindow(QMainWindow):
 
     def addSettingsPanel(self):
         panel = QWidget()
-        '''
-        grid = QGridLayout()
-        panel.setLayout(grid)
-        label = QLabel("settings panel")
-        label.setAlignment(Qt.AlignCenter)
-        grid.addWidget(label, 0, 0, 1, 1)
-        vbv = VolBoxesVisibleCheckBox(self)
-        self.settings_vol_boxes_visible = vbv
-        grid.addWidget(vbv, 1, 0, 1, 1)
-        '''
         hlayout = QHBoxLayout()
         panel.setLayout(hlayout)
         slices_layout = QVBoxLayout()
@@ -325,7 +268,6 @@ class MainWindow(QMainWindow):
         slices_layout.addWidget(vbv)
         slices_layout.addStretch()
         fragment_layout = QVBoxLayout()
-        # hlayout.addLayout(slices_layout)
         fragment_layout.addWidget(QLabel("Fragment View"))
 
         self.tab_panel.addTab(panel, "Settings")
@@ -365,29 +307,48 @@ class MainWindow(QMainWindow):
         for frag in self.project_view.fragments.keys():
             name = frag.name
             names.add(name)
+        stem = "frag"
+        mfv = self.project_view.mainActiveVisibleFragmentView(unaligned_ok=True)
+        if mfv is not None:
+            stem = mfv.fragment.name
         for i in range(1,1000):
-            name = "frag%d"%i
+            # name = "%s%d"%(stem,i)
+            name = Utils.nextName(stem, i)
             if name not in names:
                 break
         # print("color",color)
         frag = Fragment(name, vv.direction)
-        # frag.color = Utils.getNextColor()
         frag.setColor(Utils.getNextColor())
         print("created fragment %s"%frag.name)
         self.fragments_table.model().beginResetModel()
         self.project_view.project.addFragment(frag)
         self.fragments_table.model().endResetModel()
-        # self.project_view.addFragmentView(frag)
         self.setFragments()
-        # self.project_view.setCurrentFragment(frag)
-        self.setCurrentFragment(frag)
+        fv = self.project_view.fragments[frag]
+        fv.active = True
+        self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
         # need to make sure new fragment is added to table
-        # before calling scrollToEnd
+        # before calling scrollToRow
         self.app.processEvents()
-        self.fragments_table.model().scrollToEnd()
+        index = self.project_view.project.fragments.index(frag)
+        self.fragments_table.model().scrollToRow(index)
+
+    def renameFragment(self, frag, name):
+        if frag.name == name:
+            return
+        self.fragments_table.model().beginResetModel()
+        frag.name = name
+        proj = self.project_view.project
+        proj.alphabetizeFragments()
+        self.fragments_table.model().endResetModel()
+        self.app.processEvents()
+        index = proj.fragments.index(frag)
+        self.fragments_table.model().scrollToRow(index)
+        self.drawSlices()
 
     def addPointToCurrentFragment(self, tijk):
-        cur_frag_view = self.project_view.cur_fragment_view
+        # cur_frag_view = self.project_view.cur_fragment_view
+        cur_frag_view = self.project_view.mainActiveVisibleFragmentView()
         if cur_frag_view is None:
             print("no current fragment view set")
             return
@@ -437,22 +398,6 @@ class MainWindow(QMainWindow):
         print("calling project save")
         # self.project_view.project.save()
         self.project_view.save()
-
-    '''
-    def OldonLoadHardwiredProjectButtonClick(self, s):
-        print("load hardwired project clicked")
-        project = Project.open('H:\\Vesuvius\\try2.khprj')
-        # project = Project.open('H:\\Vesuvius\\try1.khprj')
-        if not project.valid:
-            print("Project file not opened: %s"%new_prj.error)
-            return
-        volume = project.volumes[0]
-        self.setProject(project)
-        self.setVolume(volume)
-    '''
-
-    # def onFilesSelected(self, files):
-    #     print("files selected", files)
 
     # Qt trickery to get around a problem with QFileDialog
     # when the user double-clicks on
@@ -521,10 +466,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("%s - %s"%(MainWindow.appname, pdir.name))
         self.setProject(new_prj)
 
-        # print("calling project save")
-        # self.project_view.project.save()
-        # self.project_view.save()
-
     def onSaveProjectAsButtonClick(self, s):
         print("save project as clicked")
         if self.project_view is None or self.project_view.project is None:
@@ -562,7 +503,7 @@ class MainWindow(QMainWindow):
         print("save as", idir)
         pdir = Path(idir)
         if pdir.exists():
-            answer = QMessageBox.warning(self, "khartes", "The project directory %s already exists.\nDo you want to overwrite it?"%idir, QMessageBox.Ok|QMessageBox.Cancel, QMessageBox.Ok)
+            answer = QMessageBox.warning(self, "Save project as...", "The project directory %s already exists.\nDo you want to overwrite it?"%idir, QMessageBox.Ok|QMessageBox.Cancel, QMessageBox.Ok)
             if answer != QMessageBox.Ok:
                 print("Save as cancelled by user")
                 return
@@ -571,7 +512,12 @@ class MainWindow(QMainWindow):
         new_prj = Project.create(idir)
         if not new_prj.valid:
             err = new_prj.error
-            print("Failed to create project to save to: %s", err)
+            print("Failed to create project to save to: %s"%err)
+            msg = QMessageBox()
+            msg.setWindowTitle("Save project as...")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("'Save as' failed: %s"%err)
+            msg.exec()
             return
 
         self.setWindowTitle("%s - %s"%(MainWindow.appname, Path(idir).name))
@@ -587,10 +533,6 @@ class MainWindow(QMainWindow):
         old_prj.fragments_path = new_prj.fragments_path
 
         self.project_view.save()
-
-        # print("calling project save")
-        # self.project_view.project.save()
-        # self.project_view.save()
 
     def settingsApplySizePos(self):
         self.settings.beginGroup("MainWindow")
@@ -665,12 +607,17 @@ class MainWindow(QMainWindow):
 
     # TODO Should have dialog where user can select infill parameter
     def onExportAsMeshButtonClick(self, s):
-        # self.settingsSaveDirectory(str(parent), "nrrd_")
         print("export mesh clicked")
         if self.project_view is None or self.project_view.project is None:
             print("No project currently loaded")
             return
-        if self.project_view.cur_fragment is None:
+        frags = []
+        fvs = []
+        for frag, fv in self.project_view.fragments.items():
+            if fv.active:
+                frags.append(frag)
+                fvs.append(fv)
+        if len(frags) == 0:
             print("No active fragment")
             return
         sdir = self.settingsGetDirectory("mesh_")
@@ -692,7 +639,11 @@ class MainWindow(QMainWindow):
         name = pname.name
 
         # TODO: allow the user to set the infill
-        err = self.project_view.cur_fragment.saveAsObjMesh(pname, 16)
+        # TODO: save all active fragments
+        # err = Fragment.saveListAsObjMesh(frags, pname, 16)
+        infill = 16
+        err = Fragment.saveListAsObjMesh(fvs, pname, infill)
+
         if err != "":
             msg = QMessageBox()
             msg.setWindowTitle("Save fragment as mesh")
@@ -738,21 +689,14 @@ class MainWindow(QMainWindow):
             return
 
         idir = file_names[0]
-        ''''''
-        # idir = QFileDialog.getExistingDirectory(self, "Open .khprj directory")
-
-        # print("Directory",idir)
 
         loading = self.showLoading()
         pv = ProjectView.open(idir)
         if not pv.valid:
             print("Project file %s not opened: %s"%(idir, pv.error))
             return
-        # self.project_view = pv
         self.setProjectView(pv)
         self.setWindowTitle("%s - %s"%(MainWindow.appname, Path(idir).name))
-        # volume = project.volumes[0]
-        # self.setProject(project)
         cur_volume = pv.cur_volume
         if cur_volume is None:
             print("no cur volume set")
@@ -760,6 +704,9 @@ class MainWindow(QMainWindow):
             if len(pv.volumes) > 0:
                 cur_volume = list(spv.keys())[0]
         self.setVolume(cur_volume)
+        # intentionally called a second time to use
+        # cur_volume information to set fragment view volume
+        self.setProjectView(pv)
         path = Path(idir)
         path = path.absolute()
         parent = path.parent
@@ -871,14 +818,7 @@ class MainWindow(QMainWindow):
             return loading
 
     def setVolume(self, volume):
-        # self.test = QLabel("hello")
-        # self.test.setWindowFlags(Qt.CustomizeWindowHint)
-        # self.test.show()
         if volume is not None and volume.data is None:
-            # loading = MainWindow.Loading()
-            # loading.show()
-            # needed to make label visible
-            # self.app.processEvents()
             loading = self.showLoading()
 
         self.volumes_table.model().beginResetModel()
@@ -892,8 +832,6 @@ class MainWindow(QMainWindow):
                 vv.setDefaultParameters(self)
             if vv.minZoom == 0.:
                 vv.setDefaultMinZoom(self)
-        # for fv in self.project_view.fragments.values():
-        #     fv.setVolumeView(vv)
         self.project_view.updateFragmentViews()
         self.depth.setVolumeView(vv);
         self.xline.setVolumeView(vv);
@@ -913,22 +851,6 @@ class MainWindow(QMainWindow):
         fragment_views = list(self.project_view.fragments.values())
         for fv in fragment_views:
             fv.setVolumeView(self.volumeView())
-        # self.depth.setFragmentViews(fragment_views)
-        # self.xline.setFragmentViews(fragment_views)
-        # self.inline.setFragmentViews(fragment_views)
-        # self.surface.setFragmentViews(fragment_views)
-        self.drawSlices()
-
-    def setCurrentFragment(self, cur_fragment):
-        self.fragments_table.model().beginResetModel()
-        self.project_view.setCurrentFragment(cur_fragment)
-        self.fragments_table.model().endResetModel()
-        self.export_mesh_action.setEnabled(cur_fragment is not None)
-        # cur_fragment_view = self.project_view.cur_fragment_view
-        # self.depth.setCurrentFragmentView(cur_fragment_view)
-        # self.xline.setCurrentFragmentView(cur_fragment_view)
-        # self.inline.setCurrentFragmentView(cur_fragment_view)
-        # self.surface.setCurrentFragmentView(cur_fragment_view)
         self.drawSlices()
 
     def setFragmentVisibility(self, fragment, visible):
@@ -940,22 +862,25 @@ class MainWindow(QMainWindow):
         self.fragments_table.model().endResetModel()
         self.drawSlices()
 
+    def setFragmentActive(self, fragment, active, exclusive=False):
+        # print("sfa", fragment.name, active, exclusive)
+        fragment_view = self.project_view.fragments[fragment]
+        if fragment_view.active == active:
+            return
+        self.fragments_table.model().beginResetModel()
+        if exclusive:
+            self.project_view.clearActiveFragmentViews()
+        fragment_view.active = active
+        self.fragments_table.model().endResetModel()
+        # self.export_mesh_action.setEnabled(self.project_view.mainActiveVisibleFragmentView() is not None)
+        self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
+        self.drawSlices()
+
     def setFragmentColor(self, fragment, color):
         self.fragments_table.model().beginResetModel()
         fragment.setColor(color)
         self.fragments_table.model().endResetModel()
         self.drawSlices()
-
-        '''
-        self.save_project_action = QAction("Save project", self)
-        self.save_project_action.triggered.connect(self.onSaveProjectButtonClick)
-        self.save_project_as_action = QAction("Save project as...", self)
-        self.save_project_as_action.triggered.connect(self.onSaveProjectAsButtonClick)
-        self.import_nrrd_action = QAction("Import NRRD files...", self)
-        self.import_nrrd_action.triggered.connect(self.onImportNRRDButtonClick)
-        self.import_tiffs_action = QAction("Import TIFF files...", self)
-        self.import_tiffs_action.triggered.connect(self.onImportTiffsButtonClick)
-        '''
 
     def setProjectView(self, project_view):
         self.project_view = project_view
@@ -971,14 +896,15 @@ class MainWindow(QMainWindow):
         self.save_project_as_action.setEnabled(True)
         self.import_nrrd_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
-        self.export_mesh_action.setEnabled(project_view.cur_fragment is not None)
+        # self.export_mesh_action.setEnabled(project_view.mainActiveFragmentView() is not None)
+        self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
 
     def setProject(self, project):
         project_view = ProjectView(project)
         self.setProjectView(project_view)
         self.setVolume(None)
         self.setFragments()
-        self.setCurrentFragment(None)
+        # self.setCurrentFragment(None)
         self.drawSlices()
 
     def resizeEvent(self, e):

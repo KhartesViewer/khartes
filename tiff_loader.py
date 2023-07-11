@@ -173,7 +173,10 @@ class TiffLoader(QMainWindow):
         self.nameedit = QLineEdit()
         self.nameedit.textEdited.connect(self.onNameEdited)
         hbox.addWidget(self.nameedit)
+        self.vcrender = QCheckBox("TIFFs are from vc_layers")
+        self.vcrender.setCheckState(Qt.Unchecked)
         hbox.addStretch()
+        hbox.addWidget(self.vcrender)
         vbox.addLayout(hbox)
         hbox = QHBoxLayout()
         self.gobutton = QPushButton("Create")
@@ -482,8 +485,12 @@ class TiffLoader(QMainWindow):
         volume_name = self.name
         filenames = self.filepathdict
         callback = self.readerCallback
+        vcrender = self.vcrender.isChecked()
 
-        new_volume = Volume.createFromTiffs(project, tiff_directory, volume_name, ranges, "", filenames, callback)
+        old_volume = self.main_window.project_view.cur_volume
+        # unloads old volume
+        self.main_window.setVolume(None)
+        new_volume = Volume.createFromTiffs(project, tiff_directory, volume_name, ranges, "", filenames, callback, vcrender)
 
         self.reading = False
         self.cancel = False
@@ -494,6 +501,7 @@ class TiffLoader(QMainWindow):
             msg.setIcon(QMessageBox.Critical)
             msg.setText("Failed to create new volume from TIFF files: %s"%new_volume.error)
             msg.exec()
+            self.main_window.setVolume(old_volume)
         else:
             self.main_window.setVolume(new_volume)
             self.hide()

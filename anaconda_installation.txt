@@ -6,11 +6,16 @@ similar, but I haven't tested them.  Although khartes
 does not actually use matlib, I installed it because 
 doing so automatically installs PyQt5 and numpy.
 
-The only possibly unfamiliar package is pynrrd, 
+One possibly unfamiliar package is pynrrd, 
 which implements (in pure python) the NRRD format 
 (Nearly Raw Raster Data).  This format consists 
 of an ascii header followed by binary raster data;
 khartes uses this format for storing data volumes.
+
+Another unusual package is rectpack, which is
+used for packing 2D rectangles in a minimum-size box.
+It is used when exporting textures in the export-mesh
+function.
 
 I tested khartes in Python 3.11, but it probably works 
 on slightly older versions of Python 3 as well.
@@ -26,3 +31,4 @@ conda install matplotlib
 conda install opencv
 conda install scipy
 conda install -c conda-forge pynrrd
+conda install -c conda-forge rectpack
