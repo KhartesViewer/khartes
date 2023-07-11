@@ -1308,8 +1308,8 @@ class FragmentView:
             ss0 = ftrdata[(z0s, ixyzs[1,:], ixyzs[2,:])]
             z1s = np.minimum(ixyzs[0,:]+1, ftrdata.shape[0]-1)
             ss1 = ftrdata[(z1s, ixyzs[1,:], ixyzs[2,:])]
-            xyzsn = xyzsn[:,xyzsn[0,:]<ftrdata.shape[0]]
-            xyzsn = xyzsn[:,xyzsn[0,:]>=0]
+            xyzsn = xyzsn[:,np.rint(xyzsn[0,:])<ftrdata.shape[0]]
+            xyzsn = xyzsn[:,np.rint(xyzsn[0,:])>=0]
             zfs = xyzsn[0]-z0s
             ssi = ss0*(1.-zfs)+ss1*(zfs)
             self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = np.minimum(ssi, 65535)
