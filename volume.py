@@ -5,6 +5,34 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import Qt
 import cv2
 import nrrd
+import nrrd.writer
+
+# The nrrd writer provided by the pynrrd package duplicates
+# the data in memory before writing.  This is undesirable
+# for large data volumes.  The code below overrides the
+# original nrrd write function, to avoid data duplication in
+# the particular case that is used by the TIFF importer.
+
+# save the original version of the nrrd writer
+nrrd_write_data_original = nrrd.writer._write_data
+
+# original function signature, with types:
+# def _write_data(data: npt.NDArray, fh: IO, header: NRRDHeader, compression_level: Optional[int] = None,
+
+# overriding function
+def nrrd_write_data_override(data, fh, header, compression_level=None, index_order='F'):
+    print("nrrd_write_data_override", header['encoding'], index_order)
+    if header['encoding'] == 'raw' and index_order == 'C':
+        print("nrrd_write_data_override: doing direct write")
+        # write without duplicating data
+        data.tofile(fh)
+    else:
+        # call the original nrrd write function
+        nrrd_write_data_original(data, fh, header, compression_level, index_order)
+
+nrrd.writer._write_data = nrrd_write_data_override
+
+# end of code to override pynrrd functionality
 
 class ColorSelectorDelegate(QtWidgets.QStyledItemDelegate):
     def __init__(self, table, parent=None):
@@ -705,20 +733,18 @@ class Volume():
             ofilefull.unlink(True)
             return Volume.createErrorVolume("Cancelled by user")
         # tocube = ocube
-        tocube = np.transpose(ocube)
+        # tocube = np.transpose(ocube)
         # TODO: for testing
         # tocube = np.transpose(tocube, axes=[2,1,0])
-        if axes is not None:
-            tocube = np.transpose(tocube, axes=axes)
+        # if axes is not None:
+        #     tocube = np.transpose(tocube, axes=axes)
         print("beginning write to %s"%ofilefull)
         if callback is not None and not callback("Beginning write to %s"%ofilefull):
             return Volume.createErrorVolume("Cancelled by user")
-        # the option index_order='C' seems to make nrrd.write
-        # run very slowly, so better to pass a transposed matrix
-        # to nrrd.write
-        # nrrd.write(str(ofilefull), ocube, header, index_order='C')
-        nrrd.write(str(ofilefull), tocube, header)
+        nrrd.write(str(ofilefull), ocube, header, index_order='C')
+        # nrrd.write(str(ofilefull), tocube, header)
         print("file %s saved"%ofilefull)
+        callback("Loading volume from %s"%ofilefull)
         volume = Volume.loadNRRD(ofilefull)
         project.addVolume(volume)
         
