@@ -1,21 +1,24 @@
 from pathlib import Path
 import shutil
+import copy
+import json
 
 from PyQt5.QtWidgets import (
         QAction, QApplication, QAbstractItemView,
         QCheckBox,
-        QFileDialog,
-        QGridLayout,
+        QFileDialog, QFrame,
+        QGridLayout, QGroupBox,
         QHBoxLayout, 
         QLabel,
         QMainWindow, QMessageBox,
         QPlainTextEdit, QPushButton,
-        QStatusBar,
+        QSpacerItem, QSpinBox, QDoubleSpinBox,
+        QStatusBar, QStyledItemDelegate,
         QTableView, QTabWidget, QTextEdit, QToolBar,
         QVBoxLayout, 
         QWidget, 
         )
-from PyQt5.QtCore import QSize, Qt, qVersion, QSettings
+from PyQt5.QtCore import QAbstractTableModel, QSize, Qt, qVersion, QSettings
 from PyQt5.QtGui import QPalette, QColor, QCursor
 
 from tiff_loader import TiffLoader
@@ -27,6 +30,121 @@ from volume import (
         DirectionSelectorDelegate,
         ColorSelectorDelegate)
 from utils import Utils
+
+'''
+# https://joelmccune.com/python-dictionary-as-object/amp
+class DictObj:
+    def __init__(self, in_dict):
+        for key, val in in_dict.items():
+            if isinstance(val, (list, tuple)):
+                setattr(self, key, [DictObj(x) if isinstance(x, dict) else x for x in val])
+            else:
+                setattr(self, key, DictObj(val) if isinstance(val, dict) else val)
+
+class GenericSpinBoxDelegate(QStyledItemDelegate):
+    def __init__(self, spinbox_factory, table, parent=None):
+        super(GenericSpinBoxDelegate, self).__init__(parent)
+        self.table = table
+        self.spinbox_factory = spinbox_factory
+
+    def createEditor(self, parent, option, index):
+        sb = self.spinbox_factory(parent)
+        sb.valueChanged.connect(lambda d: self.onValueChanged(d, sb, index))
+        return sb
+
+    def onValueChanged(self, sb_index, spinbox, model_index):
+        self.table.model().setData(model_index, spinbox.value, Qt.EditRole)
+
+    def setEditorData(self, editor, index):
+        sb_value = index.data(Qt.DisplayRole)
+        if sb_value >= 0:
+            editor.setValue(sb_value)
+
+    def setModelData(self, editor, model, index):
+        # do nothing, since onValueChanged handled it
+        pass
+
+    # class function
+    def widthSpinBoxFactory(parent):
+        sb = QSpinBox(parent)
+        sb.minimum = 0
+        sb.maximum = 10
+        return sb
+
+    # class function
+    def opacitySpinBoxFactory(parent):
+        sb = QDoubleSpinBox(parent)
+        sb.minimum = 0.
+        sb.maximum = 1.0
+        sb.decimals = 1
+        sb.singleStep = 0.1
+        return sb
+
+class DrawSettingsModel(QAbstractTableModel):
+    def __init__(self, main_window):
+        super(DrawSettingsModel, self).__init__()
+        # TODO: are these settings attached to the user,
+        # or to the project?  Probably to the user.
+        self.main_window = main_window
+
+    columns = ["", "Width", "Opacity"]
+    ctips = ["", "Width of line or node in pixels", "Opacity: 0.0 is transparent, 1.0 is opaque"]
+
+    rows = ["Node", "Line", "Mesh"]
+
+    def flags(self, index):
+        col = index.column()
+        oflags = super(DrawSettingsModel, self).flags(index)
+        if col == 0:
+            nflags = Qt.ItemNeverHasChildren
+            return nflags
+        if col == 1 or col == 2:
+            nflags = Qt.ItemNeverHasChildren
+            nflags |= Qt.ItemIsEnabled
+            return nflags
+
+    def headerData(self, section, orientation, role):
+        if orientation != Qt.Horizontal:
+            return None
+
+        if role == Qt.DisplayRole:
+            if section == 0:
+                table = self.main_window.draw_settings_table
+                # make sure spin boxes in cols 1 and 2 are always open,
+                # so no double-clicking is required
+                for i in range(self.rowCount()):
+                    index = self.createIndex(i, 1)
+                    table.openPErsistendEditor(index)
+                    index = self.createIndex(i, 2)
+                    table.openPErsistendEditor(index)
+                return DrawSettingsModel.columns[section]
+            elif role == Qt.ToolTipRole:
+                return DrawSettingsModel.ctips[section]
+
+    def columnCount(self, parent=None):
+        return len(DrawSettingsModel.columns)
+
+    def rowCount(self, parent=None):
+        return len(DrawSettingsModel.rows)
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole and (column == 1 or column == 2):
+            row = index.row()
+            column = index.column()
+            rowname = self.rows[row]
+            colname = self.columns[column]
+            return(self.main_window.drawSettings(rowname, colname))
+        return None
+
+    def setData(self, index, value, role):
+        row = index.row()
+        column = index.column()
+        if role == Qt.EditRole and (column == 1 or column == 2):
+            rowname = self.rows[row]
+            colname = self.columns[column]
+            self.main_window.setDrawSettings(rowname, colname, value)
+        return False
+'''
 
 class ColorBlock(QLabel):
 
@@ -64,16 +182,134 @@ class VolBoxesVisibleCheckBox(QCheckBox):
         self.main_window.setVolBoxesVisible(s==Qt.Checked)
 
 
+class WidthSpinBox(QSpinBox):
+    def __init__(self, main_window, name, parent=None):
+        super(WidthSpinBox, self).__init__(parent)
+        self.main_window = main_window
+        self.name = name
+        self.class_name = "width"
+        self.setMinimum(1)
+        self.setMaximum(10)
+        self.setValue(main_window.draw_settings[self.name][self.class_name])
+        self.valueChanged.connect(self.onValueChanged, Qt.QueuedConnection)
+        main_window.draw_settings_widgets[self.name][self.class_name] = self
+
+    def onValueChanged(self, value):
+        self.main_window.setDrawSettingsValue(self.name, self.class_name, value)
+        self.lineEdit().deselect()
+
+    def updateValue(self, value):
+        self.setValue(value)
+
+class OpacitySpinBox(QDoubleSpinBox):
+    def __init__(self, main_window, name, parent=None):
+        super(OpacitySpinBox, self).__init__(parent)
+        self.main_window = main_window
+        self.name = name
+        self.class_name = "opacity"
+        self.setMinimum(0.0)
+        self.setMaximum(1.0)
+        self.setDecimals(1)
+        self.setSingleStep(0.1)
+        self.setValue(main_window.draw_settings[name][self.class_name])
+        self.valueChanged.connect(self.onValueChanged, Qt.QueuedConnection)
+        main_window.draw_settings_widgets[self.name][self.class_name] = self
+
+    def onValueChanged(self, value):
+        rvalue = round(value*10)/10.
+        if rvalue != value:
+            # print("rvalue",rvalue,"!=","value",value)
+            self.setValue(rvalue)
+        self.main_window.setDrawSettingsValue(self.name, self.class_name, rvalue)
+        self.lineEdit().deselect()
+
+    def updateValue(self, value):
+        self.setValue(value)
+
+class ApplyOpacityCheckBox(QCheckBox):
+    def __init__(self, main_window, name, enabled, parent=None):
+        super(ApplyOpacityCheckBox, self).__init__(parent)
+        self.main_window = main_window
+        self.name = name
+        self.class_name = "apply_opacity"
+        self.setChecked(main_window.draw_settings[self.name][self.class_name])
+        self.setEnabled(enabled)
+        self.stateChanged.connect(self.onStateChanged)
+        main_window.draw_settings_widgets[self.name][self.class_name] = self
+
+    def onStateChanged(self, s):
+        self.main_window.setDrawSettingsValue(self.name, self.class_name, s==Qt.Checked)
+
+    def updateValue(self, value):
+        self.setChecked(value)
+
+
+    '''
+    # class function
+    def widthSpinBoxFactory(parent):
+        sb = QSpinBox(parent)
+        sb.minimum = 0
+        sb.maximum = 10
+        return sb
+
+    # class function
+    def opacitySpinBoxFactory(parent):
+        sb = QDoubleSpinBox(parent)
+        sb.minimum = 0.
+        sb.maximum = 1.0
+        sb.decimals = 1
+        sb.singleStep = 0.1
+        return sb
+    '''
+
+
 class MainWindow(QMainWindow):
 
     appname = "χάρτης"
+
+    draw_settings_defaults = {
+        "node": {
+            "width": 5,
+            "opacity": 1.0,
+            "apply_opacity": True,
+        },
+        "line": {
+            "width": 1,
+            "opacity": 1.0,
+            "apply_opacity": True,
+        },
+        "mesh": {
+            "width": 1,
+            "opacity": 1.0,
+            "apply_opacity": True,
+        },
+        "axes": {
+            "width": 1,
+            "opacity": 1.0,
+            "apply_opacity": True,
+        },
+        "borders": {
+            "width": 5,
+            "opacity": 1.0,
+            "apply_opacity": True,
+        },
+        "labels": {
+            "width": 1,
+            "opacity": 1.0,
+            "apply_opacity": False,
+        },
+        "overlay": {
+            "opacity": 1.0,
+            "apply_opacity": True,
+        },
+    }
 
     def __init__(self, appname, app):
         super(MainWindow, self).__init__()
 
         self.app = app
         self.settings = QSettings(QSettings.IniFormat, QSettings.UserScope, 'khartes.org', 'khartes')
-        print(self.settings.fileName())
+        print("Loaded settings from", self.settings.fileName())
         qv = [int(x) for x in qVersion().split('.')]
         # print("Qt version", qv)
         if qv[0] > 5 or qv[0] < 5 or qv[1] < 12:
@@ -84,6 +320,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(MainWindow.appname)
         self.setMinimumSize(QSize(750,600))
         self.settingsApplySizePos()
+
+        self.draw_settings = copy.deepcopy(MainWindow.draw_settings_defaults)
+        self.settingsLoadDrawSettings()
+        self.draw_settings_widgets = copy.deepcopy(MainWindow.draw_settings_defaults)
 
         grid = QGridLayout()
 
@@ -178,6 +418,7 @@ class MainWindow(QMainWindow):
         # is this needed?
         self.volumes_model = VolumesModel(None, self)
         self.tiff_loader = TiffLoader(self)
+        # self.setDrawSettingsToDefaults()
 
     def addFragmentsPanel(self):
         panel = QWidget()
@@ -256,19 +497,118 @@ class MainWindow(QMainWindow):
         vlayout.addWidget(self.volumes_table)
         self.tab_panel.addTab(panel, "Volumes")
 
+    def setDrawSettingsToDefaults(self):
+        self.draw_settings = copy.deepcopy(MainWindow.draw_settings_defaults)
+        self.updateDrawSettingsWidgets()
+        self.settingsSaveDrawSettings()
+        self.drawSlices()
+
+    def setDrawSettingsValue(self, obj_type, val_type, value):
+        self.draw_settings[obj_type][val_type] = value
+        self.settingsSaveDrawSettings()
+        self.drawSlices()
+
+    def updateDrawSettingsWidgets(self):
+        for class_name, class_dict in self.draw_settings.items():
+            for name, value in class_dict.items():
+                dc = self.draw_settings_widgets.get(class_name, None)
+                if dc is None: 
+                    continue
+                widget = dc.get(name, None)
+                if not isinstance(widget, QWidget):
+                    continue
+                widget.updateValue(value)
+
+
     def addSettingsPanel(self):
         panel = QWidget()
         hlayout = QHBoxLayout()
         panel.setLayout(hlayout)
+        draw_settings_vbox = QVBoxLayout()
+        hlayout.addLayout(draw_settings_vbox)
+        draw_settings_frame = QGroupBox("Display settings")
+        # draw_settings_frame.setFlat(True)
+        draw_settings_vbox.addWidget(draw_settings_frame)
+        draw_settings_vbox.addStretch()
+        draw_settings_layout = QGridLayout()
+        draw_settings_layout.setContentsMargins(2,6,2,2)
+        draw_settings_layout.setVerticalSpacing(1)
+        draw_settings_frame.setLayout(draw_settings_layout)
+        dsl = draw_settings_layout
+        tr = 0
+        dsl.addWidget(QLabel("Opacity"), tr, 1)
+        dsl.addWidget(OpacitySpinBox(self, "overlay"), tr, 2)
+        tr += 1
+        # hline = QFrame()
+        # hline.setFrameShape(QFrame.HLine)
+        # hline.setFrameShadow(QFrame.Sunken)
+        # dsl.addWidget(hline, tr, 0, 1, 3)
+        # dsl.addWidget(QLabel(" "), tr, 0)
+        dsl.addItem(QSpacerItem(1,5), tr, 0)
+        tr += 1
+        cba = Qt.AlignRight
+        dsl.addWidget(QLabel("Size"), tr, 1)
+        dsl.addWidget(QLabel("Apply\nOpacity"), tr, 2, Qt.AlignRight)
+        # dsl.addWidget(QLabel("Apply"), 1, tr)
+        tr += 1
+        dsl.addWidget(QLabel("Node"), tr, 0)
+        dsl.addWidget(WidthSpinBox(self, "node"), tr, 1)
+        # dsl.addWidget(OpacitySpinBox(self, "node"), tr, 2)
+        # dsl.addWidget(OpacitySpinBox(self, "overlay"), tr, 2, 6, 1)
+        dsl.addWidget(ApplyOpacityCheckBox(self, "node", True), tr, 2, cba)
+        tr += 1
+        dsl.addWidget(QLabel("Line"), tr, 0)
+        dsl.addWidget(WidthSpinBox(self, "line"), tr, 1)
+        # dsl.addWidget(OpacitySpinBox(self, "line"), tr, 2)
+        dsl.addWidget(ApplyOpacityCheckBox(self, "line", True), tr, 2, cba)
+        tr += 1
+        dsl.addWidget(QLabel("Mesh"), tr, 0)
+        dsl.addWidget(WidthSpinBox(self, "mesh"), tr, 1)
+        # dsl.addWidget(OpacitySpinBox(self, "mesh"), tr, 2)
+        dsl.addWidget(ApplyOpacityCheckBox(self, "mesh", True), tr, 2, cba)
+        tr += 1
+        dsl.addWidget(QLabel("Axes"), tr, 0)
+        dsl.addWidget(WidthSpinBox(self, "axes"), tr, 1)
+        # dsl.addWidget(OpacitySpinBox(self, "axes"), tr, 2)
+        dsl.addWidget(ApplyOpacityCheckBox(self, "axes", True), tr, 2, cba)
+        tr += 1
+        dsl.addWidget(QLabel("Borders"), tr, 0)
+        bwsb = WidthSpinBox(self, "borders")
+        bwsb.setMinimum(1)
+        bwsb.setMaximum(11)
+        bwsb.setSingleStep(2)
+        dsl.addWidget(bwsb, tr, 1)
+        dsl.addWidget(ApplyOpacityCheckBox(self, "borders", True), tr, 2, cba)
+        tr += 1
+        dsl.addWidget(QLabel("Labels"), tr, 0)
+        # lwsb = WidthSpinBox(self, "labels")
+        # lwsb.setEnabled(False)
+        # dsl.addWidget(lwsb, tr, 1)
+        dsl.addWidget(ApplyOpacityCheckBox(self, "labels", True), tr, 2, cba)
+        tr += 1
+        dsl.addItem(QSpacerItem(1,5), tr, 0)
+        tr += 1
+        dpb = QPushButton("Restore defaults")
+        dsl.addWidget(dpb, tr, 0, 1, 3)
+        dpb.clicked.connect(lambda s: self.setDrawSettingsToDefaults())
+
+        # sb.valueChanged.connect(lambda d: self.onValueChanged(d, sb, index))
+        # self.clicked.connect(self.onButtonClicked)
+
+        slices_vbox = QVBoxLayout()
+        hlayout.addLayout(slices_vbox)
+        slices_frame = QGroupBox("Other settings")
+        slices_vbox.addWidget(slices_frame)
+        slices_vbox.addStretch()
         slices_layout = QVBoxLayout()
-        hlayout.addLayout(slices_layout)
-        slices_layout.addWidget(QLabel("Slices"))
+        slices_frame.setLayout(slices_layout)
         vbv = VolBoxesVisibleCheckBox(self)
         self.settings_vol_boxes_visible = vbv
         slices_layout.addWidget(vbv)
-        slices_layout.addStretch()
-        fragment_layout = QVBoxLayout()
-        fragment_layout.addWidget(QLabel("Fragment View"))
+
+        hlayout.addStretch()
+        # fragment_layout = QVBoxLayout()
+        # fragment_layout.addWidget(QLabel("Fragment View"))
 
         self.tab_panel.addTab(panel, "Settings")
 
@@ -534,6 +874,26 @@ class MainWindow(QMainWindow):
 
         self.project_view.save()
 
+    def settingsSaveDrawSettings(self):
+        self.settings.beginGroup("MainWindow")
+        jstr = json.dumps(self.draw_settings)
+        self.settings.setValue("drawSettings", jstr)
+        self.settings.endGroup()
+
+    def settingsLoadDrawSettings(self):
+        self.settings.beginGroup("MainWindow")
+        jstr = self.settings.value("drawSettings", None)
+        if jstr is not None:
+            try:
+                settings = json.loads(jstr)
+                self.draw_settings = settings
+                # No need; settingsLoadDrawSettings is
+                # called before widgets are created
+                # self.updateDrawSettingsWidgets()
+            except Exception as e:
+                print("Failed to parse drawSettings json string:", str(e))
+        self.settings.endGroup()
+
     def settingsApplySizePos(self):
         self.settings.beginGroup("MainWindow")
         size = self.settings.value("size", None)
@@ -639,7 +999,6 @@ class MainWindow(QMainWindow):
         name = pname.name
 
         # TODO: allow the user to set the infill
-        # TODO: save all active fragments
         # err = Fragment.saveListAsObjMesh(frags, pname, 16)
         infill = 16
         err = Fragment.saveListAsObjMesh(fvs, pname, infill)
@@ -845,8 +1204,6 @@ class MainWindow(QMainWindow):
         self.volumes_table.model().endResetModel()
         self.drawSlices()
 
-    # TODO: this should be called whenever the user creates
-    # a new fragment
     def setFragments(self):
         fragment_views = list(self.project_view.fragments.values())
         for fv in fragment_views:

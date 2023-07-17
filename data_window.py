@@ -42,11 +42,32 @@ class DataWindow(QLabel):
         self.inactiveNodeColor = (m//2,m//4,m//4,m)
         self.triLineColor = (3*m//4,2*m//4,3*m//4,m)
         self.splineLineColor = self.triLineColor
-        self.triLineSize = 1
-        self.splineLineSize = self.triLineSize
-        self.inactiveSplineLineSize = 1
+        # self.triLineSize = 1
+        # self.splineLineSize = self.triLineSize
+        # self.inactiveSplineLineSize = 1
         self.inactiveSplineLineColor = self.triLineColor
-        self.crosshairSize = 2
+        # self.crosshairSize = 2
+
+    def getDrawWidth(self, name):
+        return self.window.draw_settings[name]["width"]
+
+    '''
+    def getDrawOpacity(self, name):
+        dsn = self.window.draw_settings[name]
+        opacity = sdn["opacity"]
+        apply = sdn["apply_opacity"]
+        if name == "overlay":
+            return opacity
+        if not apply:
+            return 1.0
+        return opacity
+    '''
+
+    def getDrawOpacity(self, name):
+        return self.window.draw_settings[name]["opacity"]
+
+    def getDrawApplyOpacity(self, name):
+        return self.window.draw_settings[name]["apply_opacity"]
 
     def setVolumeView(self, vv):
         self.volume_view = vv
@@ -256,8 +277,8 @@ class DataWindow(QLabel):
                     self.isPanning = False
                     self.isMovingNode = True
 
-    def drawNodeAtXy(self, outrgbx, xy, color):
-        cv2.circle(outrgbx, xy, 5, color, -1)
+    def drawNodeAtXy(self, outrgbx, xy, color, size):
+        cv2.circle(outrgbx, xy, size, color, -1)
 
     def mouseReleaseEvent(self, e):
         if self.volume_view is None:
@@ -438,7 +459,7 @@ class DataWindow(QLabel):
 
     def axisColor(self, axis):
         color = [0]*4
-        color[3] = 65535
+        # color[3] = int(65535*self.getDrawOpacity("axes"))
         color[axis] = 65535
         if axis == 1:
             # make green a less bright
@@ -650,6 +671,13 @@ into and out of the viewing plane.
             if not self.has_had_volume_view:
                 self.resetText()
             return
+        opacity = self.getDrawOpacity("overlay")
+        apply_labels_opacity = self.getDrawApplyOpacity("labels")
+        apply_axes_opacity = self.getDrawApplyOpacity("axes")
+        apply_borders_opacity = self.getDrawApplyOpacity("borders")
+        apply_node_opacity = self.getDrawApplyOpacity("node")
+        apply_mesh_opacity = self.getDrawApplyOpacity("mesh")
+        apply_line_opacity = self.getDrawApplyOpacity("line")
         self.setMargin(0)
         self.window.setFocus()
         # if self.axis == 1:
@@ -709,20 +737,41 @@ into and out of the viewing plane.
 
         # convert 16-bit (uint16) gray scale to 16-bit RGBX (X is like
         # alpha, but always has the value 65535)
-        outrgbx = np.stack(((out,)*4), axis=-1)
-        outrgbx[:,:,3] = 65535
+        outrgbx = np.stack(((out,)*3), axis=-1)
+        original = None
+        # if opacity > 0 and opacity < 1:
+        if opacity < 1:
+            original = outrgbx.copy()
+        else:
+            apply_labels_opacity = True
+            apply_axes_opacity = True
+            apply_borders_opacity = True
+            apply_node_opacity = True
+            apply_line_opacity = True
+            apply_mesh_opacity = True
+        # outrgbx = np.stack(((out,)*4), axis=-1)
+        # outrgbx[:,:,3] = 65535
         # draw a colored rectangle outline around the window, then
         # draw a thin black rectangle outline on top of that
-        cv2.rectangle(outrgbx, (2,2), (ww-3,wh-3), self.axisColor(self.axis), 5)
+        bw = self.getDrawWidth("borders")
+        bwh = (bw-1)//2
+        
+        cv2.rectangle(outrgbx, (bwh,bwh), (ww-bwh-1,wh-bwh-1), self.axisColor(self.axis), bw)
         cv2.rectangle(outrgbx, (0,0), (ww-1,wh-1), (0,0,0,65536), 1)
+        if not apply_borders_opacity:
+            cv2.rectangle(original, (bwh,bwh), (ww-bwh-1,wh-bwh-1), self.axisColor(self.axis), 5)
+            cv2.rectangle(original, (0,0), (ww-1,wh-1), (0,0,0,65536), 1)
 
         fij = self.tijkToIj(volume.ijktf)
         fx,fy = self.ijToXy(fij)
 
-        size = self.crosshairSize
+        # size = self.crosshairSize
+        size = self.getDrawWidth("axes")
         cv2.line(outrgbx, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
-
         cv2.line(outrgbx, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
+        if not apply_axes_opacity:
+            cv2.line(original, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
+            cv2.line(original, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
         timera.time("draw cv2 underlay")
 
         self.cur_frag_pts_xyijk = None
@@ -730,9 +779,11 @@ into and out of the viewing plane.
         xypts = []
         pv = self.window.project_view
         nearbyNode = (pv.nearby_node_fv, pv.nearby_node_index)
+        splineLineSize = self.getDrawWidth("line")
+        nodeSize = self.getDrawWidth("node")
         for frag in self.fragmentViews():
             # if not frag.visible and frag != self.currentFragmentView():
-            if not frag.visible:
+            if not frag.visible or opacity == 0.:
                 continue
             pts = frag.getZsurfPoints(self.axis, self.positionOnAxis())
             timera.time("get zsurf points")
@@ -744,14 +795,17 @@ into and out of the viewing plane.
                 # if frag == self.currentFragmentView():
                 if frag.active:
                     # color = self.splineLineColor
-                    size = self.splineLineSize
+                    # size = self.splineLineSize
+                    size = splineLineSize
                     if len(pts) == 1:
                         size += 2 
                 else:
-                    size = self.inactiveSplineLineSize
+                    size = splineLineSize
                 vrts = self.ijsToXys(pts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
                 cv2.polylines(outrgbx, vrts, True, color, size*2)
+                if not apply_line_opacity:
+                    cv2.polylines(original, vrts, True, color, size*2)
                 timera.time("draw zsurf points")
 
             pts = frag.getPointsOnSlice(self.axis, self.positionOnAxis())
@@ -772,7 +826,9 @@ into and out of the viewing plane.
                 if (frag, pt[3]) == nearbyNode:
                     color = self.highlightNodeColor
                     self.nearbyNode = i0+i
-                self.drawNodeAtXy(outrgbx, xy, color)
+                self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
+                if not apply_node_opacity:
+                    self.drawNodeAtXy(original, xy, color, nodeSize)
             timera.time("draw nodes on slice")
             m = 65535
         timera.time("draw zsurf points")
@@ -802,6 +858,8 @@ into and out of the viewing plane.
                 minxy = self.ijToXy(minij)
                 maxxy = self.ijToXy(maxij)
                 cv2.rectangle(outrgbx, minxy, maxxy, vol_view.cvcolor, 2)
+                if not apply_labels_opacity:
+                    cv2.rectangle(original, minxy, maxxy, vol_view.cvcolor, 2)
         timera.time("draw frag")
         # print(self.cur_frag_pts_xyijk.shape)
         label = self.sliceGlobalLabel()
@@ -815,12 +873,23 @@ into and out of the viewing plane.
         white = (65535,65535,65535,65535)
         cv2.putText(outrgbx, txt, org, cv2.FONT_HERSHEY_PLAIN, size, gray, 3)
         cv2.putText(outrgbx, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
-
         self.drawScaleBar(outrgbx)
+        if not apply_labels_opacity:
+            cv2.putText(original, txt, org, cv2.FONT_HERSHEY_PLAIN, size, gray, 3)
+            cv2.putText(original, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
+            self.drawScaleBar(original)
+
+
+        if opacity > 0 and opacity < 1:
+            outrgbx = cv2.addWeighted(outrgbx, opacity, original, 1.-opacity, 0)
+        elif opacity == 0:
+            outrgbx = original
+        # outrgbx = np.append(outrgbx, np.full((wh,ww,1), 32000, dtype=np.uint16), axis=2)
+        outrgbx = np.append(outrgbx, np.zeros((wh,ww,1), dtype=np.uint16), axis=2)
 
         bytesperline = 8*outrgbx.shape[1]
         qimg = QImage(outrgbx, outrgbx.shape[1], outrgbx.shape[0], 
-                bytesperline, QImage.Format_RGBA64)
+                bytesperline, QImage.Format_RGBX64)
         pixmap = QPixmap.fromImage(qimg)
         self.setPixmap(pixmap)
         timera.time("draw to qt")
@@ -883,6 +952,12 @@ class SurfaceWindow(DataWindow):
         # print("FRAGMENT", ww, wh)
         whw = ww//2
         whh = wh//2
+        opacity = self.getDrawOpacity("overlay")
+        apply_labels_opacity = self.getDrawApplyOpacity("labels")
+        apply_axes_opacity = self.getDrawApplyOpacity("axes")
+        apply_node_opacity = self.getDrawApplyOpacity("node")
+        apply_mesh_opacity = self.getDrawApplyOpacity("mesh")
+
         out = np.zeros((wh,ww), dtype=np.uint16)
         overout = None
         overout = np.zeros((wh,ww), dtype=np.uint16)
@@ -890,7 +965,8 @@ class SurfaceWindow(DataWindow):
         timera.time("zeros")
         # convert 16-bit (uint16) gray scale to 16-bit RGBX (X is like
         # alpha, but always has the value 65535)
-        outrgbx = np.zeros((wh,ww,4), dtype=np.uint16)
+        # outrgbx = np.zeros((wh,ww,4), dtype=np.uint16)
+        # outrgbx[:,:,3] = 65535
         for frag in self.fragmentViews():
             # if not frag.activeAndAligned():
             if not frag.active:
@@ -949,8 +1025,20 @@ class SurfaceWindow(DataWindow):
 
         # convert 16-bit (uint16) gray scale to 16-bit RGBX (X is like
         # alpha, but always has the value 65535)
-        outrgbx = np.stack(((out,)*4), axis=-1)
-        outrgbx[:,:,3] = 65535
+        # outrgbx = np.stack(((out,)*4), axis=-1)
+        # outrgbx[:,:,3] = 65535
+        outrgbx = np.stack(((out,)*3), axis=-1)
+        original = None
+        # if opacity > 0 and opacity < 1:
+        if opacity < 1:
+            original = outrgbx.copy()
+        else:
+            apply_labels_opacity = True
+            apply_axes_opacity = True
+            apply_node_opacity = True
+            apply_mesh_opacity = True
+        '''
+        # Needs to be rewritten; outdated
         if overout is not None:
             outrgbx[:,:,0:3] //= 4
             outrgbx[:,:,0:3] *= 3
@@ -972,15 +1060,19 @@ class SurfaceWindow(DataWindow):
             outrgbx[gt0,0] += ogt0
             outrgbx[gt0,2] += ogt0
             outrgbx[lt0,1] += olt0
+        '''
 
         timera.time("draw cv2 underlay")
         fij = self.tijkToIj(volume.ijktf)
         fx,fy = self.ijToXy(fij)
 
-        size = self.crosshairSize
+        # size = self.crosshairSize
+        size = self.getDrawWidth("axes")
         cv2.line(outrgbx, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
-
         cv2.line(outrgbx, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
+        if not apply_axes_opacity:
+            cv2.line(original, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
+            cv2.line(original, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
 
         self.cur_frag_pts_xyijk = None
         self.cur_frag_pts_fv = []
@@ -988,11 +1080,13 @@ class SurfaceWindow(DataWindow):
         pv = self.window.project_view
         xypts = []
 
+        triLineSize = self.getDrawWidth("mesh")
+        nodeSize = self.getDrawWidth("node")
         for frag in self.fragmentViews():
             # if not frag.activeAndAligned():
             if not frag.active:
                 continue
-            if not frag.visible:
+            if not frag.visible or opacity == 0.:
                 continue
             lineColor = frag.fragment.cvcolor
             self.nearbyNode = -1
@@ -1007,7 +1101,9 @@ class SurfaceWindow(DataWindow):
                 vrts = vrts.reshape(-1,3,1,2).astype(np.int32)
                 timer.time("compute lines")
                 # True means closed line
-                cv2.polylines(outrgbx, vrts, True, lineColor, self.triLineSize)
+                cv2.polylines(outrgbx, vrts, True, lineColor, triLineSize)
+                if not apply_mesh_opacity:
+                    cv2.polylines(original, vrts, True, lineColor, triLineSize)
                 timer.time("draw lines")
 
                 color = self.nodeColor
@@ -1017,14 +1113,18 @@ class SurfaceWindow(DataWindow):
                 timer.time("compute points")
                 vrts = self.ijsToXys(pts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
-                cv2.polylines(outrgbx, vrts, True, color, 10)
+                cv2.polylines(outrgbx, vrts, True, color, 2*nodeSize)
+                if not apply_node_opacity:
+                    cv2.polylines(original, vrts, True, color, 2*nodeSize)
                 timer.time("draw points")
 
                 if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0:
                     pt = pts[pv.nearby_node_index]
                     xy = self.ijToXy(pt)
                     color = self.highlightNodeColor
-                    self.drawNodeAtXy(outrgbx, xy, color)
+                    self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
+                    if not apply_node_opacity:
+                        self.drawNodeAtXy(original, xy, color, nodeSize)
 
             elif frag.line is not None and frag.lineAxis > -1:
                 line = frag.line
@@ -1038,7 +1138,11 @@ class SurfaceWindow(DataWindow):
                 for i in range(pts.shape[0]-1):
                     xy0 = self.ijToXy(pts[i,0:2])
                     xy1 = self.ijToXy(pts[i+1,0:2])
-                    cv2.line(outrgbx, xy0, xy1, lineColor, self.triLineSize)
+                    cv2.line(outrgbx, xy0, xy1, lineColor, triLineSize)
+                    if not apply_mesh_opacity:
+                        cv2.line(original, xy0, xy1, lineColor, triLineSize)
+
+                pts = frag.vpoints[:, 0:2]
                 for i,pt in enumerate(pts):
                     xy = self.ijToXy(pt[0:2])
                     color = self.nodeColor
@@ -1048,7 +1152,9 @@ class SurfaceWindow(DataWindow):
                     ijk = frag.vpoints[i]
                     if frag == pv.nearby_node_fv and i == pv.nearby_node_index:
                         color = self.highlightNodeColor
-                    self.drawNodeAtXy(outrgbx, xy, color)
+                    self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
+                    if not apply_node_opacity:
+                        self.drawNodeAtXy(original, xy, color, nodeSize)
 
             else:
                 # pts = frag.fpoints[:, 0:2]
@@ -1061,11 +1167,15 @@ class SurfaceWindow(DataWindow):
                 vrts = self.ijsToXys(pts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
                 cv2.polylines(outrgbx, vrts, True, color, 10)
+                if not apply_node_opacity:
+                    cv2.polylines(original, vrts, True, color, 10)
                 if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0:
                     pt = pts[pv.nearby_node_index]
                     xy = self.ijToXy(pt)
                     color = self.highlightNodeColor
-                    self.drawNodeAtXy(outrgbx, xy, color)
+                    self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
+                    if not apply_node_opacity:
+                        self.drawNodeAtXy(original, xy, color, nodeSize)
 
             if frag.active:
                 i0 = len(xypts)
@@ -1081,6 +1191,15 @@ class SurfaceWindow(DataWindow):
         self.cur_frag_pts_xyijk = np.array(xypts)
 
         self.drawScaleBar(outrgbx)
+        if not apply_labels_opacity:
+            self.drawScaleBar(original)
+
+        if opacity > 0 and opacity < 1:
+            outrgbx = cv2.addWeighted(outrgbx, opacity, original, 1.-opacity, 0)
+        elif opacity == 0:
+            outrgbx = original
+        outrgbx = np.append(outrgbx, np.zeros((wh,ww,1), dtype=np.uint16), axis=2)
+        # print("outrgbx", outrgbx.shape, outrgbx[250,250])
 
         bytesperline = 8*outrgbx.shape[1]
         qimg = QImage(outrgbx, outrgbx.shape[1], outrgbx.shape[0], 

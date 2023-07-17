@@ -47,7 +47,7 @@ class ColorSelectorDelegate(QtWidgets.QStyledItemDelegate):
         cb.setContentsMargins(5,5,5,5)
         cb.clicked.connect(lambda d: self.onClicked(d, cb, index))
         # self.index = index
-        self.push_button = cb
+        # self.push_button = cb
         return cb
 
     def onClicked(self, cb_index, push_button, model_index):
@@ -96,7 +96,7 @@ class DirectionSelectorDelegate(QtWidgets.QStyledItemDelegate):
         cb.addItem("Y")
         cb.activated.connect(lambda d: self.onActivated(d, cb, index))
         # self.index = index
-        self.combo_box = cb
+        # self.combo_box = cb
         return cb
 
     def onActivated(self, cb_index, combo_box, model_index):
