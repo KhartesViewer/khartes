@@ -831,7 +831,7 @@ class Volume():
             from_vc_render = False
             if from_vc_render_str == "True":
                 from_vc_render = True
-            print("reader: from_vc_render", from_vc_render, type(from_vc_render))
+            # print("reader: from_vc_render", from_vc_render, type(from_vc_render))
         except Exception as e:
             err = "Failed to read nrrd file %s: %s"%(filename,e)
             print(err)

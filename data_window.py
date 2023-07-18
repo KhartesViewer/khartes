@@ -6,10 +6,11 @@ from PyQt5.QtWidgets import QLabel, QApplication
 from PyQt5.QtCore import QPoint, Qt
 import numpy as np
 import numpy.linalg as npla
+import cv2
+
 from utils import Utils
 # import PIL
 # import PIL.Image
-import cv2
 
 # non-intuitively, QLabel is what is used to display pixmaps
 class DataWindow(QLabel):
@@ -50,6 +51,13 @@ class DataWindow(QLabel):
         # self.inactiveSplineLineSize = 1
         self.inactiveSplineLineColor = self.triLineColor
         # self.crosshairSize = 2
+        self.defaultCursor = Qt.ArrowCursor
+        self.addingCursor = Qt.CrossCursor
+        self.movingNodeCursor = Qt.ArrowCursor
+        self.panningCursor = Qt.ClosedHandCursor
+        # c = QCursor(Qt.CrossCursor)
+        # px = c.pixmap()
+        # print("pixmap", px)
 
     def getDrawWidth(self, name):
         return self.window.draw_settings[name]["width"]
@@ -248,7 +256,6 @@ class DataWindow(QLabel):
         return True
 
     def mousePressEvent(self, e):
-        # self.checkCursor()
         if self.volume_view is None:
             return
         # print("press", e.button())
@@ -257,7 +264,10 @@ class DataWindow(QLabel):
             wpos = e.localPos()
             wxy = (wpos.x(), wpos.y())
 
-            if modifiers == Qt.ShiftModifier:
+            shift_pressed = (modifiers == Qt.ShiftModifier)
+            if self.window.add_node_mode:
+                shift_pressed = not shift_pressed
+            if shift_pressed:
                 # print('Shift+Click')
                 ij = self.xyToIj(wxy)
                 tijk = self.ijToTijk(ij)
@@ -280,6 +290,7 @@ class DataWindow(QLabel):
                     self.nnStartPoint = self.getNearbyNodeIjk()
                     self.isPanning = False
                     self.isMovingNode = True
+        self.checkCursor()
 
     def drawNodeAtXy(self, outrgbx, xy, color, size):
         cv2.circle(outrgbx, xy, size, color, -1)
@@ -298,16 +309,33 @@ class DataWindow(QLabel):
             wxy = (wpos.x(), wpos.y())
             nearbyNode = self.findNearbyNode(wxy)
             self.setNearbyNode(nearbyNode)
+        self.checkCursor()
 
     def leaveEvent(self, e):
         if self.volume_view is None:
             return
         self.setNearbyNode(-1)
         self.window.setStatusText("")
+        self.checkCursor()
 
-    def checkCursor(self, leaving=False):
-        shift_pressed = bool(QGuiApplication.queryKeyboardModifiers() | Qt.ShiftModifier)
-        print("shift pressed", shift_pressed)
+    def checkCursor(self):
+        # if leaving:
+        #     self.unsetCursor()
+        #     return
+        # shift_pressed = (QApplication.keyboardModifiers() == Qt.ShiftModifier)
+        shift_pressed = (QApplication.queryKeyboardModifiers() == Qt.ShiftModifier)
+        if self.window.add_node_mode:
+            shift_pressed = not shift_pressed
+        # print("shift pressed", shift_pressed)
+        new_cursor = self.defaultCursor
+        if self.isPanning:
+            new_cursor = self.panningCursor
+        elif self.isMovingNode:
+            new_cursor = self.movingNodeCursor
+        elif shift_pressed:
+            new_cursor = self.addingCursor
+        if new_cursor != self.cursor():
+            self.setCursor(new_cursor)
 
     def setStatusTextFromMousePosition(self):
         pt = self.mapFromGlobal(QCursor.pos())
@@ -381,6 +409,7 @@ class DataWindow(QLabel):
             nearbyNode = self.findNearbyNode(mxy)
             # print("mxy", mxy, nearbyNode)
             self.setNearbyNode(nearbyNode)
+        self.checkCursor()
 
 
     def wheelEvent(self, e):
@@ -397,6 +426,7 @@ class DataWindow(QLabel):
         mxy = (e.position().x(), e.position().y())
         self.window.drawSlices()
         # print("wheel", e.position())
+        self.checkCursor()
 
     # SurfaceWindow subclass overrides this
     # Don't allow it in ordinary slices, because once node moves
@@ -486,6 +516,7 @@ class DataWindow(QLabel):
         elif key == Qt.Key_Shift:
             pass
             # print("shift pressed")
+        self.checkCursor()
 
     # Note that this is called from MainWindow whenever MainWindow
     # catches a keyReleaseEvent; since the DataWindow widgets never
@@ -497,7 +528,7 @@ class DataWindow(QLabel):
         if key == Qt.Key_Shift:
             pass
             # print("shift released")
-
+        self.checkCursor()
 
     # adapted from https://stackoverflow.com/questions/25068538/intersection-and-difference-of-two-rectangles/25068722#25068722
     # The C++ version of OpenCV provides operations, including intersection,

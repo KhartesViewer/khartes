@@ -1,7 +1,9 @@
 from pathlib import Path
 import shutil
 import copy
+import os
 import json
+import time
 
 from PyQt5.QtWidgets import (
         QAction, QApplication, QAbstractItemView,
@@ -10,10 +12,11 @@ from PyQt5.QtWidgets import (
         QGridLayout, QGroupBox,
         QHBoxLayout, 
         QLabel,
-        QMainWindow, QMessageBox,
+        QMainWindow, QMenuBar, QMessageBox,
         QPlainTextEdit, QPushButton,
+        QSizePolicy,
         QSpacerItem, QSpinBox, QDoubleSpinBox,
-        QStatusBar, QStyledItemDelegate,
+        QStatusBar, QStyle, QStyledItemDelegate,
         QTableView, QTabWidget, QTextEdit, QToolBar,
         QVBoxLayout, 
         QWidget, 
@@ -22,7 +25,9 @@ from PyQt5.QtCore import (
         QAbstractTableModel, QCoreApplication,
         QSize, QTimer, Qt, qVersion, QSettings,
         )
-from PyQt5.QtGui import QPalette, QColor, QCursor
+from PyQt5.QtGui import QPainter, QPalette, QColor, QCursor, QIcon, QPixmap, QImage
+
+from PyQt5.QtSvg import QSvgRenderer
 
 from tiff_loader import TiffLoader
 from data_window import DataWindow, SurfaceWindow
@@ -170,6 +175,61 @@ class CreateFragmentButton(QPushButton):
 
     def onButtonClicked(self, s):
         self.main_window.createFragment()
+
+class CursorModeButton(QPushButton):
+    def __init__(self, main_window, parent=None):
+        super(CursorModeButton, self).__init__("", parent)
+        self.main_window = main_window
+        self.setCheckable(True)
+        '''
+        self.cross = QIcon(QCursor(Qt.CrossCursor).pixmap())
+        self.arrow = QIcon(QCursor(Qt.ArrowCursor).pixmap())
+        self.cross = self.style().standardIcon(QStyle.SP_MessageBoxCritical)
+        self.arrow = self.style().standardIcon(QStyle.SP_MessageBoxWarning)
+        '''
+        '''
+        self.cross = QIcon(QPixmap(":/crosshair.svg"))
+        svgr = QSvgRenderer(":/crosshair.svg")
+        image = QImage(64,64,QImage.Format_ARGB32)
+        image.fill(0x00000000)
+        svgr.render(QPainter(image))
+        pixmap = QPixmap.fromImage(image)
+        self.cross = QIcon(pixmap)
+        '''
+        # path = QApplication.applicationDirPath()
+        # path = QApplication.applicationDirPath()
+        args = QCoreApplication.arguments()
+        # path = os.path.dirname(os.path.realpath(sys.argv[0]))
+        path = os.path.dirname(os.path.realpath(args[0]))
+        # print("path is", path, args[0])
+        # crosshair.svg is from https://iconduck.com/icons/14824/crosshair
+        self.cross = QIcon(path+"/crosshair.svg")
+        self.setIcon(self.cross)
+        self.setChecked(self.main_window.add_node_mode)
+        # self.doSetToolTip()
+        self.clicked.connect(self.onButtonClicked)
+        # print("cursor mode button")
+
+    def onButtonClicked(self, s):
+        # self.add_node_mode = not self.add_node_mode
+        self.main_window.add_node_mode = self.isChecked()
+        self.doSetToolTip()
+        # print("add node mode:", self.main_window.add_node_mode)
+        # if self.add_node_mode:
+        #     self.setIcon(self.arrow)
+        # else:
+        #     self.setIcon(self.cross)
+
+    def doSetToolTip(self):
+        main_str = "Sets whether cursor is in add-node mode or panning mode"
+        add_strs = [
+                "\n(Currently in panning mode)", 
+                "\n(Currently in add-node mode)" ]
+        self.setToolTip(main_str+add_strs[self.main_window.add_node_mode])
+
+    def setChecked(self, flag):
+        super(CursorModeButton, self).setChecked(flag)
+        self.doSetToolTip()
 
 
 class VolBoxesVisibleCheckBox(QCheckBox):
@@ -397,7 +457,14 @@ class MainWindow(QMainWindow):
         self.exit_action = QAction("Exit", self)
         self.exit_action.triggered.connect(self.onExitButtonClick)
 
-        self.menu = self.menuBar()
+        # Qt trickery to put menu bar and tool bar on same line
+        self.menu_toolbar = self.addToolBar("Menu")
+        self.menu_toolbar.setFloatable(False)
+        self.menu_toolbar.setMovable(False)
+        # self.menu = self.menuBar()
+        self.menu = QMenuBar()
+        self.menu.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.menu_toolbar.addWidget(self.menu)
         self.file_menu = self.menu.addMenu("&File")
         self.file_menu.addAction(self.open_project_action)
         self.file_menu.addAction(self.new_project_action)
@@ -408,6 +475,19 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(self.export_mesh_action)
         # self.file_menu.addAction(self.load_hardwired_project_action)
         self.file_menu.addAction(self.exit_action)
+
+        # put space between end of menu bar and start of tool bar
+        sep = QAction(" ", self)
+        self.menu.addAction(sep)
+        sep.setDisabled(True)
+
+        self.toolbar = self.addToolBar("Tools")
+
+        self.add_node_mode = False
+
+        self.add_node_mode_button = CursorModeButton(self)
+        self.toolbar.addWidget(self.add_node_mode_button)
+        self.last_shift_time = 0
 
         self.toggle_direction_action = QAction("Toggle direction", self)
         self.toggle_direction_action.triggered.connect(self.onToggleDirectionButtonClick)
@@ -1314,6 +1394,16 @@ class MainWindow(QMainWindow):
 
     def keyPressEvent(self, e):
         # print("key press event in main window")
+        if e.key() == Qt.Key_Shift:
+            t = time.time()
+            if t - self.last_shift_time < .5:
+                # double click
+                self.add_node_mode = not self.add_node_mode
+                self.add_node_mode_button.setChecked(self.add_node_mode)
+                self.last_shift_time = 0
+            else:
+                self.last_shift_time = t
+
         if e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_S:
             self.onSaveProjectButtonClick(True)
         elif e.key() == Qt.Key_V:
