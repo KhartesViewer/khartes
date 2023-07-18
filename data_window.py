@@ -1,4 +1,7 @@
-from PyQt5.QtGui import QColor, QCursor, QFont, QImage, QPalette, QPixmap
+from PyQt5.QtGui import (
+        QColor, QCursor, QFont, 
+        QGuiApplication, QImage, QPalette, QPixmap,
+        )
 from PyQt5.QtWidgets import QLabel, QApplication
 from PyQt5.QtCore import QPoint, Qt
 import numpy as np
@@ -245,6 +248,7 @@ class DataWindow(QLabel):
         return True
 
     def mousePressEvent(self, e):
+        # self.checkCursor()
         if self.volume_view is None:
             return
         # print("press", e.button())
@@ -300,6 +304,10 @@ class DataWindow(QLabel):
             return
         self.setNearbyNode(-1)
         self.window.setStatusText("")
+
+    def checkCursor(self, leaving=False):
+        shift_pressed = bool(QGuiApplication.queryKeyboardModifiers() | Qt.ShiftModifier)
+        print("shift pressed", shift_pressed)
 
     def setStatusTextFromMousePosition(self):
         pt = self.mapFromGlobal(QCursor.pos())
@@ -476,6 +484,7 @@ class DataWindow(QLabel):
             gxy = self.mapToGlobal(QPoint(*xy))
             QCursor.setPos(gxy)
         elif key == Qt.Key_Shift:
+            pass
             # print("shift pressed")
 
     # Note that this is called from MainWindow whenever MainWindow
@@ -486,6 +495,7 @@ class DataWindow(QLabel):
             return
         key = e.key()
         if key == Qt.Key_Shift:
+            pass
             # print("shift released")
 
 
