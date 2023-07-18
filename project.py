@@ -95,7 +95,7 @@ class ProjectView:
     def createErrorProjectView(project, err):
         pv = ProjectView(project)
         pv.error = err
-        return prj
+        return pv
 
     def open(fullpath):
         project = Project.open(fullpath)

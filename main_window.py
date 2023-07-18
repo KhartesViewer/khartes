@@ -18,7 +18,10 @@ from PyQt5.QtWidgets import (
         QVBoxLayout, 
         QWidget, 
         )
-from PyQt5.QtCore import QAbstractTableModel, QSize, Qt, qVersion, QSettings
+from PyQt5.QtCore import (
+        QAbstractTableModel, QCoreApplication,
+        QSize, QTimer, Qt, qVersion, QSettings,
+        )
 from PyQt5.QtGui import QPalette, QColor, QCursor
 
 from tiff_loader import TiffLoader
@@ -419,6 +422,12 @@ class MainWindow(QMainWindow):
         self.volumes_model = VolumesModel(None, self)
         self.tiff_loader = TiffLoader(self)
         # self.setDrawSettingsToDefaults()
+        # command line arguments
+        args = QCoreApplication.arguments()
+        # print("command line arguments", args)
+        if len(args) > 1 and args[1].endswith('.khprj'):
+            self.loadProject(args[1])
+            QTimer.singleShot(100, self.drawSlices)
 
     def addFragmentsPanel(self):
         panel = QWidget()
@@ -640,15 +649,16 @@ class MainWindow(QMainWindow):
 
     def createFragment(self):
         vv = self.volumeView()
+        pv = self.project_view
         if vv is None:
             print("Warning, cannot create new fragment without volume view set")
             return
         names = set()
-        for frag in self.project_view.fragments.keys():
+        for frag in pv.fragments.keys():
             name = frag.name
             names.add(name)
         stem = "frag"
-        mfv = self.project_view.mainActiveVisibleFragmentView(unaligned_ok=True)
+        mfv = pv.mainActiveVisibleFragmentView(unaligned_ok=True)
         if mfv is not None:
             stem = mfv.fragment.name
         for i in range(1,1000):
@@ -661,16 +671,18 @@ class MainWindow(QMainWindow):
         frag.setColor(Utils.getNextColor())
         print("created fragment %s"%frag.name)
         self.fragments_table.model().beginResetModel()
-        self.project_view.project.addFragment(frag)
+        if len(pv.activeFragmentViews(unaligned_ok=True)) == 1:
+            pv.clearActiveFragmentViews()
+        pv.project.addFragment(frag)
         self.fragments_table.model().endResetModel()
         self.setFragments()
-        fv = self.project_view.fragments[frag]
+        fv = pv.fragments[frag]
         fv.active = True
-        self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
+        self.export_mesh_action.setEnabled(len(pv.activeFragmentViews(unaligned_ok=True)) > 0)
         # need to make sure new fragment is added to table
         # before calling scrollToRow
         self.app.processEvents()
-        index = self.project_view.project.fragments.index(frag)
+        index = pv.project.fragments.index(frag)
         self.fragments_table.model().scrollToRow(index)
 
     def renameFragment(self, frag, name):
@@ -687,13 +699,23 @@ class MainWindow(QMainWindow):
         self.drawSlices()
 
     def addPointToCurrentFragment(self, tijk):
-        # cur_frag_view = self.project_view.cur_fragment_view
         cur_frag_view = self.project_view.mainActiveVisibleFragmentView()
         if cur_frag_view is None:
             print("no current fragment view set")
             return
         self.fragments_table.model().beginResetModel()
         cur_frag_view.addPoint(tijk)
+        self.fragments_table.model().endResetModel()
+
+    def deleteNearbyNode(self):
+        pv = self.project_view
+        if pv.nearby_node_fv is None or pv.nearby_node_index < 0:
+            print("deleteNearbyNode: no current nearby node")
+            return
+        self.fragments_table.model().beginResetModel()
+        pv.nearby_node_fv.deletePointByIndex(pv.nearby_node_index)
+        pv.nearby_node_fv = None
+        pv.nearby_node_index = -1
         self.fragments_table.model().endResetModel()
 
 
@@ -1017,6 +1039,7 @@ class MainWindow(QMainWindow):
         self.tiff_loader.show()
         self.tiff_loader.raise_()
 
+    # TODO: Need to alert user if load fails
     def onOpenProjectButtonClick(self, s):
         print("open project clicked")
         ''''''
@@ -1048,14 +1071,16 @@ class MainWindow(QMainWindow):
             return
 
         idir = file_names[0]
+        self.loadProject(idir)
 
+    def loadProject(self, fname):
         loading = self.showLoading()
-        pv = ProjectView.open(idir)
+        pv = ProjectView.open(fname)
         if not pv.valid:
-            print("Project file %s not opened: %s"%(idir, pv.error))
+            print("Project file %s not opened: %s"%(fname, pv.error))
             return
         self.setProjectView(pv)
-        self.setWindowTitle("%s - %s"%(MainWindow.appname, Path(idir).name))
+        self.setWindowTitle("%s - %s"%(MainWindow.appname, Path(fname).name))
         cur_volume = pv.cur_volume
         if cur_volume is None:
             print("no cur volume set")
@@ -1066,7 +1091,7 @@ class MainWindow(QMainWindow):
         # intentionally called a second time to use
         # cur_volume information to set fragment view volume
         self.setProjectView(pv)
-        path = Path(idir)
+        path = Path(fname)
         path = path.absolute()
         parent = path.parent
         self.settingsSaveDirectory(str(parent))
@@ -1210,6 +1235,22 @@ class MainWindow(QMainWindow):
             fv.setVolumeView(self.volumeView())
         self.drawSlices()
 
+    def toggleFragmentVisibility(self):
+        afvs = self.project_view.activeFragmentViews(unaligned_ok=True)
+        if len(afvs) == 0:
+            return
+        any_visible = False
+        for afv in afvs:
+            if afv.visible:
+                any_visible = True
+                break
+        self.fragments_table.model().beginResetModel()
+        for afv in afvs:
+            afv.visible = not any_visible
+        self.fragments_table.model().endResetModel()
+        self.drawSlices()
+
+
     def setFragmentVisibility(self, fragment, visible):
         fragment_view = self.project_view.fragments[fragment]
         if fragment_view.visible == visible:
@@ -1275,11 +1316,19 @@ class MainWindow(QMainWindow):
         # print("key press event in main window")
         if e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_S:
             self.onSaveProjectButtonClick(True)
+        elif e.key() == Qt.Key_V:
+            self.toggleFragmentVisibility()
         else:
             w = QApplication.widgetAt(QCursor.pos())
             method = getattr(w, "keyPressEvent", None)
             if w != self and method is not None:
                 w.keyPressEvent(e)
+
+    def keyReleaseEvent(self, e):
+        w = QApplication.widgetAt(QCursor.pos())
+        method = getattr(w, "keyReleaseEvent", None)
+        if w != self and method is not None:
+            w.keyReleaseEvent(e)
 
     def drawSlices(self):
         self.depth.drawSlice()

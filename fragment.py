@@ -1412,9 +1412,9 @@ class FragmentView:
             self.lineAxis = -1
             return
         try:
-            self.tri = Delaunay(nppoints)
             self.line = None
             self.lineAxis = -1
+            self.tri = Delaunay(nppoints)
         except QhullError as err:
             # print("qhull error")
             self.tri = None
@@ -1483,6 +1483,11 @@ class FragmentView:
         gijk = self.cur_volume_view.transposedIjkToGlobalPosition(tijk)
         self.fragment.gpoints = np.append(self.fragment.gpoints, np.reshape(gijk, (1,3)), axis=0)
         # print(self.lpoints)
+        self.setLocalPoints(True)
+
+    def deletePointByIndex(self, index):
+        if index >= 0 and index < len(self.fragment.gpoints):
+            self.fragment.gpoints = np.delete(self.fragment.gpoints, index, 0)
         self.setLocalPoints(True)
 
     # return True if succeeds, False if fails
