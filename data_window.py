@@ -432,13 +432,61 @@ class DataWindow(QLabel):
                 self.window.drawSlices()
             else:
                 nij = list(self.getNearbyNodeIjk())
+                nij = [round(x) for x in nij]
                 d = opts[key]
+                if d[2] != 0 and not self.nodeMovementAllowedInK():
+                    return
                 nij[0] -= d[0]
                 nij[1] -= d[1]
                 nij[2] -= d[2]
-                if d[2] != 0 and not self.nodeMovementAllowedInK():
-                    return
                 self.setNearbyNodeIjk(nij)
+        elif key == Qt.Key_Backspace or key == Qt.Key_Delete:
+            # print("backspace/delete")
+            # ijk = self.getNearbyNodeIjk()
+            # if ijk is None:
+            #     return
+            # print("ijk", ijk)
+            # tijk = self.ijToTijk(ijk[0:2])
+            # print("tijk", tijk)
+            self.window.deleteNearbyNode()
+            # this repopulates local node list
+            self.drawSlice()
+            pt = self.mapFromGlobal(QCursor.pos())
+            mxy = (pt.x(), pt.y())
+            nearbyNode = self.findNearbyNode(mxy)
+            self.setNearbyNode(nearbyNode)
+            self.window.drawSlices()
+        elif key == Qt.Key_X:
+            # print("key X")
+            ijk = self.getNearbyNodeIjk()
+            if ijk is None:
+                pt = self.mapFromGlobal(QCursor.pos())
+                mxy = (pt.x(), pt.y())
+                ij = self.xyToIj(mxy)
+                tijk = self.ijToTijk(ij)
+            else:
+                # print("ijk", ijk)
+                tijk = self.ijToTijk(ijk[0:2])
+            # print("tijk", tijk)
+            self.volume_view.setIjkTf(tijk)
+            self.window.drawSlices()
+            # move cursor to cross hairs
+            ij = self.tijkToIj(tijk)
+            xy = self.ijToXy(ij)
+            gxy = self.mapToGlobal(QPoint(*xy))
+            QCursor.setPos(gxy)
+        elif key == Qt.Key_Shift:
+            # print("shift pressed")
+
+    # Note that this is called from MainWindow whenever MainWindow
+    # catches a keyReleaseEvent; since the DataWindow widgets never
+    # have focus, they never receive keyReleaseEvents directly
+    def keyReleaseEvent(self, e):
+        if self.volume_view is None:
+            return
+        key = e.key()
+        if key == Qt.Key_Shift:
+            # print("shift released")
 
 
     # adapted from https://stackoverflow.com/questions/25068538/intersection-and-difference-of-two-rectangles/25068722#25068722
@@ -920,8 +968,10 @@ class SurfaceWindow(DataWindow):
             zsurf = fv.zsurf
             if zsurf is None:
                 continue
-            if j >= 0 and j < zsurf.shape[0] and i >= 0 and i < zsurf.shape[1]:
-                z = zsurf[j,i]
+            ri = round(i)
+            rj = round(j)
+            if rj >= 0 and rj < zsurf.shape[0] and ri >= 0 and ri < zsurf.shape[1]:
+                z = zsurf[rj,ri]
                 if not np.isnan(z):
                     tijk[self.axis] = np.rint(z)
                     break

@@ -503,7 +503,7 @@ class VolumeView():
         o = [0,0,0]
 
         for i in range(0,3):
-            t = tf[i]
+            t = round(tf[i])
             m = self.trdata.shape[2-i] - 1
             t = min(m, max(t,0))
             o[i] = t
