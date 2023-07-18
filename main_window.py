@@ -905,6 +905,10 @@ class MainWindow(QMainWindow):
             print("Failed to create new project: %s", err)
             return
 
+        path = pdir.absolute()
+        parent = path.parent
+        self.settingsSaveDirectory(str(parent))
+
         self.setWindowTitle("%s - %s"%(MainWindow.appname, pdir.name))
         self.setProject(new_prj)
 
@@ -975,6 +979,10 @@ class MainWindow(QMainWindow):
         old_prj.fragments_path = new_prj.fragments_path
 
         self.project_view.save()
+
+        path = pdir.absolute()
+        parent = path.parent
+        self.settingsSaveDirectory(str(parent))
 
     def settingsSaveDrawSettings(self):
         self.settings.beginGroup("MainWindow")
