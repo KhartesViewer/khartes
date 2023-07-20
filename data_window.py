@@ -51,7 +51,8 @@ class DataWindow(QLabel):
         # self.inactiveSplineLineSize = 1
         self.inactiveSplineLineColor = self.triLineColor
         # self.crosshairSize = 2
-        self.defaultCursor = Qt.ArrowCursor
+        # self.defaultCursor = Qt.ArrowCursor
+        self.defaultCursor = Qt.OpenHandCursor
         self.addingCursor = Qt.CrossCursor
         self.movingNodeCursor = Qt.ArrowCursor
         self.panningCursor = Qt.ClosedHandCursor
@@ -330,7 +331,7 @@ class DataWindow(QLabel):
         new_cursor = self.defaultCursor
         if self.isPanning:
             new_cursor = self.panningCursor
-        elif self.isMovingNode:
+        elif self.allowMouseToDragNode() and (self.isMovingNode or self.localNearbyNodeIndex >= 0):
             new_cursor = self.movingNodeCursor
         elif shift_pressed:
             new_cursor = self.addingCursor
