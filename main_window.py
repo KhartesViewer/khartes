@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import (
         QWidget, 
         )
 from PyQt5.QtCore import (
-        QAbstractTableModel, QCoreApplication,
+        QAbstractTableModel, QCoreApplication, QObject,
         QSize, QTimer, Qt, qVersion, QSettings,
         )
 from PyQt5.QtGui import QPainter, QPalette, QColor, QCursor, QIcon, QPixmap, QImage
@@ -751,6 +751,8 @@ class MainWindow(QMainWindow):
         if not self.warnIfNotSaved("exit khartes"):
             # print("Canceled by user after warning")
             return
+        # if self.tiff_loader is not None:
+        #     self.tiff_loader.close()
         e.accept()
 
     # returns True if ok to continue, False if not ok
@@ -1204,9 +1206,9 @@ class MainWindow(QMainWindow):
     def setStatusText(self, txt):
         self.status_bar.showMessage(txt)
 
-    class Loading(QWidget):
-        def __init__(self, text=None):
-            super().__init__()
+    class LoadingWidget(QWidget):
+        def __init__(self, parent, text=None):
+            super(MainWindow.LoadingWidget, self).__init__(parent, Qt.Window|Qt.CustomizeWindowHint)
             layout = QVBoxLayout()
             if text is None:
                 text = "Loading data..."
@@ -1214,15 +1216,36 @@ class MainWindow(QMainWindow):
             # self.label.setStyleSheet("QLabel { background-color : red; color : blue; }")
             layout.addWidget(self.label)
             self.setLayout(layout)
-            self.setWindowFlags(Qt.CustomizeWindowHint)
             font = self.label.font()
             font.setPointSize(16)
             self.label.setFont(font)
+            self.show()
+
+    def loadingDestroyed(self, widget):
+        widget.close()
+
+    # Sort of complicated.  
+    # We want the "Loading..." label to be
+    # closed when the load operation is done.  One way to do this
+    # is to tie it to a variable that will go out of scope, and
+    # be deleted, when the loading operation finishes.
+    # The "Loading..." label is drawn by an instance of the 
+    # LoadingWidget class.  This instance is a child of the MainWindow
+    # instance, and thus is not automatically deleted when it
+    # goes out of scope, because from the point of view of the
+    # garbage collector, it is still in use by the MainWindow instance.
+    # So an instance of the Loading class
+    # is created, which will be deleted when it goes out of scope;
+    # this Loading class instance, when it is deleted, closes
+    # the corresponding LoadingWidget instance.
+    class Loading(QObject):
+        def __init__(self, parent, text=None):
+            super(MainWindow.Loading, self).__init__()
+            widget = MainWindow.LoadingWidget(parent, text)
+            self.destroyed.connect(lambda o: parent.loadingDestroyed(widget))
 
     def showLoading(self, text=None):
-            loading = MainWindow.Loading(text)
-            loading.show()
-            # needed to make label visible
+            loading = MainWindow.Loading(self, text)
             self.app.processEvents()
             return loading
 

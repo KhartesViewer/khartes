@@ -117,7 +117,7 @@ class RangeEdit(QLineEdit):
 class TiffLoader(QMainWindow):
 
     def __init__(self, main_window):
-        super(TiffLoader, self).__init__()
+        super(TiffLoader, self).__init__(main_window)
 
         self.main_window = main_window
         # self.font().setPointSize(20)
