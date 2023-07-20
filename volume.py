@@ -422,17 +422,26 @@ class VolumeView():
         # don't want to have to re-write the entire NRRD file.
         # So associate color with VolumeView instead.
         color = Utils.getNextColor()
-        self.setColor(color)
+        self.setColor(color, no_notify=True)
         # self.color = QColor()
         # self.cvcolor = (0,0,0,0)
 
-    def setColor(self, qcolor):
+    def notifyModified(self, tstamp=""):
+        if tstamp == "":
+            tstamp = Utils.timestamp()
+        # print("volume view modified", tstamp)
+        self.project_view.notifyModified(tstamp)
+
+    def setColor(self, qcolor, no_notify=False):
         self.color = qcolor
         rgba = qcolor.getRgbF()
         self.cvcolor = [int(65535*c) for c in rgba] 
+        if not no_notify:
+            self.notifyModified()
 
     def setZoom(self, zoom):
         self.zoom = min(self.maxZoom, max(zoom, self.minZoom))
+        self.notifyModified()
 
     # direction=0: "depth" slice is constant-x (y,z plane)
     # direction=1: "depth" slice is constant-y (z,x plane)
@@ -452,6 +461,7 @@ class VolumeView():
         self.direction = direction
         if self.volume.data is not None:
             self.trdata = self.volume.trdatas[direction]
+            self.notifyModified()
         else:
             print("warning, VolumeView.setDirection: volume data is not loaded")
             self.trdata = None
@@ -482,7 +492,7 @@ class VolumeView():
         self.minZoom = min(.05, .5*dzoom)
 
     # call after direction is set
-    def setDefaultParameters(self, window):
+    def setDefaultParameters(self, window, no_notify=False):
         # zoom=1 means one pixel in grid should
         # be the same size as one pixel in viewing window
         self.zoom = self.getDefaultZoom(window)
@@ -498,6 +508,8 @@ class VolumeView():
         gi,gj,gk = self.transposedIjkToGlobalPosition(
                 self.ijktf)
         print("global position x %d y %d image %d"%(gi,gj,gk))
+        if not no_notify:
+            self.notifyModified()
 
     def setIjkTf(self, tf):
         o = [0,0,0]
@@ -508,6 +520,7 @@ class VolumeView():
             t = min(m, max(t,0))
             o[i] = t
         self.ijktf = tuple(o)
+        self.notifyModified()
 
     def ijkToTransposedIjk(self, ijk):
         return self.volume.ijkToTransposedIjk(ijk, self.direction)

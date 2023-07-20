@@ -39,121 +39,6 @@ from volume import (
         ColorSelectorDelegate)
 from utils import Utils
 
-'''
-# https://joelmccune.com/python-dictionary-as-object/amp
-class DictObj:
-    def __init__(self, in_dict):
-        for key, val in in_dict.items():
-            if isinstance(val, (list, tuple)):
-                setattr(self, key, [DictObj(x) if isinstance(x, dict) else x for x in val])
-            else:
-                setattr(self, key, DictObj(val) if isinstance(val, dict) else val)
-
-class GenericSpinBoxDelegate(QStyledItemDelegate):
-    def __init__(self, spinbox_factory, table, parent=None):
-        super(GenericSpinBoxDelegate, self).__init__(parent)
-        self.table = table
-        self.spinbox_factory = spinbox_factory
-
-    def createEditor(self, parent, option, index):
-        sb = self.spinbox_factory(parent)
-        sb.valueChanged.connect(lambda d: self.onValueChanged(d, sb, index))
-        return sb
-
-    def onValueChanged(self, sb_index, spinbox, model_index):
-        self.table.model().setData(model_index, spinbox.value, Qt.EditRole)
-
-    def setEditorData(self, editor, index):
-        sb_value = index.data(Qt.DisplayRole)
-        if sb_value >= 0:
-            editor.setValue(sb_value)
-
-    def setModelData(self, editor, model, index):
-        # do nothing, since onValueChanged handled it
-        pass
-
-    # class function
-    def widthSpinBoxFactory(parent):
-        sb = QSpinBox(parent)
-        sb.minimum = 0
-        sb.maximum = 10
-        return sb
-
-    # class function
-    def opacitySpinBoxFactory(parent):
-        sb = QDoubleSpinBox(parent)
-        sb.minimum = 0.
-        sb.maximum = 1.0
-        sb.decimals = 1
-        sb.singleStep = 0.1
-        return sb
-
-class DrawSettingsModel(QAbstractTableModel):
-    def __init__(self, main_window):
-        super(DrawSettingsModel, self).__init__()
-        # TODO: are these settings attached to the user,
-        # or to the project?  Probably to the user.
-        self.main_window = main_window
-
-    columns = ["", "Width", "Opacity"]
-    ctips = ["", "Width of line or node in pixels", "Opacity: 0.0 is transparent, 1.0 is opaque"]
-
-    rows = ["Node", "Line", "Mesh"]
-
-    def flags(self, index):
-        col = index.column()
-        oflags = super(DrawSettingsModel, self).flags(index)
-        if col == 0:
-            nflags = Qt.ItemNeverHasChildren
-            return nflags
-        if col == 1 or col == 2:
-            nflags = Qt.ItemNeverHasChildren
-            nflags |= Qt.ItemIsEnabled
-            return nflags
-
-    def headerData(self, section, orientation, role):
-        if orientation != Qt.Horizontal:
-            return None
-
-        if role == Qt.DisplayRole:
-            if section == 0:
-                table = self.main_window.draw_settings_table
-                # make sure spin boxes in cols 1 and 2 are always open,
-                # so no double-clicking is required
-                for i in range(self.rowCount()):
-                    index = self.createIndex(i, 1)
-                    table.openPErsistendEditor(index)
-                    index = self.createIndex(i, 2)
-                    table.openPErsistendEditor(index)
-                return DrawSettingsModel.columns[section]
-            elif role == Qt.ToolTipRole:
-                return DrawSettingsModel.ctips[section]
-
-    def columnCount(self, parent=None):
-        return len(DrawSettingsModel.columns)
-
-    def rowCount(self, parent=None):
-        return len(DrawSettingsModel.rows)
-
-    def data(self, index, role):
-        if role == Qt.DisplayRole and (column == 1 or column == 2):
-            row = index.row()
-            column = index.column()
-            rowname = self.rows[row]
-            colname = self.columns[column]
-            return(self.main_window.drawSettings(rowname, colname))
-        return None
-
-    def setData(self, index, value, role):
-        row = index.row()
-        column = index.column()
-        if role == Qt.EditRole and (column == 1 or column == 2):
-            rowname = self.rows[row]
-            colname = self.columns[column]
-            self.main_window.setDrawSettings(rowname, colname, value)
-        return False
-'''
-
 class ColorBlock(QLabel):
 
     def __init__(self, color, text=""):
@@ -722,6 +607,8 @@ class MainWindow(QMainWindow):
         slices[vbv] = value
         self.settings_vol_boxes_visible.setChecked(self.getVolBoxesVisible())
         self.settings_vol_boxes_visible2.setChecked(self.getVolBoxesVisible())
+        # TODO: turn this on once ProjectView.settings is saved in project file
+        # self.notifyModified()
         self.drawSlices()
 
     def onNewFragmentButtonClick(self, s):
@@ -748,7 +635,7 @@ class MainWindow(QMainWindow):
                 break
         # print("color",color)
         frag = Fragment(name, vv.direction)
-        frag.setColor(Utils.getNextColor())
+        frag.setColor(Utils.getNextColor(), no_notify=True)
         print("created fragment %s"%frag.name)
         self.fragments_table.model().beginResetModel()
         if len(pv.activeFragmentViews(unaligned_ok=True)) == 1:
@@ -770,6 +657,7 @@ class MainWindow(QMainWindow):
             return
         self.fragments_table.model().beginResetModel()
         frag.name = name
+        frag.notifyModified()
         proj = self.project_view.project
         proj.alphabetizeFragments()
         self.fragments_table.model().endResetModel()
@@ -840,6 +728,7 @@ class MainWindow(QMainWindow):
         print("calling project save")
         # self.project_view.project.save()
         self.project_view.save()
+        self.projectModifiedCallback(self.project_view.project)
 
     # Qt trickery to get around a problem with QFileDialog
     # when the user double-clicks on
@@ -855,8 +744,40 @@ class MainWindow(QMainWindow):
             dialog.khartes_directory = sdir
             dialog.done(1)
 
+    # override
+    def closeEvent(self, e):
+        # print("close event")
+        e.ignore()
+        if not self.warnIfNotSaved("exit khartes"):
+            # print("Canceled by user after warning")
+            return
+        e.accept()
+
+    # returns True if ok to continue, False if not ok
+    def warnIfNotSaved(self, astr):
+        if self.project_view is None:
+            return True
+        project = self.project_view.project
+        uptodate = project.isSaveUpToDate()
+        if uptodate:
+            return True
+        print("Project has been modified since last save")
+        answer = QMessageBox.warning(self, 
+        "khartes", 
+        'The current project has been modified since it was last saved.\nDo you want to %s anyway?\nSelect "Ok" to %s; select "Cancel" to cancel the operation, giving you a chance to save the current project.'%(astr,astr), 
+        QMessageBox.Ok|QMessageBox.Cancel, 
+        QMessageBox.Cancel)
+        if answer != QMessageBox.Ok:
+            print("Pperation to %s cancelled by user"%astr)
+            return False
+        print("Pperation to %s accepted by user"%astr)
+        return True
+
     def onNewProjectButtonClick(self, s):
         print("new project clicked")
+        if not self.warnIfNotSaved("create a new project"):
+            # print("Canceled by user after warning")
+            return
         dialog = QFileDialog(self)
         sdir = self.settingsGetDirectory()
         if sdir is not None:
@@ -875,6 +796,9 @@ class MainWindow(QMainWindow):
 
         file_names = dialog.selectedFiles()
         khartes_directory = getattr(dialog, "khartes_directory", None)
+        # dialog.close()
+        # self.app.processEvents()
+
         if khartes_directory is not None:
             file_names = [khartes_directory]
         print(file_names)
@@ -902,7 +826,7 @@ class MainWindow(QMainWindow):
         new_prj = Project.create(pdir)
         if not new_prj.valid:
             err = new_prj.error
-            print("Failed to create new project: %s", err)
+            print("Failed to create new project: %s"%err)
             return
 
         path = pdir.absolute()
@@ -911,6 +835,11 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("%s - %s"%(MainWindow.appname, pdir.name))
         self.setProject(new_prj)
+
+    def projectModifiedCallback(self, project):
+        uptodate = project.isSaveUpToDate()
+        # print("uptodate", uptodate)
+        self.save_project_action.setEnabled(not uptodate)
 
     def onSaveProjectAsButtonClick(self, s):
         print("save project as clicked")
@@ -927,7 +856,7 @@ class MainWindow(QMainWindow):
         dialog.setFileMode(QFileDialog.AnyFile)
         # dialog.setFileMode(QFileDialog.Directory|QFileDialog.DontUseNativeDialog)
         dialog.setNameFilter("Khartes project directories (*.khprj)")
-        dialog.setLabelText(QFileDialog.Accept, "Save in .khprj folder")
+        dialog.setLabelText(QFileDialog.Accept, "Save as .khprj project")
         # dialog.filesSelected.connect(self.onFilesSelected)
         # dialog.directoryEntered.connect(self.onDirectoryEntered)
         # see comment at def of onDirectoryEntered
@@ -979,6 +908,7 @@ class MainWindow(QMainWindow):
         old_prj.fragments_path = new_prj.fragments_path
 
         self.project_view.save()
+        self.projectModifiedCallback(old_prj)
 
         path = pdir.absolute()
         parent = path.parent
@@ -1131,6 +1061,9 @@ class MainWindow(QMainWindow):
     def onOpenProjectButtonClick(self, s):
         print("open project clicked")
         ''''''
+        if not self.warnIfNotSaved("load a new project"):
+            # print("Canceled by user after warning")
+            return
         dialog = QFileDialog(self)
         sdir = self.settingsGetDirectory()
         if sdir is not None:
@@ -1175,7 +1108,7 @@ class MainWindow(QMainWindow):
             spv = pv.volumes
             if len(pv.volumes) > 0:
                 cur_volume = list(spv.keys())[0]
-        self.setVolume(cur_volume)
+        self.setVolume(cur_volume, no_notify=True)
         # intentionally called a second time to use
         # cur_volume information to set fragment view volume
         self.setProjectView(pv)
@@ -1206,6 +1139,10 @@ class MainWindow(QMainWindow):
         self.setVolume(cur_volume)
 
     def onExitButtonClick(self, s):
+        # print("exit button clicked")
+        if not self.warnIfNotSaved("exit khartes"):
+            # print("Canceled by user after warning")
+            return
         self.settingsSaveSizePos()
         self.app.quit()
 
@@ -1289,19 +1226,19 @@ class MainWindow(QMainWindow):
             self.app.processEvents()
             return loading
 
-    def setVolume(self, volume):
+    def setVolume(self, volume, no_notify=False):
         if volume is not None and volume.data is None:
             loading = self.showLoading()
 
         self.volumes_table.model().beginResetModel()
-        self.project_view.setCurrentVolume(volume)
+        self.project_view.setCurrentVolume(volume, no_notify)
         self.volumes_table.model().endResetModel()
         vv = None
         if volume is not None:
             vv = self.project_view.cur_volume_view
             if vv.zoom == 0.:
                 print("setting volume default parameters", volume.name)
-                vv.setDefaultParameters(self)
+                vv.setDefaultParameters(self, no_notify)
             if vv.minZoom == 0.:
                 vv.setDefaultMinZoom(self)
         self.project_view.updateFragmentViews()
@@ -1335,6 +1272,7 @@ class MainWindow(QMainWindow):
         self.fragments_table.model().beginResetModel()
         for afv in afvs:
             afv.visible = not any_visible
+            afv.notifyModified()
         self.fragments_table.model().endResetModel()
         self.drawSlices()
 
@@ -1345,6 +1283,7 @@ class MainWindow(QMainWindow):
             return
         self.fragments_table.model().beginResetModel()
         fragment_view.visible = visible
+        fragment_view.notifyModified()
         self.fragments_table.model().endResetModel()
         self.drawSlices()
 
@@ -1357,6 +1296,7 @@ class MainWindow(QMainWindow):
         if exclusive:
             self.project_view.clearActiveFragmentViews()
         fragment_view.active = active
+        fragment_view.notifyModified()
         self.fragments_table.model().endResetModel()
         # self.export_mesh_action.setEnabled(self.project_view.mainActiveVisibleFragmentView() is not None)
         self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
@@ -1369,6 +1309,7 @@ class MainWindow(QMainWindow):
         self.drawSlices()
 
     def setProjectView(self, project_view):
+        project_view.project.modified_callback = self.projectModifiedCallback
         self.project_view = project_view
         self.volumes_model = VolumesModel(project_view, self)
         self.volumes_table.setModel(self.volumes_model)
@@ -1378,7 +1319,7 @@ class MainWindow(QMainWindow):
         self.fragments_table.resizeColumnsToContents()
         self.settings_vol_boxes_visible.setChecked(self.getVolBoxesVisible())
         self.settings_vol_boxes_visible2.setChecked(self.getVolBoxesVisible())
-        self.save_project_action.setEnabled(True)
+        self.save_project_action.setEnabled(False)
         self.save_project_as_action.setEnabled(True)
         self.import_nrrd_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
@@ -1388,7 +1329,7 @@ class MainWindow(QMainWindow):
     def setProject(self, project):
         project_view = ProjectView(project)
         self.setProjectView(project_view)
-        self.setVolume(None)
+        self.setVolume(None, no_notify=True)
         self.setFragments()
         # self.setCurrentFragment(None)
         self.drawSlices()

@@ -19,11 +19,11 @@ class ProjectView:
 
         self.volumes = {}
         for volume in project.volumes:
-            self.addVolumeView(volume)
+            self.addVolumeView(volume, no_notify=True)
 
         self.fragments = {}
         for fragment in project.fragments:
-            self.addFragmentView(fragment)
+            self.addFragmentView(fragment, no_notify=True)
 
         self.cur_volume = None
         self.cur_volume_view = None
@@ -37,9 +37,11 @@ class ProjectView:
         self.settings['fragment']['triangles_visible'] = True
         self.settings['slices']['vol_boxes_visible'] = False
 
-    def addVolumeView(self, volume):
+    def addVolumeView(self, volume, no_notify=False):
         if volume not in self.volumes:
             self.volumes[volume] = VolumeView(self, volume)
+        if not no_notify:
+            self.notifyModified()
 
     def alphabetizeFragmentViews(self):
         frags = list(self.fragments.keys())
@@ -49,9 +51,11 @@ class ProjectView:
             new_frags[frag] = self.fragments[frag]
         self.fragments = new_frags
 
-    def addFragmentView(self, fragment):
+    def addFragmentView(self, fragment, no_notify=False):
         if fragment not in self.fragments:
             self.fragments[fragment] = FragmentView(self, fragment)
+        if not no_notify:
+            self.notifyModified()
 
     # "id" is fragment's "created" attribute
     # returns None if nothing found
@@ -60,6 +64,13 @@ class ProjectView:
             if f.created == fid:
                 return fv;
         return None
+
+    def notifyModified(self, tstamp=""):
+        if tstamp == "":
+            tstamp = Utils.timestamp()
+        self.modified = tstamp
+        # print("project view modified", tstamp)
+        self.project.notifyModified(tstamp)
 
     def save(self):
         print("called project_view save")
@@ -137,7 +148,7 @@ class ProjectView:
                 if 'ijktf' in vinfo:
                     vv.ijktf = vinfo['ijktf']
                 if 'color' in vinfo:
-                    vv.setColor(QColor(vinfo['color']))
+                    vv.setColor(QColor(vinfo['color']), no_notify=True)
                 # else:
                 # this else clause is not needed because VolumeView
                 # creator sets a random color
@@ -169,7 +180,7 @@ class ProjectView:
                 for vol in pv.volumes.keys():
                     # print(" vol name", vol.name)
                     if vol.name == cvname:
-                        pv.setCurrentVolume(vol)
+                        pv.setCurrentVolume(vol, no_notify=True)
                         # print("set cur vol")
                         break
             if 'cur_fragment' in pinfo:
@@ -190,7 +201,7 @@ class ProjectView:
             fv.setLocalPoints(True)
 
 
-    def setCurrentVolume(self, volume):
+    def setCurrentVolume(self, volume, no_notify=False):
         if self.cur_volume != volume:
             if self.cur_volume is not None:
                 self.cur_volume.unloadData(self)
@@ -202,6 +213,8 @@ class ProjectView:
         else:
             self.cur_volume_view = self.volumes[volume]
             self.cur_volume_view.dataLoaded()
+        if not no_notify:
+            self.notifyModified()
 
     def setDirection(self, volume, direction):
         if volume == self.cur_volume:
@@ -221,6 +234,7 @@ class ProjectView:
     def clearActiveFragmentViews(self):
         for fv in self.fragments.values():
             fv.active = False
+            fv.notifyModified()
 
     def mainActiveVisibleFragmentView(self, unaligned_ok=False):
         last = None
@@ -255,6 +269,8 @@ class Project:
         self.project_views = []
         self.valid = False
         self.error = "no error message set"
+        self.modified_callback = None
+        self.last_saved = ""
 
     def createErrorProject(err):
         prj = Project()
@@ -300,7 +316,14 @@ class Project:
                     print(err)
                     return Project.createErrorProject(err)
         try:
+            # print("about to sleep")
+            # When over-writing an existing project, 
+            # this error message is printed during the sleep: QFileSystemWatcher: FindNextChangeNotification failed for "[filename]"  (Access is denied.)
+            # If the sleep is not here, the mkdir fails in this case.
+            time.sleep(1)
+            # print("creating", str(fp))
             fp.mkdir()
+            # print("created", str(fp))
         except:
             err = "Could not create new directory %s"%fullpath
             print(err)
@@ -341,7 +364,21 @@ class Project:
             info[param] = getattr(self, param)
         info_txt = json.dumps(info, sort_keys=True, indent=4)
         (self.path / 'project.json').write_text(info_txt, encoding="utf8")
+        self.last_saved = Utils.timestamp()
 
+    notify_counter = 0
+
+    def notifyModified(self, tstamp=""):
+        if tstamp == "":
+            tstamp = Utils.timestamp()
+        self.modified = tstamp
+        # print("project modified", tstamp)
+        # if Project.notify_counter >= 0:
+        #     # intentionally cause a crash, to examine the stack trace
+        #     print(asdf)
+        if self.modified_callback is not None:
+            self.modified_callback(self)
+        Project.notify_counter += 1
 
     def open(fullpath):
         fp = pathlib.Path(fullpath)
@@ -397,6 +434,8 @@ class Project:
                 return Project.createErrorProject(err)
             setattr(prj, param, info[param])
 
+        prj.last_saved = prj.modified
+
         for vfile in vdir.glob("*.nrrd"):
             vol = Volume.loadNRRD(vfile)
             if vol is not None and vol.valid:
@@ -411,6 +450,9 @@ class Project:
 
         return prj
 
+    def isSaveUpToDate(self):
+        # print("ls",self.last_saved,"m",self.modified)
+        return (self.last_saved >= self.modified)
 
     def addVolume(self, volume):
         self.volumes.append(volume)
@@ -423,6 +465,7 @@ class Project:
             pv.alphabetizeFragmentViews()
 
     def addFragment(self, fragment):
+        fragment.project = self
         self.fragments.append(fragment)
         for pv in self.project_views:
             pv.addFragmentView(fragment)

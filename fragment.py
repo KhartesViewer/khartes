@@ -239,11 +239,13 @@ class Fragment:
         self.valid = False
         self.created = Utils.timestamp()
         self.modified = Utils.timestamp()
+        self.project = None
 
     def toDict(self):
         info = {}
         info['name'] = self.name
         info['created'] = self.created
+        info['modified'] = self.modified
         info['direction'] = self.direction
         info['color'] = self.color.name()
         info['params'] = self.params
@@ -253,7 +255,6 @@ class Fragment:
         return info
 
 
-    # TODO: need "created" and "modified" timestamps
     def save(self, path):
         info = self.toDict()
         # print(info)
@@ -273,6 +274,17 @@ class Fragment:
         print("writing to",file)
         file.write_text(info_txt, encoding="utf8")
 
+    # notify_count = 0
+
+    def notifyModified(self, tstamp=""):
+        if tstamp == "":
+            tstamp = Utils.timestamp()
+        self.modified = tstamp
+        # print("fragment",self.name,"modified", tstamp)
+        # if Fragment.notify_count > 0:
+        #     print(asdf)
+        # Fragment.notify_count += 1
+        self.project.notifyModified(tstamp)
 
     def createErrorFragment():
         frag = Fragment("", -1)
@@ -295,7 +307,7 @@ class Fragment:
         direction = info['direction']
         gpoints = info['gpoints']
         frag = Fragment(name, direction)
-        frag.setColor(color)
+        frag.setColor(color, no_notify=True)
         frag.valid = True
         if len(gpoints) > 0:
             frag.gpoints = np.array(gpoints, dtype=np.int32)
@@ -310,6 +322,10 @@ class Fragment:
             # sleeping to make sure timestamp is unique
             time.sleep(.1)
             frag.created = Utils.timestamp()
+        if 'modified' in info:
+            frag.modified = info['modified']
+        else:
+            frag.modified = frag.created
 
         return frag
 
@@ -346,11 +362,12 @@ class Fragment:
     def sortFragmentList(frags):
         frags.sort(key=lambda f: f.name)
 
-    def setColor(self, qcolor):
+    def setColor(self, qcolor, no_notify=False):
         self.color = qcolor
         rgba = qcolor.getRgbF()
         self.cvcolor = [int(65535*c) for c in rgba] 
-
+        if not no_notify:
+            self.notifyModified()
 
     def badTrglsByMaxAngle(self, tri):
         simps = tri.simplices
@@ -880,6 +897,13 @@ class FragmentView:
         # same as above, but trijk based on cur_volume_view's 
         # direction
         self.vpoints = np.zeros((0,4), dtype=np.float32)
+
+    def notifyModified(self, tstamp=""):
+        if tstamp == "":
+            tstamp = Utils.timestamp()
+        self.modified = tstamp
+        # print("fragment view", self.fragment.name,"modified", tstamp)
+        self.project_view.notifyModified(tstamp)
 
     def clearZsliceCache(self):
         self.prevZslice = -1
@@ -1483,11 +1507,13 @@ class FragmentView:
         gijk = self.cur_volume_view.transposedIjkToGlobalPosition(tijk)
         self.fragment.gpoints = np.append(self.fragment.gpoints, np.reshape(gijk, (1,3)), axis=0)
         # print(self.lpoints)
+        self.fragment.notifyModified()
         self.setLocalPoints(True)
 
     def deletePointByIndex(self, index):
         if index >= 0 and index < len(self.fragment.gpoints):
             self.fragment.gpoints = np.delete(self.fragment.gpoints, index, 0)
+        self.fragment.notifyModified()
         self.setLocalPoints(True)
 
     # return True if succeeds, False if fails
@@ -1503,5 +1529,6 @@ class FragmentView:
         # print(match, new_gijk)
         self.fragment.gpoints[index, :] = new_gijk
         # print(self.fragment.gpoints)
+        self.fragment.notifyModified()
         self.setLocalPoints(True)
         return True
