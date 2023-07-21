@@ -30,12 +30,15 @@ class ProjectView:
         self.nearby_node_index = -1
         self.nearby_node_fv = None
         project.project_views.append(self)
+        '''
         self.settings = {}
         self.settings['fragment'] = {}
         self.settings['slices'] = {}
         self.settings['fragment']['nodes_visible'] = True
         self.settings['fragment']['triangles_visible'] = True
         self.settings['slices']['vol_boxes_visible'] = False
+        '''
+        self.vol_boxes_visible = False
 
     def addVolumeView(self, volume, no_notify=False):
         if volume not in self.volumes:
@@ -80,6 +83,7 @@ class ProjectView:
         prj = {}
         if self.cur_volume is not None:
             prj['cur_volume'] = self.cur_volume.name
+        prj['vol_boxes_visible'] = self.vol_boxes_visible
         info['project'] = prj
 
         vvs = {}
@@ -100,7 +104,8 @@ class ProjectView:
             fvs[frag.fragment.created] = fv
         info['fragments'] = fvs
 
-        info_txt = json.dumps(info, sort_keys=True, indent=4)
+        # info_txt = json.dumps(info, sort_keys=True, indent=4)
+        info_txt = json.dumps(info, indent=4)
         (self.project.path / 'views.json').write_text(info_txt, encoding="utf8")
 
     def createErrorProjectView(project, err):
@@ -189,6 +194,8 @@ class ProjectView:
                     if frag.name == cfname:
                         pv.fragments[frag].active = True
                         break
+            if 'vol_boxes_visible' in pinfo:
+                pv.vol_boxes_visible = pinfo['vol_boxes_visible']
 
         return pv
 
@@ -260,13 +267,15 @@ class Project:
 
     suffix = ".khprj"
 
-    info_parameters = ["created", "modified", "name", "version"]
+    info_parameters = ["created", "modified", "name", "version", "voxel_size_um"]
+    default_voxel_size_um = 7.91
 
 
     def __init__(self):
         self.volumes = []
         self.fragments = []
         self.project_views = []
+        self.voxel_size_um = Project.default_voxel_size_um
         self.valid = False
         self.error = "no error message set"
         self.modified_callback = None
@@ -429,6 +438,8 @@ class Project:
 
         for param in Project.info_parameters:
             if param not in info:
+                if param == "voxel_size_um":
+                    continue
                 err = "project info file is missing parameter '%s'"%param
                 print(err)
                 return Project.createErrorProject(err)
@@ -455,6 +466,7 @@ class Project:
         return (self.last_saved >= self.modified)
 
     def addVolume(self, volume):
+        volume.setVoxelSizeUm(self.voxel_size_um)
         self.volumes.append(volume)
         for pv in self.project_views:
             pv.addVolumeView(volume)
@@ -478,4 +490,13 @@ class Project:
             if frag.created == fid:
                 return frag;
         return None
+
+    def getVoxelSizeUm(self):
+        return self.voxel_size_um
+
+    def setVoxelSizeUm(self, vs):
+        self.voxel_size_um = vs
+        for v in self.volumes:
+            v.setVoxelSizeUm(vs)
+        self.notifyModified()
 

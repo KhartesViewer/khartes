@@ -404,16 +404,6 @@ class VolumeView():
         self.zoom = 0.
         self.minZoom = 0.
         self.maxZoom = 5
-        # TODO: voxelSizeUm should probably be an attribute
-        # of Project, not VolumeView.  apparentVoxelSize
-        # might belong here, since in the future it should
-        # be anisotropic, based on self.direction
-        self.voxelSizeUm = 7.91
-        self.apparentVoxelSize = self.voxelSizeUm
-        gs = volume.gijk_steps
-        # take the geometric mean of the step sizes
-        sizemult = (gs[0]*gs[1]*gs[2])**(1./3.)
-        self.apparentVoxelSize = sizemult*self.voxelSizeUm 
         # It would seem to make more sense to attach the
         # color to Volume, rather than to VolumeView, just as
         # a fragment's color is attached to Fragment rather
@@ -554,6 +544,7 @@ class Volume():
         # self.trdata = None
         self.trdatas = None
         self.data_header = None
+        # self.setVoxelSizeUm(self.project_view.project.voxel_size_um)
 
         self.valid = False
         self.error = "no error message set"
@@ -582,6 +573,18 @@ class Volume():
         if r != 0:
             size += 1
         return size
+
+    # Called by project if project's voxel size changes
+    def setVoxelSizeUm(self, voxelSizeUm):
+        # in the future apparentVoxelSize should
+        # be anisotropic, based on self.direction
+        gs = self.gijk_steps
+        # take the geometric mean of the step sizes
+        sizemult = (gs[0]*gs[1]*gs[2])**(1./3.)
+        self.apparentVoxelSize = sizemult*voxelSizeUm 
+        # no need to call notifyModified, because
+        # apparentVoxelSize is not stored for each volume
+        # (instead, voxelSizeUm is stored with the project)
 
     # project is the project that the nrrd file will be added to
     # tiff_directory is the name of the directory containing the

@@ -479,7 +479,7 @@ class DataWindow(QLabel):
                 nij[1] -= d[1]
                 nij[2] -= d[2]
                 self.setNearbyNodeIjk(nij)
-        elif key == Qt.Key_Backspace or key == Qt.Key_Delete:
+        elif not self.isMovingNode and (key == Qt.Key_Backspace or key == Qt.Key_Delete):
             # print("backspace/delete")
             # ijk = self.getNearbyNodeIjk()
             # if ijk is None:
@@ -495,7 +495,7 @@ class DataWindow(QLabel):
             nearbyNode = self.findNearbyNode(mxy)
             self.setNearbyNode(nearbyNode)
             self.window.drawSlices()
-        elif key == Qt.Key_X:
+        elif not self.isMovingNode and key == Qt.Key_X:
             # print("key X")
             ijk = self.getNearbyNodeIjk()
             if ijk is None:
@@ -514,9 +514,6 @@ class DataWindow(QLabel):
             xy = self.ijToXy(ij)
             gxy = self.mapToGlobal(QPoint(*xy))
             QCursor.setPos(gxy)
-        elif key == Qt.Key_Shift:
-            pass
-            # print("shift pressed")
         self.checkCursor()
 
     # Note that this is called from MainWindow whenever MainWindow
@@ -574,7 +571,7 @@ class DataWindow(QLabel):
         return gxyz[gaxis]
 
     def drawScaleBar(self, outrgbx):
-        pixPerMm = 1000./self.volume_view.apparentVoxelSize
+        pixPerMm = 1000./self.volume_view.volume.apparentVoxelSize
         zoom = self.getZoom()
         length = zoom*pixPerMm
         unit = "mm"
@@ -924,7 +921,8 @@ into and out of the viewing plane.
         timera.time("draw zsurf points")
         self.cur_frag_pts_xyijk = np.array(xypts)
 
-        if self.window.project_view.settings['slices']['vol_boxes_visible']:
+        # if self.window.project_view.settings['slices']['vol_boxes_visible']:
+        if self.window.getVolBoxesVisible():
             cur_vol_view = self.window.project_view.cur_volume_view
             cur_vol = self.window.project_view.cur_volume
             for vol, vol_view in self.window.project_view.volumes.items():

@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
         QFileDialog, QFrame,
         QGridLayout, QGroupBox,
         QHBoxLayout, 
-        QLabel,
+        QLabel, QLineEdit,
         QMainWindow, QMenuBar, QMessageBox,
         QPlainTextEdit, QPushButton,
         QSizePolicy,
@@ -129,6 +129,63 @@ class VolBoxesVisibleCheckBox(QCheckBox):
     def onStateChanged(self, s):
         self.main_window.setVolBoxesVisible(s==Qt.Checked)
 
+class VoxelSizeEditor(QWidget):
+    def __init__(self, main_window, parent=None):
+        super(VoxelSizeEditor, self).__init__(parent)
+        self.main_window = main_window
+        # print("widget margins", self.contentsMargins())
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0,0,0,0)
+        # print("layout margins", layout.contentsMargins())
+        # print("layout spacing", layout.spacing())
+        # layout.setSpacing(0)
+        self.setLayout(layout)
+        self.edit = QLineEdit()
+        fm = self.edit.fontMetrics()
+        w = 7*fm.width('0')
+        self.edit.setFixedWidth(w)
+        self.edit.editingFinished.connect(self.onEditingFinished)
+        self.edit.textEdited.connect(self.onTextEdited)
+        self.setToVoxelSize()
+        layout.addWidget(self.edit)
+        label = QLabel("Voxel size in μm")
+        layout.addWidget(label)
+        layout.addStretch()
+
+    def setToVoxelSize(self):
+        voxel_size_um = self.main_window.getVoxelSizeUm()
+        txt = self.floatToText(voxel_size_um)
+        self.edit.setText(txt)
+        self.onTextEdited(txt)
+
+    def floatToText(self, value):
+        return "%.3f"%value
+
+    def onEditingFinished(self):
+        txt = self.edit.text()
+        valid, size = self.parseText(txt)
+        # print("oef", valid, size)
+        if valid:
+            self.main_window.setVoxelSizeUm(size)
+
+    def parseText(self, txt):
+        valid = True
+        f = 0
+        try:
+            f = float(txt)
+        except:
+            valid = False
+        if f <= 0:
+            valid = False
+        return valid, f
+
+    def onTextEdited(self, txt):
+        valid, f = self.parseText(txt)
+        # print("ote", valid)
+        if valid:
+            self.edit.setStyleSheet("")
+        else:
+            self.edit.setStyleSheet("QLineEdit { color: red }")
 
 class WidthSpinBox(QSpinBox):
     def __init__(self, main_window, name, parent=None):
@@ -275,6 +332,8 @@ class MainWindow(QMainWindow):
 
         grid = QGridLayout()
 
+        self.project_view = None
+
         # x slice or y slice in data
         self.depth = DataWindow(self, 2)
 
@@ -382,7 +441,6 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar(self)
         self.setStatusBar(self.status_bar)
 
-        self.project_view = None
         # is this needed?
         self.volumes_model = VolumesModel(None, self)
         self.tiff_loader = TiffLoader(self)
@@ -579,6 +637,9 @@ class MainWindow(QMainWindow):
         vbv = VolBoxesVisibleCheckBox(self)
         self.settings_vol_boxes_visible = vbv
         slices_layout.addWidget(vbv)
+        vs = VoxelSizeEditor(self)
+        self.settings_voxel_size_um = vs
+        slices_layout.addWidget(vs)
 
         hlayout.addStretch()
         # fragment_layout = QVBoxLayout()
@@ -592,23 +653,25 @@ class MainWindow(QMainWindow):
     def getVolBoxesVisible(self):
         if self.project_view is None:
             return
-        slices = self.project_view.settings['slices']
-        vbv = 'vol_boxes_visible'
-        return slices[vbv]
+        # slices = self.project_view.settings['slices']
+        # vbv = 'vol_boxes_visible'
+        # return slices[vbv]
+        return self.project_view.vol_boxes_visible
 
     def setVolBoxesVisible(self, value):
         if self.project_view is None:
             return
-        slices = self.project_view.settings['slices']
-        vbv = 'vol_boxes_visible'
-        old_value = slices[vbv]
+        # slices = self.project_view.settings['slices']
+        # vbv = 'vol_boxes_visible'
+        # old_value = slices[vbv]
+        old_value = self.project_view.vol_boxes_visible
         if old_value == value:
             return
-        slices[vbv] = value
+        self.project_view.vol_boxes_visible = value
+        # slices[vbv] = value
         self.settings_vol_boxes_visible.setChecked(self.getVolBoxesVisible())
         self.settings_vol_boxes_visible2.setChecked(self.getVolBoxesVisible())
-        # TODO: turn this on once ProjectView.settings is saved in project file
-        # self.notifyModified()
+        self.project_view.notifyModified()
         self.drawSlices()
 
     def onNewFragmentButtonClick(self, s):
@@ -770,9 +833,9 @@ class MainWindow(QMainWindow):
         QMessageBox.Ok|QMessageBox.Cancel, 
         QMessageBox.Cancel)
         if answer != QMessageBox.Ok:
-            print("Pperation to %s cancelled by user"%astr)
+            print("Operation to %s cancelled by user"%astr)
             return False
-        print("Pperation to %s accepted by user"%astr)
+        print("Operation to %s accepted by user"%astr)
         return True
 
     def onNewProjectButtonClick(self, s):
@@ -1342,6 +1405,7 @@ class MainWindow(QMainWindow):
         self.fragments_table.resizeColumnsToContents()
         self.settings_vol_boxes_visible.setChecked(self.getVolBoxesVisible())
         self.settings_vol_boxes_visible2.setChecked(self.getVolBoxesVisible())
+        self.settings_voxel_size_um.setToVoxelSize()
         self.save_project_action.setEnabled(False)
         self.save_project_as_action.setEnabled(True)
         self.import_nrrd_action.setEnabled(True)
@@ -1397,3 +1461,17 @@ class MainWindow(QMainWindow):
         self.xline.drawSlice()
         self.inline.drawSlice()
         self.surface.drawSlice()
+
+    def getVoxelSizeUm(self):
+        if self.project_view is None:
+            return Project.default_voxel_size_um
+        return self.project_view.project.getVoxelSizeUm()
+
+    def setVoxelSizeUm(self, size):
+        if self.project_view is None:
+            return
+        old_size = self.getVoxelSizeUm()
+        if old_size == size:
+            return
+        self.project_view.project.setVoxelSizeUm(size)
+        self.drawSlices()
