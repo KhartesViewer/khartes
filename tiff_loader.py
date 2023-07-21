@@ -67,7 +67,7 @@ class RangeEdit(QLineEdit):
         mn, mx = self.minmax
         if v < mn or v > mx:
             valid = False
-            range_valie = False
+            range_valid = False
         # if txt=="":
         #     print("blank",v,mn,mx,valid)
         lt = self.lesser
@@ -81,7 +81,8 @@ class RangeEdit(QLineEdit):
             gtvalid = False
             valid = False
         if valid:
-            self.setStyleSheet("RangeEdit { color: black }")
+            # self.setStyleSheet("RangeEdit { color: black }")
+            self.setStyleSheet("")
             self.value = v
         else:
             self.setStyleSheet("RangeEdit { color: red }")
@@ -89,13 +90,15 @@ class RangeEdit(QLineEdit):
 
         if range_valid and lt is not None and lt.range_valid:
             if ltvalid and lt.valid:
-                lt.setStyleSheet("RangeEdit { color: black }")
+                # lt.setStyleSheet("RangeEdit { color: black }")
+                lt.setStyleSheet("")
             else:
                 lt.setStyleSheet("RangeEdit { color: red }")
 
         if range_valid and gt is not None and gt.range_valid:
             if gtvalid and gt.valid:
-                gt.setStyleSheet("RangeEdit { color: black }")
+                # gt.setStyleSheet("RangeEdit { color: black }")
+                gt.setStyleSheet("")
             else:
                 gt.setStyleSheet("RangeEdit { color: red }")
         self.valid = valid
