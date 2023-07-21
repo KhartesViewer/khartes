@@ -193,7 +193,7 @@ class WidthSpinBox(QSpinBox):
         self.main_window = main_window
         self.name = name
         self.class_name = "width"
-        self.setMinimum(1)
+        self.setMinimum(0)
         self.setMaximum(10)
         self.setValue(main_window.draw_settings[self.name][self.class_name])
         self.valueChanged.connect(self.onValueChanged, Qt.QueuedConnection)
@@ -613,9 +613,10 @@ class MainWindow(QMainWindow):
         dsl.addWidget(ApplyOpacityCheckBox(self, "borders", True), tr, 2, cba)
         tr += 1
         dsl.addWidget(QLabel("Labels"), tr, 0)
-        # lwsb = WidthSpinBox(self, "labels")
+        lwsb = WidthSpinBox(self, "labels")
+        lwsb.setMaximum(1)
         # lwsb.setEnabled(False)
-        # dsl.addWidget(lwsb, tr, 1)
+        dsl.addWidget(lwsb, tr, 1)
         dsl.addWidget(ApplyOpacityCheckBox(self, "labels", True), tr, 2, cba)
         tr += 1
         dsl.addItem(QSpacerItem(1,5), tr, 0)

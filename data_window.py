@@ -843,22 +843,24 @@ into and out of the viewing plane.
         bw = self.getDrawWidth("borders")
         bwh = (bw-1)//2
         
-        cv2.rectangle(outrgbx, (bwh,bwh), (ww-bwh-1,wh-bwh-1), self.axisColor(self.axis), bw)
-        cv2.rectangle(outrgbx, (0,0), (ww-1,wh-1), (0,0,0,65536), 1)
-        if not apply_borders_opacity:
-            cv2.rectangle(original, (bwh,bwh), (ww-bwh-1,wh-bwh-1), self.axisColor(self.axis), 5)
-            cv2.rectangle(original, (0,0), (ww-1,wh-1), (0,0,0,65536), 1)
+        if bw > 0:
+            cv2.rectangle(outrgbx, (bwh,bwh), (ww-bwh-1,wh-bwh-1), self.axisColor(self.axis), bw)
+            cv2.rectangle(outrgbx, (0,0), (ww-1,wh-1), (0,0,0,65536), 1)
+            if not apply_borders_opacity:
+                cv2.rectangle(original, (bwh,bwh), (ww-bwh-1,wh-bwh-1), self.axisColor(self.axis), 5)
+                cv2.rectangle(original, (0,0), (ww-1,wh-1), (0,0,0,65536), 1)
 
         fij = self.tijkToIj(volume.ijktf)
         fx,fy = self.ijToXy(fij)
 
         # size = self.crosshairSize
         size = self.getDrawWidth("axes")
-        cv2.line(outrgbx, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
-        cv2.line(outrgbx, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
-        if not apply_axes_opacity:
-            cv2.line(original, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
-            cv2.line(original, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
+        if size > 0:
+            cv2.line(outrgbx, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
+            cv2.line(outrgbx, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
+            if not apply_axes_opacity:
+                cv2.line(original, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
+                cv2.line(original, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
         timera.time("draw cv2 underlay")
 
         self.cur_frag_pts_xyijk = None
@@ -874,7 +876,7 @@ into and out of the viewing plane.
                 continue
             pts = frag.getZsurfPoints(self.axis, self.positionOnAxis())
             timera.time("get zsurf points")
-            if pts is not None:
+            if pts is not None and splineLineSize > 0:
                 # print(pts)
                 m = 65535
                 color = (0,m,0,65535)
@@ -913,9 +915,10 @@ into and out of the viewing plane.
                 if (frag, pt[3]) == nearbyNode:
                     color = self.highlightNodeColor
                     self.nearbyNode = i0+i
-                self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
-                if not apply_node_opacity:
-                    self.drawNodeAtXy(original, xy, color, nodeSize)
+                if nodeSize > 0:
+                    self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
+                    if not apply_node_opacity:
+                        self.drawNodeAtXy(original, xy, color, nodeSize)
             timera.time("draw nodes on slice")
             m = 65535
         timera.time("draw zsurf points")
@@ -959,13 +962,14 @@ into and out of the viewing plane.
         m = 16000
         gray = (m,m,m,65535)
         white = (65535,65535,65535,65535)
-        cv2.putText(outrgbx, txt, org, cv2.FONT_HERSHEY_PLAIN, size, gray, 3)
-        cv2.putText(outrgbx, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
-        self.drawScaleBar(outrgbx)
-        if not apply_labels_opacity:
-            cv2.putText(original, txt, org, cv2.FONT_HERSHEY_PLAIN, size, gray, 3)
-            cv2.putText(original, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
-            self.drawScaleBar(original)
+        if self.getDrawWidth("labels") > 0:
+            cv2.putText(outrgbx, txt, org, cv2.FONT_HERSHEY_PLAIN, size, gray, 3)
+            cv2.putText(outrgbx, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
+            self.drawScaleBar(outrgbx)
+            if not apply_labels_opacity:
+                cv2.putText(original, txt, org, cv2.FONT_HERSHEY_PLAIN, size, gray, 3)
+                cv2.putText(original, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
+                self.drawScaleBar(original)
 
 
         if opacity > 0 and opacity < 1:
@@ -1158,11 +1162,12 @@ class SurfaceWindow(DataWindow):
 
         # size = self.crosshairSize
         size = self.getDrawWidth("axes")
-        cv2.line(outrgbx, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
-        cv2.line(outrgbx, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
-        if not apply_axes_opacity:
-            cv2.line(original, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
-            cv2.line(original, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
+        if size > 0:
+            cv2.line(outrgbx, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
+            cv2.line(outrgbx, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
+            if not apply_axes_opacity:
+                cv2.line(original, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
+                cv2.line(original, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
 
         self.cur_frag_pts_xyijk = None
         self.cur_frag_pts_fv = []
@@ -1191,9 +1196,10 @@ class SurfaceWindow(DataWindow):
                 vrts = vrts.reshape(-1,3,1,2).astype(np.int32)
                 timer.time("compute lines")
                 # True means closed line
-                cv2.polylines(outrgbx, vrts, True, lineColor, triLineSize)
-                if not apply_mesh_opacity:
-                    cv2.polylines(original, vrts, True, lineColor, triLineSize)
+                if triLineSize > 0:
+                    cv2.polylines(outrgbx, vrts, True, lineColor, triLineSize)
+                    if not apply_mesh_opacity:
+                        cv2.polylines(original, vrts, True, lineColor, triLineSize)
                 timer.time("draw lines")
 
                 color = self.nodeColor
@@ -1203,12 +1209,13 @@ class SurfaceWindow(DataWindow):
                 timer.time("compute points")
                 vrts = self.ijsToXys(pts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
-                cv2.polylines(outrgbx, vrts, True, color, 2*nodeSize)
-                if not apply_node_opacity:
-                    cv2.polylines(original, vrts, True, color, 2*nodeSize)
+                if nodeSize > 0:
+                    cv2.polylines(outrgbx, vrts, True, color, 2*nodeSize)
+                    if not apply_node_opacity:
+                        cv2.polylines(original, vrts, True, color, 2*nodeSize)
                 timer.time("draw points")
 
-                if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0:
+                if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0 and nodeSize > 0:
                     pt = pts[pv.nearby_node_index]
                     xy = self.ijToXy(pt)
                     color = self.highlightNodeColor
@@ -1225,28 +1232,30 @@ class SurfaceWindow(DataWindow):
                 # print(pts.shape)
                 pts[:,axis] = frag.lineAxisPosition
                 pts[:,2] = line[:,2]
-                for i in range(pts.shape[0]-1):
-                    xy0 = self.ijToXy(pts[i,0:2])
-                    xy1 = self.ijToXy(pts[i+1,0:2])
-                    cv2.line(outrgbx, xy0, xy1, lineColor, triLineSize)
-                    if not apply_mesh_opacity:
-                        cv2.line(original, xy0, xy1, lineColor, triLineSize)
+                if triLineSize > 0:
+                    for i in range(pts.shape[0]-1):
+                        xy0 = self.ijToXy(pts[i,0:2])
+                        xy1 = self.ijToXy(pts[i+1,0:2])
+                        cv2.line(outrgbx, xy0, xy1, lineColor, triLineSize)
+                        if not apply_mesh_opacity:
+                            cv2.line(original, xy0, xy1, lineColor, triLineSize)
 
                 pts = frag.vpoints[:, 0:2]
-                for i,pt in enumerate(pts):
-                    xy = self.ijToXy(pt[0:2])
-                    color = self.nodeColor
-                    # all frags are active at this point
-                    # if not frag.activeAndAligned():
-                    #     color = self.inactiveNodeColor
-                    ijk = frag.vpoints[i]
-                    if frag == pv.nearby_node_fv and i == pv.nearby_node_index:
-                        color = self.highlightNodeColor
-                    self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
-                    if not apply_node_opacity:
-                        self.drawNodeAtXy(original, xy, color, nodeSize)
+                if nodeSize > 0:
+                    for i,pt in enumerate(pts):
+                        xy = self.ijToXy(pt[0:2])
+                        color = self.nodeColor
+                        # all frags are active at this point
+                        # if not frag.activeAndAligned():
+                        #     color = self.inactiveNodeColor
+                        ijk = frag.vpoints[i]
+                        if frag == pv.nearby_node_fv and i == pv.nearby_node_index:
+                            color = self.highlightNodeColor
+                        self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
+                        if not apply_node_opacity:
+                            self.drawNodeAtXy(original, xy, color, nodeSize)
 
-            else:
+            elif nodeSize > 0:
                 # pts = frag.fpoints[:, 0:2]
                 pts = frag.vpoints[:, 0:2]
                 # print("pts shape", pts.shape)
@@ -1256,9 +1265,9 @@ class SurfaceWindow(DataWindow):
                 #     color = self.inactiveNodeColor
                 vrts = self.ijsToXys(pts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
-                cv2.polylines(outrgbx, vrts, True, color, 10)
+                cv2.polylines(outrgbx, vrts, True, color, 2*nodeSize)
                 if not apply_node_opacity:
-                    cv2.polylines(original, vrts, True, color, 10)
+                    cv2.polylines(original, vrts, True, color, 2*nodeSize)
                 if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0:
                     pt = pts[pv.nearby_node_index]
                     xy = self.ijToXy(pt)
@@ -1280,9 +1289,10 @@ class SurfaceWindow(DataWindow):
         timera.time("draw frag")
         self.cur_frag_pts_xyijk = np.array(xypts)
 
-        self.drawScaleBar(outrgbx)
-        if not apply_labels_opacity:
-            self.drawScaleBar(original)
+        if self.getDrawWidth("labels") > 0:
+            self.drawScaleBar(outrgbx)
+            if not apply_labels_opacity:
+                self.drawScaleBar(original)
 
         if opacity > 0 and opacity < 1:
             outrgbx = cv2.addWeighted(outrgbx, opacity, original, 1.-opacity, 0)
