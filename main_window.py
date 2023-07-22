@@ -730,6 +730,12 @@ class MainWindow(QMainWindow):
         self.fragments_table.model().scrollToRow(index)
         self.drawSlices()
 
+    def movePoint(self, fragment_view, index, new_tijk):
+        self.fragments_table.model().beginResetModel()
+        result = fragment_view.movePoint(index, new_tijk)
+        self.fragments_table.model().endResetModel()
+        return result
+
     def addPointToCurrentFragment(self, tijk):
         cur_frag_view = self.project_view.mainActiveVisibleFragmentView()
         if cur_frag_view is None:

@@ -35,7 +35,8 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             "Name",
             "Color",
             "Dir",
-            "Pts"
+            "Pts",
+            "cm^2"
             ]
 
     ctips = [
@@ -44,7 +45,8 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             "Name of the fragment; click to edit",
             "Color of the fragment; click to edit",
             "Direction (orientation) of the fragment",
-            "Number of points currently in fragment"
+            "Number of points currently in fragment",
+            "Fragment area in square centimeters"
             ]
     
     def flags(self, index):
@@ -166,6 +168,8 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             return ('X','Y')[fragment.direction]
         elif column == 5:
             return len(fragment.gpoints)
+        elif column == 6:
+            return "%.4f"%fragment_view.sqcm
         else:
             return None
 
@@ -532,7 +536,7 @@ class Fragment:
         ngijks = Volume.transposedGlobalIjksToGlobalIjks(newtijks, direction)
 
         # TODO: shouldn't be hardwired here!
-        voxelSizeUm = 7.91
+        voxelSizeUm = self.project.voxel_size_um
         meshCount = len(newtijks)
         area_sq_mm_flat = meshCount*voxelSizeUm*voxelSizeUm*infill*infill/1000000
         simps = tri.simplices
@@ -881,6 +885,7 @@ class FragmentView:
         self.visible = True
         self.active = False
         self.tri = None
+        self.sqcm = 0.
         self.line = None
         self.lineAxis = -1
         self.lineAxisPosition = 0
@@ -904,6 +909,29 @@ class FragmentView:
         self.modified = tstamp
         # print("fragment view", self.fragment.name,"modified", tstamp)
         self.project_view.notifyModified(tstamp)
+
+    def calculateSqCm(self):
+        if self.tri is None:
+            self.sqcm = 0.
+            return 0.
+        pts = self.fragment.gpoints
+        simps = self.tri.simplices
+        # need astype, otherwise does integer arithmetic,
+        # which overflows and goes negative at 2^31
+        v0 = pts[simps[:,0]].astype(np.float64)
+        v1 = pts[simps[:,1]].astype(np.float64)
+        v2 = pts[simps[:,2]].astype(np.float64)
+        v01 = v1-v0
+        v02 = v2-v0
+        norm = np.cross(v01, v02)
+        normsq = np.sum(norm*norm, axis=1)
+        voxel_size_um = self.project_view.project.voxel_size_um
+        # if np.isnan(np.sum(np.sqrt(normsq))):
+        #     print("problem", normsq, norm)
+        area_sq_mm_trg = np.sum(np.sqrt(normsq))*voxel_size_um*voxel_size_um/(2*1000000)
+        self.sqcm = area_sq_mm_trg/100.
+        # print(self.fragment.name, self.sqcm, "sq cm")
+        return self.sqcm
 
     def clearZsliceCache(self):
         self.prevZslice = -1
@@ -954,6 +982,7 @@ class FragmentView:
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
             # print(self.vpoints[0])
         self.createZsurf()
+        self.calculateSqCm()
         if not recursion_ok:
             return
         for fv in self.project_view.fragments.values():
@@ -1507,8 +1536,8 @@ class FragmentView:
         gijk = self.cur_volume_view.transposedIjkToGlobalPosition(tijk)
         self.fragment.gpoints = np.append(self.fragment.gpoints, np.reshape(gijk, (1,3)), axis=0)
         # print(self.lpoints)
-        self.fragment.notifyModified()
         self.setLocalPoints(True)
+        self.fragment.notifyModified()
 
     def deletePointByIndex(self, index):
         if index >= 0 and index < len(self.fragment.gpoints):

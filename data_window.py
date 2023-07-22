@@ -189,7 +189,8 @@ class DataWindow(QLabel):
             new_tijk[self.jIndex] = j
             new_tijk[self.axis] = k
             # True if successful
-            if fv.movePoint(index, new_tijk):
+            # if fv.movePoint(index, new_tijk):
+            if self.window.movePoint(fv, index, new_tijk):
                 # wpos = e.localPos()
                 # wxy = (wpos.x(), wpos.y())
                 # nearbyNode = self.findNearbyNode(wxy)
