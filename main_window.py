@@ -333,6 +333,15 @@ class MainWindow(QMainWindow):
         grid = QGridLayout()
 
         self.project_view = None
+        args = QCoreApplication.arguments()
+        path = os.path.dirname(os.path.realpath(args[0]))
+        # https://iconduck.com/icons/163625/openhand
+        px = QPixmap(path+"/openhand.svg")
+        # print("px size",px.size())
+        self.openhand = QCursor(px)
+        px = QPixmap(path+"/openhand transparent.svg")
+        # print("px size",px.size())
+        self.openhand_transparent = QCursor(px)
 
         # x slice or y slice in data
         self.depth = DataWindow(self, 2)
