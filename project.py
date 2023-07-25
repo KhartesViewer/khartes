@@ -40,6 +40,14 @@ class ProjectView:
         '''
         self.vol_boxes_visible = False
 
+    def alphabetizeVolumeViews(self):
+        vols = list(self.volumes.keys())
+        Volume.sortVolumeList(vols)
+        new_vols = {}
+        for vol in vols:
+            new_vols[vol] = self.volumes[vol]
+        self.volumes = new_vols
+
     def addVolumeView(self, volume, no_notify=False):
         if volume not in self.volumes:
             self.volumes[volume] = VolumeView(self, volume)
@@ -465,11 +473,17 @@ class Project:
         # print("ls",self.last_saved,"m",self.modified)
         return (self.last_saved >= self.modified)
 
+    def alphabetizeVolumes(self):
+        Volume.sortVolumeList(self.volumes)
+        for pv in self.project_views:
+            pv.alphabetizeVolumeViews()
+
     def addVolume(self, volume):
         volume.setVoxelSizeUm(self.voxel_size_um)
         self.volumes.append(volume)
         for pv in self.project_views:
             pv.addVolumeView(volume)
+        self.alphabetizeVolumes()
 
     def alphabetizeFragments(self):
         Fragment.sortFragmentList(self.fragments)
