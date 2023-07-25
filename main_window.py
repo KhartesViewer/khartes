@@ -8,6 +8,7 @@ import time
 from PyQt5.QtWidgets import (
         QAction, QApplication, QAbstractItemView,
         QCheckBox,
+        QDialog, QDialogButtonBox,
         QFileDialog, QFrame,
         QGridLayout, QGroupBox,
         QHBoxLayout, 
@@ -50,6 +51,85 @@ class ColorBlock(QLabel):
         palette = self.palette()
         palette.setColor(QPalette.Window, QColor(color))
         self.setPalette(palette)
+
+class InfillDialog(QDialog):
+    def __init__(self, main_window, parent=None):
+        instructions = "In order to fit the curved fragment surface,\ninfill points are added to the exported mesh.\nThe distance between points is given in voxels.\n16 is a good default.\n0 means do not infill."
+        super(InfillDialog, self).__init__(parent)
+        vlayout = QVBoxLayout()
+        self.setLayout(vlayout)
+        hlayout = QHBoxLayout()
+        vlayout.addLayout(hlayout)
+        hlayout.addWidget(QLabel("Infill spacing"))
+        self.edit = QLineEdit("16")
+        fm = self.edit.fontMetrics()
+        w = 7*fm.width('0')
+        self.edit.setFixedWidth(w)
+        self.edit.editingFinished.connect(self.onEditingFinished)
+        self.edit.textEdited.connect(self.onTextEdited)
+        hlayout.addWidget(self.edit)
+        hlayout.addStretch()
+        self.wlabel = QLabel("")
+        vlayout.addWidget(self.wlabel)
+        self.ilabel = QLabel(instructions)
+        vlayout.addWidget(self.ilabel)
+        bbox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bbox.accepted.connect(self.accepted)
+        bbox.rejected.connect(self.rejected)
+        vlayout.addWidget(bbox)
+        self.is_accepted = False
+        # print("InfillDialog created")
+
+    def getValue(self):
+        txt = self.edit.text()
+        valid, i = self.parseText(txt)
+        if not valid or not self.is_accepted:
+            i = -1
+        # print("getValue", i)
+        return i
+
+    def accepted(self):
+        self.is_accepted = True
+        value = self.getValue()
+        # print("accepted", value)
+        if value < 0:
+            self.edit.setText("")
+            self.wlabel.setText('Please enter a valid value (an integer >= 0)\nor press "Cancel"')
+            self.wlabel.setStyleSheet("QLabel { color: red; font-weight: bold }")
+        else:
+            self.close()
+
+    def rejected(self):
+        self.is_accepted = False
+        # print("rejected")
+        self.close()
+
+    def onEditingFinished(self):
+        txt = self.edit.text()
+        valid, size = self.parseText(txt)
+        # print("oef", valid, size)
+        # if valid:
+        #     self.main_window.setVoxelSizeUm(size)
+
+    def parseText(self, txt):
+        valid = True
+        i = -1
+        try:
+            i = int(txt)
+        except:
+            valid = False
+        if i < 0:
+            valid = False
+        return valid, i
+
+    def onTextEdited(self, txt):
+        valid, i = self.parseText(txt)
+        # print("ote", valid)
+        if valid:
+            self.edit.setStyleSheet("")
+        else:
+            self.edit.setStyleSheet("QLineEdit { color: red }")
+
 
 class CreateFragmentButton(QPushButton):
     def __init__(self, main_window, parent=None):
@@ -1121,7 +1201,13 @@ class MainWindow(QMainWindow):
 
         # TODO: allow the user to set the infill
         # err = Fragment.saveListAsObjMesh(frags, pname, 16)
-        infill = 16
+        # infill = 16
+        dialog = InfillDialog(self)
+        dialog.exec()
+        infill = dialog.getValue()
+        if infill < 0:
+            print("Export mesh cancelled by user")
+            return
         err = Fragment.saveListAsObjMesh(fvs, pname, infill)
 
         if err != "":
