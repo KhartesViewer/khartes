@@ -595,6 +595,12 @@ class Volume():
         # apparentVoxelSize is not stored for each volume
         # (instead, voxelSizeUm is stored with the project)
 
+
+    # class function
+    # performs an in-place sort of the list
+    def sortVolumeList(vols):
+        vols.sort(key=lambda v: v.name)
+
     # project is the project that the nrrd file will be added to
     # tiff_directory is the name of the directory containing the
     # tiff files
