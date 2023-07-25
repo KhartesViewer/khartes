@@ -75,28 +75,44 @@ class RangeEdit(QLineEdit):
         if range_valid and lt is not None and lt.range_valid and lt.value >= v:
             ltvalid = False
             valid = False
+        # if lt is not None:
+        #     print("l",v,range_valid,lt.range_valid,lt.value)
+        # else:
+        #     print("ln",v,range_valid)
         gt = self.greater
         gtvalid = True
         if range_valid and gt is not None and gt.range_valid and gt.value <= v:
             gtvalid = False
             valid = False
+        # if gt is not None:
+        #     print("g",v,range_valid,gt.range_valid,gt.value)
+        # else:
+        #     print("gn",v,range_valid)
+        if range_valid:
+            self.value = v
+        else:
+            self.value = -1
         if valid:
             # self.setStyleSheet("RangeEdit { color: black }")
             self.setStyleSheet("")
-            self.value = v
+            # self.value = v
         else:
             self.setStyleSheet("RangeEdit { color: red }")
-            self.value = -1
+            # self.value = -1
 
         if range_valid and lt is not None and lt.range_valid:
-            if ltvalid and lt.valid:
+            # print("ll",ltvalid, lt.valid)
+            # if ltvalid and lt.valid:
+            if ltvalid:
                 # lt.setStyleSheet("RangeEdit { color: black }")
                 lt.setStyleSheet("")
             else:
                 lt.setStyleSheet("RangeEdit { color: red }")
 
         if range_valid and gt is not None and gt.range_valid:
-            if gtvalid and gt.valid:
+            # print("gg",gtvalid, gt.valid)
+            # if gtvalid and gt.valid:
+            if gtvalid:
                 # gt.setStyleSheet("RangeEdit { color: black }")
                 gt.setStyleSheet("")
             else:
