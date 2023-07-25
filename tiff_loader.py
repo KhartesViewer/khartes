@@ -251,11 +251,14 @@ class TiffLoader(QMainWindow):
             dialog.done(1)
         
     def onNameEdited(self, txt):
-        if txt == "":
+        vol_names = set(v.name for v in self.main_window.project_view.volumes.keys())
+        if txt == "" or txt in vol_names:
             self.name_valid = False
+            self.nameedit.setStyleSheet("QLineEdit { color: red }")
         else:
             self.name_valid = True
             self.name = txt
+            self.nameedit.setStyleSheet("")
         # print("oNE", txt, self.name_valid)
         self.onChange()
 
@@ -448,7 +451,7 @@ class TiffLoader(QMainWindow):
         else:
             gb = size/1000000000
             self.status_bar.showMessage("Volume size: %.1f Gb"%gb)
-        if self.areValid():
+        if self.areValid() and not self.reading:
             self.gobutton.setEnabled(True)
             self.gobutton.setDefault(True)
         else:
@@ -495,6 +498,7 @@ class TiffLoader(QMainWindow):
 
         self.cancel = False
         self.reading = True
+        self.onChange()
 
         self.createRanges()
         ranges = self.ranges
@@ -529,6 +533,8 @@ class TiffLoader(QMainWindow):
     # Callback as specified in Volume.createFromTiffs
     def readerCallback(self, text):
         print("rc", text)
+        if text.startswith("Loading"):
+            self.hide()
         self.status_bar.showMessage(text)
         self.main_window.app.processEvents()
         # True to continue, False to cancel
