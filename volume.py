@@ -478,15 +478,18 @@ class VolumeView():
         return minzoom
 
     def setDefaultMinZoom(self, window):
-        dzoom = self.getDefaultZoom(window)
+        dzoom = self.getDefaultZoom(window)*self.volume.averageStepSize()
+        asz = self.volume.averageStepSize()
         self.minZoom = min(.05, .5*dzoom)
+        self.maxZoom = 5*asz
 
     # call after direction is set
     def setDefaultParameters(self, window, no_notify=False):
         # zoom=1 means one pixel in grid should
         # be the same size as one pixel in viewing window
         self.zoom = self.getDefaultZoom(window)
-        self.minZoom = .5*self.zoom
+        # self.minZoom = .5*self.zoom
+        # self.maxZoom = 5*self.volume.averageStepSize()
         sh = self.trdata.shape
         # itf, jtf, ktf are ijk of focus point in tranposed grid
         # value at focus point is trdata[ktf,jtf,itf]
@@ -574,13 +577,19 @@ class Volume():
             size += 1
         return size
 
+    def averageStepSize(self):
+        gs = self.gijk_steps
+        sizemult = (gs[0]*gs[1]*gs[2])**(1./3.)
+        return sizemult
+
     # Called by project if project's voxel size changes
     def setVoxelSizeUm(self, voxelSizeUm):
         # in the future apparentVoxelSize should
         # be anisotropic, based on self.direction
-        gs = self.gijk_steps
+        # gs = self.gijk_steps
         # take the geometric mean of the step sizes
-        sizemult = (gs[0]*gs[1]*gs[2])**(1./3.)
+        # sizemult = (gs[0]*gs[1]*gs[2])**(1./3.)
+        sizemult = self.averageStepSize()
         self.apparentVoxelSize = sizemult*voxelSizeUm 
         # no need to call notifyModified, because
         # apparentVoxelSize is not stored for each volume

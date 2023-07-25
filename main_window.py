@@ -479,7 +479,7 @@ class MainWindow(QMainWindow):
         self.import_nrrd_action.triggered.connect(self.onImportNRRDButtonClick)
         self.import_nrrd_action.setEnabled(False)
 
-        self.import_tiffs_action = QAction("Import TIFF files...", self)
+        self.import_tiffs_action = QAction("Create volume from TIFF files...", self)
         self.import_tiffs_action.triggered.connect(self.onImportTiffsButtonClick)
         self.import_tiffs_action.setEnabled(False)
 
@@ -1384,9 +1384,11 @@ class MainWindow(QMainWindow):
             font = self.label.font()
             font.setPointSize(16)
             self.label.setFont(font)
+            print("Loading widget created", self)
             self.show()
 
     def loadingDestroyed(self, widget):
+        print("Loading destroyed, loading widget to close", widget)
         widget.close()
 
     # Sort of complicated.  
@@ -1408,6 +1410,7 @@ class MainWindow(QMainWindow):
             super(MainWindow.Loading, self).__init__()
             widget = MainWindow.LoadingWidget(parent, text)
             self.destroyed.connect(lambda o: parent.loadingDestroyed(widget))
+            print("Loading created", self, widget)
 
     def showLoading(self, text=None):
             loading = MainWindow.Loading(self, text)
