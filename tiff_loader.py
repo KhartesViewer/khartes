@@ -6,7 +6,7 @@ from volume import Volume
 
 from PyQt5.QtWidgets import (
         QAction, QApplication, QAbstractItemView,
-        QCheckBox,
+        QCheckBox, QColorDialog,
         QFileDialog,
         QGridLayout,
         QHBoxLayout, 
@@ -20,6 +20,29 @@ from PyQt5.QtWidgets import (
         )
 from PyQt5.QtCore import QSize, Qt, qVersion, QSettings
 from PyQt5.QtGui import QPalette, QColor, QCursor, QIntValidator
+
+class ColorEdit(QPushButton):
+
+    def __init__(self, tiff_loader):
+        super(ColorEdit, self).__init__()
+        self.tiff_loader = tiff_loader
+        self.clicked.connect(self.onClicked)
+        self.setColor("magenta")
+
+    def setColor(self, color_name):
+        self.setStyleSheet("ColorEdit {background-color: %s}"%color_name)
+        print("set color to", color_name)
+
+
+    def getColor(self):
+        return self.palette().color(QPalette.Window)
+
+    def onClicked(self, d):
+        old_color = self.getColor()
+        new_color = QColorDialog.getColor(old_color, self)
+        if new_color.isValid() and new_color != old_color:
+            self.setColor(new_color.name())
+            self.tiff_loader.onChange()
 
 # from data_window import DataWindow, SurfaceWindow
 # from project import Project, ProjectView
@@ -198,6 +221,17 @@ class TiffLoader(QMainWindow):
         hbox.addWidget(self.vcrender)
         vbox.addLayout(hbox)
         hbox = QHBoxLayout()
+        hbox.addWidget(QLabel("Volume color:"))
+        self.color_editor = ColorEdit(self)
+        hbox.addWidget(self.color_editor)
+        hbox.addStretch()
+        self.recenter = QPushButton("Re-center slices")
+        self.recenter.clicked.connect(self.onRecenterClicked)
+        self.recenter.setEnabled(False)
+        hbox.addWidget(self.recenter)
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
         self.gobutton = QPushButton("Create")
         self.gobutton.clicked.connect(self.onGoButtonClicked)
         self.gobutton.setEnabled(False)
@@ -221,6 +255,14 @@ class TiffLoader(QMainWindow):
         self.filepathdict = None
         self.reading = False
         self.cancel = False
+
+    # override
+    def hideEvent(self, e):
+        self.onChange()
+
+    # override
+    def showEvent(self, e):
+        self.onChange()
 
     #TODO: when shown, make sure a project currently exists.
 
@@ -443,6 +485,21 @@ class TiffLoader(QMainWindow):
             v *= n
         return v
 
+    def color(self):
+        return self.color_editor.getColor()
+
+    def corners(self):
+        if not self.areAllRangesValid():
+            return None
+        if not self.isVisible():
+            return None
+        # if self.reading:
+        #     return None
+        self.createRanges()
+        ranges = np.array(self.ranges, dtype=np.int32)
+        return ranges.transpose()[0:2]
+
+
     def onChange(self):
         size = self.computeSize()
         # print("oc size", size)
@@ -451,6 +508,12 @@ class TiffLoader(QMainWindow):
         else:
             gb = size/1000000000
             self.status_bar.showMessage("Volume size: %.1f Gb"%gb)
+        if not self.reading:
+            self.main_window.drawSlices()
+        self.recenter.setEnabled(
+                # not self.reading and
+                self.corners() is not None
+                )
         if self.areValid() and not self.reading:
             self.gobutton.setEnabled(True)
             self.gobutton.setDefault(True)
@@ -527,6 +590,9 @@ class TiffLoader(QMainWindow):
             self.main_window.setVolume(old_volume)
         else:
             self.main_window.setVolume(new_volume)
+            vv = self.main_window.project_view.cur_volume_view
+            vv.setColor(QColor(self.color()))
+            # should have been hidden during readerCallback
             self.hide()
         self.onChange()
 
@@ -543,6 +609,11 @@ class TiffLoader(QMainWindow):
         else:
             return True
 
+    def onRecenterClicked(self, s):
+        # print("Recenter clicked")
+        cs = self.corners()
+        avg = .5*(cs[0]+cs[1])
+        self.main_window.recenterCurrentVolume(avg)
 
     def onCancelClicked(self, s):
         if self.reading:
