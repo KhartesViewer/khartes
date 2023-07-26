@@ -30,6 +30,8 @@ from PyQt5.QtGui import QPainter, QPalette, QColor, QCursor, QIcon, QPixmap, QIm
 
 from PyQt5.QtSvg import QSvgRenderer
 
+from PyQt5.QtXml import QDomDocument
+
 from tiff_loader import TiffLoader
 from data_window import DataWindow, SurfaceWindow
 from project import Project, ProjectView
@@ -209,6 +211,26 @@ class VolBoxesVisibleCheckBox(QCheckBox):
     def onStateChanged(self, s):
         self.main_window.setVolBoxesVisible(s==Qt.Checked)
 
+class TrackingCursorsVisibleCheckBox(QCheckBox):
+    def __init__(self, main_window, parent=None):
+        super(TrackingCursorsVisibleCheckBox, self).__init__("Show tracking cursors", parent)
+        self.main_window = main_window
+        # at the time this widget is created, state is unknown,
+        # so no use to check it
+        # self.setChecked(state)
+        self.stateChanged.connect(self.onStateChanged)
+        self.name = "tracking_cursors"
+        self.class_name = "show"
+        self.setChecked(main_window.draw_settings[self.name][self.class_name])
+        main_window.draw_settings_widgets[self.name][self.class_name] = self
+
+    def onStateChanged(self, s):
+        # self.main_window.setVolBoxesVisible(s==Qt.Checked)
+        self.main_window.setTrackingCursorsVisible(s==Qt.Checked)
+
+    def updateValue(self, value):
+        self.setChecked(value)
+
 class VoxelSizeEditor(QWidget):
     def __init__(self, main_window, parent=None):
         super(VoxelSizeEditor, self).__init__(parent)
@@ -387,6 +409,9 @@ class MainWindow(QMainWindow):
             "opacity": 1.0,
             "apply_opacity": True,
         },
+        "tracking_cursors": {
+            "show": False,
+        },
     }
 
     def __init__(self, appname, app):
@@ -413,6 +438,8 @@ class MainWindow(QMainWindow):
         grid = QGridLayout()
 
         self.project_view = None
+        self.cursor_tijk = None
+        self.cursor_window = None
         args = QCoreApplication.arguments()
         path = os.path.dirname(os.path.realpath(args[0]))
         # https://iconduck.com/icons/163625/openhand
@@ -422,6 +449,8 @@ class MainWindow(QMainWindow):
         px = QPixmap(path+"/openhand transparent.svg")
         # print("px size",px.size())
         self.openhand_transparent = QCursor(px)
+        self.openhand_transparents = self.transparentSvgs(path+"/openhand transparent.svg", 11)
+        self.openhand_transparent = self.openhand_transparents[0]
 
         # x slice or y slice in data
         self.depth = DataWindow(self, 2)
@@ -540,6 +569,79 @@ class MainWindow(QMainWindow):
         if len(args) > 1 and args[1].endswith('.khprj'):
             self.loadProject(args[1])
             QTimer.singleShot(100, self.drawSlices)
+
+    def setCursorPosition(self, data_window, tijk):
+        # show_tracking_cursors = self.draw_settings["tracking_cursors"]["show"]
+        # TODO remove after testing
+        # show_tracking_cursors = True
+        # if not show_tracking_cursors:
+        if not self.getTrackingCursorsVisible():
+            self.cursor_tijk = None
+            self.cursor_window = None
+            return
+        self.cursor_tijk = tijk
+        self.cursor_window = data_window
+        self.drawSlices()
+
+    # loosely based on https://stackoverflow.com/questions/15123544/change-the-color-of-an-svg-in-qt
+    def transparentSvgs(self, fname, cnt):
+        try:
+            fd = open(fname, "r")
+        except:
+            print("could not open",fname)
+            return []
+        svg_txt = fd.read()
+        doc = QDomDocument()
+        doc.setContent(svg_txt)
+        paths = doc.elementsByTagName("path")
+        print(len(paths),"paths")
+        gradients = [
+                {
+                    "fill-opacity": (.2, 0.),
+                    "stroke-opacity": (0., 1.)
+                    },
+                {
+                    "fill-opacity": (1., 0.),
+                    "stroke-opacity": (0., 1.)
+                    },
+                {
+                    "fill-opacity": (1., 0.2),
+                    # "fill-opacity": (1., 0.0),
+                    "stroke-opacity": (0., 0.6)
+                    }
+                ]
+        if len(gradients) != len(paths):
+            print("gradient-path mismatch")
+            return []
+
+        delta = 1./(cnt-1)
+
+        cursors = []
+        for i in range(0,cnt+1):
+            a = i*delta
+            # for j,path in enumerate(paths):
+            for j in range(paths.length()):
+                path = paths.at(j).toElement()
+
+                gradient = gradients[j]
+                for attr, x01 in gradient.items():
+                    x0 = x01[0]
+                    x1 = x01[1]
+                    v = (1.-a)*x0 + x1
+                    strv = "%.3f"%v
+                    # print(v,strv)
+                    path.setAttribute(attr, strv)
+            # if i == 5:
+            #     print(doc.toString(4))
+            rend = QSvgRenderer(doc.toByteArray())
+            pix = QPixmap(rend.defaultSize())
+            pix.fill(Qt.transparent)
+            painter = QPainter(pix)
+            rend.render(painter)
+            painter.end()
+            cursors.append(QCursor(pix))
+
+        return cursors
 
     def addFragmentsPanel(self):
         panel = QWidget()
@@ -727,6 +829,9 @@ class MainWindow(QMainWindow):
         vbv = VolBoxesVisibleCheckBox(self)
         self.settings_vol_boxes_visible = vbv
         slices_layout.addWidget(vbv)
+        tcv = TrackingCursorsVisibleCheckBox(self)
+        self.settings_tracking_cursors_visible = tcv
+        slices_layout.addWidget(tcv)
         vs = VoxelSizeEditor(self)
         self.settings_voxel_size_um = vs
         slices_layout.addWidget(vs)
@@ -753,6 +858,22 @@ class MainWindow(QMainWindow):
 
     def volumeView(self):
         return self.project_view.cur_volume_view
+
+    def getTrackingCursorsVisible(self):
+        return self.draw_settings["tracking_cursors"]["show"]
+
+    def setTrackingCursorsVisible(self, value):
+        # slices = self.project_view.settings['slices']
+        # vbv = 'vol_boxes_visible'
+        # old_value = slices[vbv]
+        old_value = self.getTrackingCursorsVisible()
+        if old_value == value:
+            return
+        self.draw_settings["tracking_cursors"]["show"] = value
+        self.settings_tracking_cursors_visible.setChecked(self.getTrackingCursorsVisible())
+        # self.project_view.notifyModified()
+        self.settingsSaveDrawSettings()
+        self.drawSlices()
 
     def getVolBoxesVisible(self):
         if self.project_view is None:
@@ -1101,7 +1222,13 @@ class MainWindow(QMainWindow):
         if jstr is not None:
             try:
                 settings = json.loads(jstr)
-                self.draw_settings = settings
+                # merge into current settings, in case
+                # some are missing from the json file
+                # self.draw_settings = settings
+                # print("json settings", settings)
+                # print("draw settings", self.draw_settings)
+                self.draw_settings = Utils.updateDict(self.draw_settings, settings)
+                # print("updated draw settings", self.draw_settings)
                 # No need; settingsLoadDrawSettings is
                 # called before widgets are created
                 # self.updateDrawSettingsWidgets()
@@ -1180,7 +1307,6 @@ class MainWindow(QMainWindow):
         parent = path.parent
         self.settingsSaveDirectory(str(parent), "nrrd_")
 
-    # TODO Should have dialog where user can select infill parameter
     def onExportAsMeshButtonClick(self, s):
         print("export mesh clicked")
         if self.project_view is None or self.project_view.project is None:
@@ -1213,9 +1339,6 @@ class MainWindow(QMainWindow):
 
         name = pname.name
 
-        # TODO: allow the user to set the infill
-        # err = Fragment.saveListAsObjMesh(frags, pname, 16)
-        # infill = 16
         dialog = InfillDialog(self)
         dialog.exec()
         infill = dialog.getValue()

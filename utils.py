@@ -63,6 +63,16 @@ class Utils:
         i += inc
         return "%s%d"%(base,i)
 
+        
+    # https://stackoverflow.com/questions/3232943/update-value-of-a-nested-dictionary-of-varying-depth
+    def updateDict(d, u):
+        for k, v in u.items():
+            if isinstance(v, dict):
+                d[k] = Utils.updateDict(d.get(k, {}), v)
+            else:
+                d[k] = v
+        return d
+
     def getNextColorOld():
         Utils.colorCounter = (Utils.colorCounter+1)%len(Utils.colors)
         color = Utils.colors[Utils.colorCounter]

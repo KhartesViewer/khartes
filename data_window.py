@@ -34,6 +34,8 @@ class DataWindow(QLabel):
         self.isPanning = False
         self.isMovingNode = False
         self.localNearbyNodeIndex = -1
+        self.maxNearbyNodeDistance = 10
+        self.nearbyNodeDistance = -1
         self.tfStartPoint = None
         self.nnStartPoint = None
         self.cur_frag_pts_xyijk = None
@@ -55,6 +57,7 @@ class DataWindow(QLabel):
         # self.defaultCursor = Qt.OpenHandCursor
         self.defaultCursor = self.window.openhand
         self.nearNonMovingNodeCursor = self.window.openhand_transparent
+        self.nearNonMovingNodeCursors = self.window.openhand_transparents
         self.addingCursor = Qt.CrossCursor
         self.movingNodeCursor = Qt.ArrowCursor
         self.panningCursor = Qt.ClosedHandCursor
@@ -82,6 +85,9 @@ class DataWindow(QLabel):
 
     def getDrawApplyOpacity(self, name):
         return self.window.draw_settings[name]["apply_opacity"]
+
+    # def getDrawSetting(self, clss, name):
+    #     return self.window.draw_settings[clss][name]
 
     def setVolumeView(self, vv):
         self.volume_view = vv
@@ -244,7 +250,9 @@ class DataWindow(QLabel):
         # print(ds)
         imin = np.argmin(ds)
         vmin = ds[imin]
-        if vmin > 10:
+        self.nearbyNodeDistance = vmin
+        if vmin > self.maxNearbyNodeDistance:
+            self.nearbyNodeDistance = -1
             return -1
 
         # print("fnn", imin, index, xyijks[imin])
@@ -320,6 +328,7 @@ class DataWindow(QLabel):
             return
         self.setNearbyNode(-1)
         self.window.setStatusText("")
+        self.window.setCursorPosition(None, None)
         self.checkCursor()
 
     def checkCursor(self):
@@ -337,7 +346,16 @@ class DataWindow(QLabel):
         elif self.allowMouseToDragNode() and (self.isMovingNode or self.localNearbyNodeIndex >= 0):
             new_cursor = self.movingNodeCursor
         elif not self.allowMouseToDragNode() and self.localNearbyNodeIndex >= 0:
-            new_cursor = self.nearNonMovingNodeCursor
+            cursors = self.nearNonMovingNodeCursors
+            cursor = self.nearNonMovingNodeCursor
+            if len(cursors) == 0:
+                new_cursor = cursor
+            else:
+                pdist = self.nearbyNodeDistance/self.maxNearbyNodeDistance
+                rdist = min(2.-2*pdist, 1)
+                index = round((len(cursors)-1)*rdist)
+                new_cursor = cursors[index]
+
         elif shift_pressed:
             new_cursor = self.addingCursor
         if new_cursor != self.cursor():
@@ -382,8 +400,6 @@ class DataWindow(QLabel):
         if self.volume_view is None:
             return
         mxy = (e.localPos().x(), e.localPos().y())
-        ij = self.xyToIj(mxy)
-        tijk = self.ijToTijk(ij)
         self.setStatusTextFromMousePosition()
         if self.isPanning:
             delta = e.localPos()-self.mouseStartPoint
@@ -415,6 +431,9 @@ class DataWindow(QLabel):
             nearbyNode = self.findNearbyNode(mxy)
             # print("mxy", mxy, nearbyNode)
             self.setNearbyNode(nearbyNode)
+        ij = self.xyToIj(mxy)
+        tijk = self.ijToTijk(ij)
+        self.window.setCursorPosition(self, tijk)
         self.checkCursor()
 
 
@@ -558,7 +577,8 @@ class DataWindow(QLabel):
             color[axis] *= 2/3
         if axis == 2:
             # make blue a bit brighter
-            f = 16384
+            # f = 16384
+            f = 24000
             color[(axis+1)%3] = f
             color[(axis+2)%3] = f
         return color
@@ -771,6 +791,33 @@ into and out of the viewing plane.
         maxxy = self.ijToXy(maxij)
         return minxy, maxxy, intersects_slice
 
+    def drawTrackingCursor(self, canvas):
+        cw = self.window.cursor_window
+        if cw is None or cw == self:
+            return
+        cijk = self.window.cursor_tijk
+        cij = self.tijkToIj(cijk)
+        cxy = self.ijToXy(cij)
+        r = 5
+        thickness = 2
+        color = self.axisColor(cw.axis)
+        white = (65535,65535,65535)
+        # cv2.circle(canvas, cxy, 2*r+1, white, thickness+2)
+        cv2.circle(canvas, cxy, 2*r+1, color, thickness)
+        # self.ijToTijk is a virtual function that
+        # sets the true k value in the fragment window
+        # k = self.positionOnAxis()
+        k = self.ijToTijk(cij)[self.axis]
+        ck = cijk[self.axis]
+        cx = cxy[0]
+        cy = cxy[1]
+        if k-ck != 0:
+            cv2.line(canvas, (cx-r,cy), (cx+r,cy), white, thickness+2)
+            cv2.line(canvas, (cx-r,cy), (cx+r,cy), color, thickness)
+        if k < ck:
+            cv2.line(canvas, (cx,cy-r), (cx,cy+r), white, thickness+2)
+            cv2.line(canvas, (cx,cy-r), (cx,cy+r), color, thickness)
+
     def drawSlice(self):
         timera = Utils.Timer(False)
         volume = self.volume_view
@@ -797,7 +844,6 @@ into and out of the viewing plane.
         sh = slc.shape[0]
         # label = self.sliceGlobalLabel()
         # gpos = self.sliceGlobalPosition()
-        # print("--------------------")
         # print("%s %d %d"%(self.sliceGlobalLabel(), sw, sh))
         # zoomed slice width, height
         zsw = max(int(z*sw), 1)
@@ -952,25 +998,6 @@ into and out of the viewing plane.
             for vol, vol_view in self.window.project_view.volumes.items():
                 if vol == cur_vol:
                     continue
-                '''
-                xyz0 = np.array(vol.gijk_starts, dtype=np.int32)
-                dxyz = np.array(vol.gijk_steps, dtype=np.int32)
-                nxyz = np.array(vol.sizes, dtype=np.int32)
-                gmin = xyz0
-                gmax = xyz0 + dxyz*nxyz
-                gs = np.array((gmin, gmax))
-                tijks = cur_vol_view.globalPositionsToTransposedIjks(gs)
-                mink = tijks[0][self.axis]
-                maxk = tijks[1][self.axis]
-                curk = self.positionOnAxis()
-                if curk < mink or curk > maxk:
-                    continue
-
-                minij = self.tijkToIj(tijks[0])
-                maxij = self.tijkToIj(tijks[1])
-                minxy = self.ijToXy(minij)
-                maxxy = self.ijToXy(maxij)
-                '''
                 gs = vol.corners()
                 minxy, maxxy, intersects_slice = self.cornersToXY(gs)
                 if not intersects_slice:
@@ -1007,10 +1034,12 @@ into and out of the viewing plane.
             cv2.putText(outrgbx, txt, org, cv2.FONT_HERSHEY_PLAIN, size, gray, 3)
             cv2.putText(outrgbx, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
             self.drawScaleBar(outrgbx)
+            self.drawTrackingCursor(outrgbx)
             if not apply_labels_opacity:
                 cv2.putText(original, txt, org, cv2.FONT_HERSHEY_PLAIN, size, gray, 3)
                 cv2.putText(original, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
                 self.drawScaleBar(original)
+                self.drawTrackingCursor(original)
 
 
         if opacity > 0 and opacity < 1:
@@ -1332,8 +1361,10 @@ class SurfaceWindow(DataWindow):
 
         if self.getDrawWidth("labels") > 0:
             self.drawScaleBar(outrgbx)
+            self.drawTrackingCursor(outrgbx)
             if not apply_labels_opacity:
                 self.drawScaleBar(original)
+                self.drawTrackingCursor(original)
 
         if opacity > 0 and opacity < 1:
             outrgbx = cv2.addWeighted(outrgbx, opacity, original, 1.-opacity, 0)
