@@ -595,6 +595,15 @@ class Volume():
         # apparentVoxelSize is not stored for each volume
         # (instead, voxelSizeUm is stored with the project)
 
+    # returns a numpy array with min and max corner ijks
+    def corners(self):
+        xyz0 = np.array(self.gijk_starts, dtype=np.int32)
+        dxyz = np.array(self.gijk_steps, dtype=np.int32)
+        nxyz = np.array(self.sizes, dtype=np.int32)
+        gmin = xyz0
+        gmax = xyz0 + dxyz*nxyz
+        gs = np.array((gmin, gmax))
+        return gs
 
     # class function
     # performs an in-place sort of the list

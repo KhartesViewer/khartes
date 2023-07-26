@@ -737,6 +737,20 @@ class MainWindow(QMainWindow):
 
         self.tab_panel.addTab(panel, "Settings")
 
+    # gijk is a numpy array
+    def recenterCurrentVolume(self, gijk):
+        if self.project_view is None:
+            return
+        vv = self.project_view.cur_volume_view
+        if vv is None:
+            return
+        gijks = gijk.reshape((1,-1))
+        # print("rcv g", gijk, gijks)
+        tijk = vv.globalPositionsToTransposedIjks(gijks)
+        # print("rcv t", tijk)
+        vv.setIjkTf(tijk[0].tolist())
+        self.drawSlices()
+
     def volumeView(self):
         return self.project_view.cur_volume_view
 

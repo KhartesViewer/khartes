@@ -755,6 +755,22 @@ into and out of the viewing plane.
             self.setAlignment(Qt.AlignCenter)
         self.innerResetText(text, ptsize)
 
+    # return xymin, xymax, intersects_slice
+    def cornersToXY(self, corners):
+        cur_vol_view = self.window.project_view.cur_volume_view
+        # cur_vol = cur_vol_view.cur_volume
+        tijks = cur_vol_view.globalPositionsToTransposedIjks(corners)
+        mink = tijks[0][self.axis]
+        maxk = tijks[1][self.axis]
+        curk = self.positionOnAxis()
+        intersects_slice = (mink <= curk <= maxk)
+
+        minij = self.tijkToIj(tijks[0])
+        maxij = self.tijkToIj(tijks[1])
+        minxy = self.ijToXy(minij)
+        maxxy = self.ijToXy(maxij)
+        return minxy, maxxy, intersects_slice
+
     def drawSlice(self):
         timera = Utils.Timer(False)
         volume = self.volume_view
@@ -936,6 +952,7 @@ into and out of the viewing plane.
             for vol, vol_view in self.window.project_view.volumes.items():
                 if vol == cur_vol:
                     continue
+                '''
                 xyz0 = np.array(vol.gijk_starts, dtype=np.int32)
                 dxyz = np.array(vol.gijk_steps, dtype=np.int32)
                 nxyz = np.array(vol.sizes, dtype=np.int32)
@@ -953,9 +970,28 @@ into and out of the viewing plane.
                 maxij = self.tijkToIj(tijks[1])
                 minxy = self.ijToXy(minij)
                 maxxy = self.ijToXy(maxij)
+                '''
+                gs = vol.corners()
+                minxy, maxxy, intersects_slice = self.cornersToXY(gs)
+                if not intersects_slice:
+                    continue
                 cv2.rectangle(outrgbx, minxy, maxxy, vol_view.cvcolor, 2)
                 if not apply_labels_opacity:
                     cv2.rectangle(original, minxy, maxxy, vol_view.cvcolor, 2)
+        tiff_corners = self.window.tiff_loader.corners()
+        if tiff_corners is not None:
+            # print("tiff corners", tiff_corners)
+
+            minxy, maxxy, intersects_slice = self.cornersToXY(tiff_corners)
+            if intersects_slice:
+                # tcolor is a string
+                tcolor = self.window.tiff_loader.color()
+                qcolor = QColor(tcolor)
+                rgba = qcolor.getRgbF()
+                cvcolor = [int(65535*c) for c in rgba]
+                cv2.rectangle(outrgbx, minxy, maxxy, cvcolor, 2)
+                if not apply_labels_opacity:
+                    cv2.rectangle(original, minxy, maxxy, cvcolor, 2)
         timera.time("draw frag")
         # print(self.cur_frag_pts_xyijk.shape)
         label = self.sliceGlobalLabel()
