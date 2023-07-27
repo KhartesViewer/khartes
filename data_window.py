@@ -33,11 +33,15 @@ class DataWindow(QLabel):
         self.mouseStartPoint = None
         self.isPanning = False
         self.isMovingNode = False
+        self.isMovingTiff = False
         self.localNearbyNodeIndex = -1
         self.maxNearbyNodeDistance = 10
         self.nearbyNodeDistance = -1
+        self.nearby_tiff_corner = -1
+        self.nearby_tiff_xy = None
         self.tfStartPoint = None
         self.nnStartPoint = None
+        self.ntStartPoint = None
         self.cur_frag_pts_xyijk = None
         self.cur_frag_pts_fv = None
         self.setMouseTracking(True)
@@ -61,6 +65,8 @@ class DataWindow(QLabel):
         self.addingCursor = Qt.CrossCursor
         self.movingNodeCursor = Qt.ArrowCursor
         self.panningCursor = Qt.ClosedHandCursor
+        self.upperLeftCursor = Qt.SizeFDiagCursor
+        self.upperRightCursor = Qt.SizeBDiagCursor
         # c = QCursor(Qt.CrossCursor)
         # px = c.pixmap()
         # print("pixmap", px)
@@ -294,6 +300,8 @@ class DataWindow(QLabel):
                 # print("left mouse button down")
                 self.mouseStartPoint = e.localPos()
                 nearbyNode = self.findNearbyNode(wxy)
+                tiffCorner = self.findNearbyTiffCorner(wxy)
+                '''
                 if nearbyNode < 0 or not self.allowMouseToDragNode():
                     self.tfStartPoint = self.volume_view.ijktf
                     self.isPanning = True
@@ -302,6 +310,20 @@ class DataWindow(QLabel):
                     self.nnStartPoint = self.getNearbyNodeIjk()
                     self.isPanning = False
                     self.isMovingNode = True
+                '''
+                self.tfStartPoint = self.volume_view.ijktf
+                self.isPanning = True
+                self.isMovingNode = False
+                self.isMovingTiff = False
+                if self.allowMouseToDragNode():
+                    if tiffCorner >= 0:
+                        self.ntStartPoint = self.getNearbyTiffIj()
+                        self.isPanning = False
+                        self.isMovingTiff = True
+                    elif nearbyNode >= 0:
+                        self.ntStartPoint = self.getNearbyNodeIjk()
+                        self.isPanning = False
+                        self.isMovingNode = True
         self.checkCursor()
 
     def drawNodeAtXy(self, outrgbx, xy, color, size):
@@ -317,6 +339,7 @@ class DataWindow(QLabel):
             self.nnStartPoint = None
             self.isPanning = False
             self.isMovingNode = False
+            self.isMovingTiff = False
             wpos = e.localPos()
             wxy = (wpos.x(), wpos.y())
             nearbyNode = self.findNearbyNode(wxy)
@@ -343,8 +366,15 @@ class DataWindow(QLabel):
         new_cursor = self.defaultCursor
         if self.isPanning:
             new_cursor = self.panningCursor
-        elif self.allowMouseToDragNode() and (self.isMovingNode or self.localNearbyNodeIndex >= 0):
+        # elif self.allowMouseToDragNode() and (self.isMovingNode or self.localNearbyNodeIndex >= 0):
+        elif self.allowMouseToDragNode() and self.localNearbyNodeIndex >= 0:
             new_cursor = self.movingNodeCursor
+        elif self.allowMouseToDragNode() and self.nearby_tiff_corner >= 0:
+            c = self.nearby_tiff_corner
+            if c == 0 or c == 3:
+                new_cursor = self.upperLeftCursor
+            else:
+                new_cursor = self.upperRightCursor
         elif not self.allowMouseToDragNode() and self.localNearbyNodeIndex >= 0:
             cursors = self.nearNonMovingNodeCursors
             cursor = self.nearNonMovingNodeCursor
@@ -426,9 +456,27 @@ class DataWindow(QLabel):
             nij[1] += dj
             self.setNearbyNodeIjk(nij)
             self.window.drawSlices()
+        elif self.isMovingTiff:
+            if self.ntStartPoint is None:
+                print("ntStartPoint is None while moving node!")
+                return
+            delta = e.localPos()-self.mouseStartPoint
+            dx,dy = delta.x(), delta.y()
+            zoom = self.getZoom()
+            di = int(dx/zoom)
+            dj = int(dy/zoom)
+            nij = list(self.ntStartPoint)
+            nij[0] += di
+            nij[1] += dj
+            self.setNearbyTiffIjk(nij)
+            self.window.drawSlices()
         else:
             mxy = (e.localPos().x(), e.localPos().y())
-            nearbyNode = self.findNearbyNode(mxy)
+            nearbyTiffCorner = self.findNearbyTiffCorner(mxy)
+            self.setNearbyTiff(nearbyTiffCorner)
+            nearbyNode = -1
+            if nearbyTiffCorner < 0:
+                nearbyNode = self.findNearbyNode(mxy)
             # print("mxy", mxy, nearbyNode)
             self.setNearbyNode(nearbyNode)
         ij = self.xyToIj(mxy)
@@ -436,6 +484,71 @@ class DataWindow(QLabel):
         self.window.setCursorPosition(self, tijk)
         self.checkCursor()
 
+    def setNearbyTiff(self, nearby_tiff_corner):
+        prev_corner = self.nearby_tiff_corner
+        if prev_corner == nearby_tiff_corner:
+            return
+        self.nearby_tiff_corner = nearby_tiff_corner
+        self.drawSlices()
+
+    def getNearbyTiffIj(self):
+        xyijks = self.cur_frag_pts_xyijk
+        corner = self.nearby_tiff_corner
+        if corner < 0:
+            return None
+        tiff_corners = self.window.tiff_loader.corners()
+        cur_vol_view = self.window.project_view.cur_volume_view
+        # cur_vol = cur_vol_view.cur_volume
+        tijks = cur_vol_view.globalPositionsToTransposedIjks(tiff_corners)
+        minij = self.tijkToIj(tijks[0])
+        maxij = self.tijkToIj(tijks[1])
+        mmijs = (minij, maxij)
+        cx = corner%2
+        cy = corner//2
+        corner_ij = (mmijs[cx][0], mmijs[cy][1])
+        # print("corner_ij", corner_ij, self.iIndex, self.jIndex)
+        return corner_ij
+
+    def setNearbyTiffIjk(self, nij):
+        tijk = [0,0,0]
+        tijk[self.axis] = 0
+        tijk[self.iIndex] = nij[0]
+        tijk[self.jIndex] = nij[1]
+        vv = self.volume_view
+        gijk = vv.transposedIjkToGlobalPosition(tijk)
+        # print("gijk", gijk)
+        iaxis = vv.globalAxisFromTransposedAxis(self.iIndex)
+        jaxis = vv.globalAxisFromTransposedAxis(self.jIndex)
+        corner = self.nearby_tiff_corner
+        self.window.tiff_loader.setCornerValues(gijk, iaxis, jaxis, corner)
+
+    def findNearbyTiffCorner(self, xy):
+        tiff_corners = self.window.tiff_loader.corners()
+        if tiff_corners is None:
+            return -1
+        minxy, maxxy, intersects_slice = self.cornersToXY(tiff_corners)
+        if not intersects_slice:
+            return -1
+
+        xys = np.array((
+            (minxy[0],minxy[1]),
+            (maxxy[0],minxy[1]),
+            (minxy[0],maxxy[1]),
+            (maxxy[0],maxxy[1]),
+            ), dtype=np.float32)
+
+        ds = npla.norm(xys-np.array(xy), axis=1)
+        # print(ds)
+        imin = np.argmin(ds)
+        vmin = ds[imin]
+        if vmin > self.maxNearbyNodeDistance:
+            self.nearby_tiff_corner = -1
+            return -1
+
+        self.nearby_tiff_corner = imin
+        self.nearby_tiff_xy = xys[imin].tolist()
+        # print("nearby tiff", self.nearby_tiff_corner, self.nearby_tiff_xy)
+        return imin
 
     def wheelEvent(self, e):
         if self.volume_view is None:

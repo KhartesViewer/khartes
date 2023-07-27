@@ -70,6 +70,7 @@ class RangeEdit(QLineEdit):
         # self.setInputMask('99999')
 
     def setValue(self, v):
+        v = int(round(v))
         txt = "%d"%v
         self.setText(txt)
         self.value = v
@@ -467,6 +468,14 @@ class TiffLoader(QMainWindow):
             step = rw[i][2].value
             rng = [xmin, xmax, step]
             self.ranges.append(rng)
+
+    def setCornerValues(self, ijk, iaxis, jaxis, corner):
+        ci = corner%2
+        cj = corner//2
+        rw = self.range_widgets
+        rw[iaxis][ci].setValue(ijk[iaxis])
+        rw[jaxis][cj].setValue(ijk[jaxis])
+        self.onChange()
 
     def computeSize(self):
         if not self.areAllRangesValid():
