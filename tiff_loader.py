@@ -472,10 +472,34 @@ class TiffLoader(QMainWindow):
     def setCornerValues(self, ijk, iaxis, jaxis, corner):
         ci = corner%2
         cj = corner//2
+        vi = int(round(ijk[iaxis]))
+        vj = int(round(ijk[jaxis]))
         rw = self.range_widgets
-        rw[iaxis][ci].setValue(ijk[iaxis])
-        rw[jaxis][cj].setValue(ijk[jaxis])
-        self.onChange()
+        rwi = rw[iaxis][ci]
+        rwj = rw[jaxis][cj]
+
+        oki = True
+        if vi < rwi.minmax[0] or vi > rwi.minmax[1]:
+            oki = False
+        if rwi.greater is not None and vi >= rwi.greater.value:
+            oki = False
+        if rwi.lesser is not None and vi <= rwi.lesser.value:
+            oki = False
+
+        okj = True
+        if vj < rwj.minmax[0] or vj > rwj.minmax[1]:
+            okj = False
+        if rwj.greater is not None and vj >= rwj.greater.value:
+            okj = False
+        if rwj.lesser is not None and vj <= rwj.lesser.value:
+            okj = False
+
+        if oki:
+            rwi.setValue(vi)
+        if okj:
+            rwj.setValue(vj)
+        if oki or okj:
+            self.onChange()
 
     def computeSize(self):
         if not self.areAllRangesValid():

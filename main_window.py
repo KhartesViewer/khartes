@@ -594,7 +594,7 @@ class MainWindow(QMainWindow):
         doc = QDomDocument()
         doc.setContent(svg_txt)
         paths = doc.elementsByTagName("path")
-        print(len(paths),"paths")
+        # print(len(paths),"paths")
         gradients = [
                 {
                     "fill-opacity": (.2, 0.),
