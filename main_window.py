@@ -435,6 +435,9 @@ class MainWindow(QMainWindow):
         self.settingsLoadDrawSettings()
         self.draw_settings_widgets = copy.deepcopy(MainWindow.draw_settings_defaults)
 
+        # if False, shift lock only requires a single click
+        self.shift_lock_double_click = True
+
         grid = QGridLayout()
 
         self.project_view = None
@@ -1528,6 +1531,9 @@ class MainWindow(QMainWindow):
             print("Loading widget created", self)
             self.show()
 
+        def closeEvent(self, e):
+            print("Loading widget close event", self)
+
     def loadingDestroyed(self, widget):
         print("Loading destroyed, loading widget to close", widget)
         widget.close()
@@ -1678,12 +1684,16 @@ class MainWindow(QMainWindow):
         # print("key press event in main window")
         if e.key() == Qt.Key_Shift:
             t = time.time()
-            if t - self.last_shift_time < .5:
-                # double click
-                self.add_node_mode = not self.add_node_mode
-                self.add_node_mode_button.setChecked(self.add_node_mode)
-                self.last_shift_time = 0
+            if self.shift_lock_double_click:
+                if t - self.last_shift_time < .5:
+                    # double click
+                    self.add_node_mode = not self.add_node_mode
+                    self.add_node_mode_button.setChecked(self.add_node_mode)
+                    self.last_shift_time = 0
+                else:
+                    self.last_shift_time = t
             else:
+                # print("press", t)
                 self.last_shift_time = t
 
         if e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_S:
@@ -1704,10 +1714,23 @@ class MainWindow(QMainWindow):
                 w.keyPressEvent(e)
 
     def keyReleaseEvent(self, e):
-        w = QApplication.widgetAt(QCursor.pos())
-        method = getattr(w, "keyReleaseEvent", None)
-        if w != self and method is not None:
-            w.keyReleaseEvent(e)
+        if e.key() == Qt.Key_Shift and not self.shift_lock_double_click:
+            t = time.time()
+            # print("release", t)
+            if t - self.last_shift_time < .5:
+                # quick click-and-release
+                self.add_node_mode = not self.add_node_mode
+                self.add_node_mode_button.setChecked(self.add_node_mode)
+            w = QApplication.widgetAt(QCursor.pos())
+            method = getattr(w, "keyReleaseEvent", None)
+            if w != self and method is not None:
+                w.keyReleaseEvent(e)
+            self.last_shift_time = 0
+        else:
+            w = QApplication.widgetAt(QCursor.pos())
+            method = getattr(w, "keyReleaseEvent", None)
+            if w != self and method is not None:
+                w.keyReleaseEvent(e)
 
     def drawSlices(self):
         self.depth.drawSlice()
