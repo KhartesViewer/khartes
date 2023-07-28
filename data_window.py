@@ -38,7 +38,7 @@ class DataWindow(QLabel):
         self.maxNearbyNodeDistance = 10
         self.nearbyNodeDistance = -1
         self.nearby_tiff_corner = -1
-        self.nearby_tiff_xy = None
+        # self.nearby_tiff_xy = None
         self.tfStartPoint = None
         self.nnStartPoint = None
         self.ntStartPoint = None
@@ -248,7 +248,18 @@ class DataWindow(QLabel):
         else:
             return False
 
+    def inAddNodeMode(self):
+        # modifiers = QApplication.keyboardModifiers()
+        modifiers = QApplication.queryKeyboardModifiers()
+        shift_pressed = (modifiers == Qt.ShiftModifier)
+        if self.window.add_node_mode:
+            shift_pressed = not shift_pressed
+        # print("shift_pressed", shift_pressed)
+        return shift_pressed
+
     def findNearbyNode(self, xy):
+        if self.inAddNodeMode():
+            return -1
         xyijks = self.cur_frag_pts_xyijk
         if xyijks is None:
             return -1
@@ -288,10 +299,7 @@ class DataWindow(QLabel):
             wpos = e.localPos()
             wxy = (wpos.x(), wpos.y())
 
-            shift_pressed = (modifiers == Qt.ShiftModifier)
-            if self.window.add_node_mode:
-                shift_pressed = not shift_pressed
-            if shift_pressed:
+            if self.inAddNodeMode():
                 # print('Shift+Click')
                 ij = self.xyToIj(wxy)
                 tijk = self.ijToTijk(ij)
@@ -327,7 +335,7 @@ class DataWindow(QLabel):
                         self.isPanning = False
                         self.isMovingTiff = True
                     elif nearbyNode >= 0:
-                        self.ntStartPoint = self.getNearbyNodeIjk()
+                        self.nnStartPoint = self.getNearbyNodeIjk()
                         self.isPanning = False
                         self.isMovingNode = True
         self.checkCursor()
@@ -364,14 +372,11 @@ class DataWindow(QLabel):
         # if leaving:
         #     self.unsetCursor()
         #     return
-        # shift_pressed = (QApplication.keyboardModifiers() == Qt.ShiftModifier)
-        shift_pressed = (QApplication.queryKeyboardModifiers() == Qt.ShiftModifier)
-        if self.window.add_node_mode:
-            shift_pressed = not shift_pressed
-        # print("shift pressed", shift_pressed)
         new_cursor = self.defaultCursor
         if self.isPanning:
             new_cursor = self.panningCursor
+        elif self.inAddNodeMode():
+            new_cursor = self.addingCursor
         # elif self.allowMouseToDragNode() and (self.isMovingNode or self.localNearbyNodeIndex >= 0):
         elif self.allowMouseToDragNode() and self.localNearbyNodeIndex >= 0:
             new_cursor = self.movingNodeCursor
@@ -392,8 +397,6 @@ class DataWindow(QLabel):
                 index = round((len(cursors)-1)*rdist)
                 new_cursor = cursors[index]
 
-        elif shift_pressed:
-            new_cursor = self.addingCursor
         if new_cursor != self.cursor():
             self.setCursor(new_cursor)
 
@@ -475,9 +478,11 @@ class DataWindow(QLabel):
             nij[0] += di
             nij[1] += dj
             self.setNearbyTiffIjk(nij)
-            self.window.drawSlices()
+            # self.window.drawSlices()
         else:
             mxy = (e.localPos().x(), e.localPos().y())
+            self.setNearbyTiffAndNode(mxy)
+            '''
             nearbyTiffCorner = self.findNearbyTiffCorner(mxy)
             self.setNearbyTiff(nearbyTiffCorner)
             nearbyNode = -1
@@ -485,6 +490,7 @@ class DataWindow(QLabel):
                 nearbyNode = self.findNearbyNode(mxy)
             # print("mxy", mxy, nearbyNode)
             self.setNearbyNode(nearbyNode)
+            '''
         ij = self.xyToIj(mxy)
         tijk = self.ijToTijk(ij)
         self.window.setCursorPosition(self, tijk)
@@ -495,7 +501,7 @@ class DataWindow(QLabel):
         if prev_corner == nearby_tiff_corner:
             return
         self.nearby_tiff_corner = nearby_tiff_corner
-        self.drawSlices()
+        self.drawSlice()
 
     def getNearbyTiffIj(self):
         xyijks = self.cur_frag_pts_xyijk
@@ -529,11 +535,15 @@ class DataWindow(QLabel):
         self.window.tiff_loader.setCornerValues(gijk, iaxis, jaxis, corner)
 
     def findNearbyTiffCorner(self, xy):
+        if self.inAddNodeMode():
+            return -1
         tiff_corners = self.window.tiff_loader.corners()
         if tiff_corners is None:
+            # print("no tiff corners")
             return -1
         minxy, maxxy, intersects_slice = self.cornersToXY(tiff_corners)
         if not intersects_slice:
+            # print("no tiff intersect")
             return -1
 
         xys = np.array((
@@ -548,13 +558,22 @@ class DataWindow(QLabel):
         imin = np.argmin(ds)
         vmin = ds[imin]
         if vmin > self.maxNearbyNodeDistance:
+            # print("tiff corner too far", vmin)
             self.nearby_tiff_corner = -1
             return -1
 
         self.nearby_tiff_corner = imin
-        self.nearby_tiff_xy = xys[imin].tolist()
+        # self.nearby_tiff_xy = xys[imin].tolist()
         # print("nearby tiff", self.nearby_tiff_corner, self.nearby_tiff_xy)
         return imin
+
+    def setNearbyTiffAndNode(self, xy):
+        nearbyTiffCorner = self.findNearbyTiffCorner(xy)
+        self.setNearbyTiff(nearbyTiffCorner)
+        nearbyNode = -1
+        if nearbyTiffCorner < 0:
+            nearbyNode = self.findNearbyNode(xy)
+        self.setNearbyNode(nearbyNode)
 
     def wheelEvent(self, e):
         if self.volume_view is None:
@@ -568,6 +587,15 @@ class DataWindow(QLabel):
         # print(d, z)
         self.volume_view.setZoom(z)
         mxy = (e.position().x(), e.position().y())
+        self.setNearbyTiffAndNode(mxy)
+        '''
+        nearbyTiffCorner = self.findNearbyTiffCorner(mxy)
+        self.setNearbyTiff(nearbyTiffCorner)
+        nearbyNode = -1
+        if nearbyTiffCorner < 0:
+            nearbyNode = self.findNearbyNode(mxy)
+        self.setNearbyNode(nearbyNode)
+        '''
         self.window.drawSlices()
         # print("wheel", e.position())
         self.checkCursor()
@@ -604,7 +632,8 @@ class DataWindow(QLabel):
         if key in opts:
             self.setStatusTextFromMousePosition()
             d = opts[key]
-            if self.localNearbyNodeIndex < 0:
+            if self.inAddNodeMode() or (self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0):
+                # pan
                 tfijk = list(self.volume_view.ijktf)
                 # print(d)
                 tfijk[self.iIndex] += d[0]
@@ -612,7 +641,19 @@ class DataWindow(QLabel):
                 tfijk[self.axis] += d[2]
                 self.volume_view.setIjkTf(tfijk)
                 self.window.drawSlices()
+            elif self.nearby_tiff_corner >= 0:
+                # move nearby tiff corner
+                nij = list(self.ntStartPoint)
+                nij = list(self.getNearbyTiffIj())
+                nij = [round(x) for x in nij]
+                if d[2] != 0:
+                    return
+                nij[0] -= d[0]
+                nij[1] -= d[1]
+                self.setNearbyTiffIjk(nij)
+                # self.window.drawSlices()
             else:
+                # move nearby node
                 nij = list(self.getNearbyNodeIjk())
                 nij = [round(x) for x in nij]
                 d = opts[key]
@@ -665,6 +706,16 @@ class DataWindow(QLabel):
             ij = self.xyToIj(mxy)
             tijk = self.ijToTijk(ij)
             self.window.setCursorPosition(self, tijk)
+        elif key == Qt.Key_Shift:
+            pt = self.mapFromGlobal(QCursor.pos())
+            mxy = (pt.x(), pt.y())
+            self.setNearbyTiffAndNode(mxy)
+            self.tfStartPoint = None
+            self.nnStartPoint = None
+            self.mouseStartPoint = None
+            self.isPanning = False
+            self.isMovingNode = False
+            self.isMovingTiff = False
         self.checkCursor()
 
     # Note that this is called from MainWindow whenever MainWindow
@@ -675,9 +726,17 @@ class DataWindow(QLabel):
             return
         key = e.key()
         if key == Qt.Key_Shift:
-            pass
             # print("shift released")
-        self.checkCursor()
+            pt = self.mapFromGlobal(QCursor.pos())
+            mxy = (pt.x(), pt.y())
+            self.setNearbyTiffAndNode(mxy)
+            self.tfStartPoint = None
+            self.nnStartPoint = None
+            self.mouseStartPoint = None
+            self.isPanning = False
+            self.isMovingNode = False
+            self.isMovingTiff = False
+            self.checkCursor()
 
     # adapted from https://stackoverflow.com/questions/25068538/intersection-and-difference-of-two-rectangles/25068722#25068722
     # The C++ version of OpenCV provides operations, including intersection,
