@@ -448,10 +448,11 @@ class MainWindow(QMainWindow):
         # https://iconduck.com/icons/163625/openhand
         px = QPixmap(path+"/openhand.svg")
         # print("px size",px.size())
-        self.openhand = QCursor(px)
+        self.cursor_center = (16, 8)
+        self.openhand = QCursor(px, *self.cursor_center)
         px = QPixmap(path+"/openhand transparent.svg")
         # print("px size",px.size())
-        self.openhand_transparent = QCursor(px)
+        self.openhand_transparent = QCursor(px, *self.cursor_center)
         self.openhand_transparents = self.transparentSvgs(path+"/openhand transparent.svg", 11)
         self.openhand_transparent = self.openhand_transparents[0]
 
@@ -601,16 +602,19 @@ class MainWindow(QMainWindow):
         gradients = [
                 {
                     "fill-opacity": (.2, 0.),
-                    "stroke-opacity": (0., 1.)
+                    # "stroke-opacity": (0., 1.)
+                    "stroke-opacity": (0., .4)
                     },
                 {
                     "fill-opacity": (1., 0.),
-                    "stroke-opacity": (0., 1.)
+                    # "stroke-opacity": (0., 1.)
+                    "stroke-opacity": (0., .4)
                     },
                 {
-                    "fill-opacity": (1., 0.2),
-                    # "fill-opacity": (1., 0.0),
-                    "stroke-opacity": (0., 0.6)
+                    # "fill-opacity": (1., 0.2),
+                    "fill-opacity": (1., 0.0),
+                    # "stroke-opacity": (0., 0.6)
+                    "stroke-opacity": (0., 0.4)
                     }
                 ]
         if len(gradients) != len(paths):
@@ -642,7 +646,7 @@ class MainWindow(QMainWindow):
             painter = QPainter(pix)
             rend.render(painter)
             painter.end()
-            cursors.append(QCursor(pix))
+            cursors.append(QCursor(pix, *self.cursor_center))
 
         return cursors
 
