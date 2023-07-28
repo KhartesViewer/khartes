@@ -226,7 +226,7 @@ class TiffLoader(QMainWindow):
         self.color_editor = ColorEdit(self)
         hbox.addWidget(self.color_editor)
         hbox.addStretch()
-        self.recenter = QPushButton("Re-center slices")
+        self.recenter = QPushButton("Re-center view")
         self.recenter.clicked.connect(self.onRecenterClicked)
         self.recenter.setEnabled(False)
         hbox.addWidget(self.recenter)
