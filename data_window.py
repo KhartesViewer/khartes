@@ -651,6 +651,12 @@ class DataWindow(QLabel):
             xy = self.ijToXy(ij)
             gxy = self.mapToGlobal(QPoint(*xy))
             QCursor.setPos(gxy)
+        elif key == Qt.Key_T:
+            pt = self.mapFromGlobal(QCursor.pos())
+            mxy = (pt.x(), pt.y())
+            ij = self.xyToIj(mxy)
+            tijk = self.ijToTijk(ij)
+            self.window.setCursorPosition(self, tijk)
         self.checkCursor()
 
     # Note that this is called from MainWindow whenever MainWindow
@@ -913,8 +919,9 @@ into and out of the viewing plane.
         cxy = self.ijToXy(cij)
         r = 5
         thickness = 2
-        color = self.axisColor(cw.axis)
+        # color = self.axisColor(cw.axis)
         white = (65535,65535,65535)
+        color = (16000,55000,16000)
         # cv2.circle(canvas, cxy, 2*r+1, white, thickness+2)
         cv2.circle(canvas, cxy, 2*r+1, color, thickness)
         # self.ijToTijk is a virtual function that

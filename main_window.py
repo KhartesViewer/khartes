@@ -859,6 +859,10 @@ class MainWindow(QMainWindow):
     def volumeView(self):
         return self.project_view.cur_volume_view
 
+    def toggleTrackingCursorsVisible(self):
+        vis = self.getTrackingCursorsVisible()
+        self.setTrackingCursorsVisible(not vis)
+
     def getTrackingCursorsVisible(self):
         return self.draw_settings["tracking_cursors"]["show"]
 
@@ -1684,6 +1688,13 @@ class MainWindow(QMainWindow):
 
         if e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_S:
             self.onSaveProjectButtonClick(True)
+        elif e.key() == Qt.Key_T:
+            self.toggleTrackingCursorsVisible()
+            w = QApplication.widgetAt(QCursor.pos())
+            method = getattr(w, "keyPressEvent", None)
+            if w != self and method is not None:
+                w.keyPressEvent(e)
+            self.drawSlices()
         elif e.key() == Qt.Key_V:
             self.toggleFragmentVisibility()
         else:
