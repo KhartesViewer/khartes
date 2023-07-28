@@ -228,7 +228,13 @@ class DataWindow(QLabel):
             new_global_node_index = int(xyijks[nearbyNode, 5])
             new_global_node_fv = self.cur_frag_pts_fv[nearbyNode]
         
-        if old_global_node_index != new_global_node_index or old_global_node_fv != new_global_node_fv:
+        # print("ogni",old_global_node_index,"ngni",new_global_node_index)
+        # Note special case when a node is deleted, 
+        # MainWindow.deleteNearbyNode sets pv.nearby_node_fv to None
+        # and pv.nearby_node_index to -1, before setNearbyNode is called,
+        # so the global old vs new tests in this if statement fall through.
+        # So need to compare old vs new local node indices as well
+        if old_global_node_index != new_global_node_index or old_global_node_fv != new_global_node_fv or self.localNearbyNodeIndex != nearbyNode:
             # print("snn", self.curNearbyNode(), nearbyNode)
             if nearbyNode >= 0 and xyijks_valid:
                 pv.nearby_node_fv = new_global_node_fv
@@ -630,7 +636,9 @@ class DataWindow(QLabel):
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
             nearbyNode = self.findNearbyNode(mxy)
+            # print("del nearby node", nearbyNode)
             self.setNearbyNode(nearbyNode)
+            # print("del localNearbyNodeIndex", self.localNearbyNodeIndex)
             self.window.drawSlices()
         elif not self.isMovingNode and key == Qt.Key_X:
             # print("key X")
