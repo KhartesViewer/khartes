@@ -1534,6 +1534,10 @@ class MainWindow(QMainWindow):
         def closeEvent(self, e):
             print("Loading widget close event", self)
 
+        def mousePressEvent(self, e):
+            print("Loading widget mouse press event", self)
+            self.close()
+
     def loadingDestroyed(self, widget):
         print("Loading destroyed, loading widget to close", widget)
         widget.close()
