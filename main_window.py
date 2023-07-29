@@ -289,6 +289,25 @@ class VoxelSizeEditor(QWidget):
         else:
             self.edit.setStyleSheet("QLineEdit { color: red }")
 
+class ShiftClicksSpinBox(QSpinBox):
+    def __init__(self, main_window, parent=None):
+        super(ShiftClicksSpinBox, self).__init__(parent)
+        self.main_window = main_window
+        self.name = "shift_clicks"
+        self.class_name = "count"
+        self.setMinimum(0)
+        self.setMaximum(2)
+        self.setValue(main_window.draw_settings[self.name][self.class_name])
+        self.valueChanged.connect(self.onValueChanged, Qt.QueuedConnection)
+        main_window.draw_settings_widgets[self.name][self.class_name] = self
+
+    def onValueChanged(self, value):
+        self.main_window.setShiftClicksCount(value)
+        self.lineEdit().deselect()
+
+    def updateValue(self, value):
+        self.setValue(value)
+
 class WidthSpinBox(QSpinBox):
     def __init__(self, main_window, name, parent=None):
         super(WidthSpinBox, self).__init__(parent)
@@ -412,6 +431,9 @@ class MainWindow(QMainWindow):
         "tracking_cursors": {
             "show": False,
         },
+        "shift_clicks": {
+            "count": 1,
+        },
     }
 
     def __init__(self, appname, app):
@@ -436,7 +458,7 @@ class MainWindow(QMainWindow):
         self.draw_settings_widgets = copy.deepcopy(MainWindow.draw_settings_defaults)
 
         # if False, shift lock only requires a single click
-        self.shift_lock_double_click = True
+        # self.shift_lock_double_click = True
 
         grid = QGridLayout()
 
@@ -728,7 +750,12 @@ class MainWindow(QMainWindow):
         self.tab_panel.addTab(panel, "Volumes")
 
     def setDrawSettingsToDefaults(self):
-        self.draw_settings = copy.deepcopy(MainWindow.draw_settings_defaults)
+        ndict = {}
+        for key,value in self.draw_settings_defaults.items():
+            if key in ["tracking_cursors", "shift_clicks"]:
+                continue
+            self.draw_settings[key] = copy.deepcopy(value)
+        # self.draw_settings = copy.deepcopy(MainWindow.draw_settings_defaults)
         self.updateDrawSettingsWidgets()
         self.settingsSaveDrawSettings()
         self.drawSlices()
@@ -839,6 +866,14 @@ class MainWindow(QMainWindow):
         tcv = TrackingCursorsVisibleCheckBox(self)
         self.settings_tracking_cursors_visible = tcv
         slices_layout.addWidget(tcv)
+        hbox = QHBoxLayout()
+        hbox.addWidget(QLabel("Shift-lock after"))
+        scc = ShiftClicksSpinBox(self)
+        self.settings_shift_clicks_count = scc
+        hbox.addWidget(scc)
+        hbox.addWidget(QLabel("clicks"))
+        hbox.addStretch()
+        slices_layout.addLayout(hbox)
         vs = VoxelSizeEditor(self)
         self.settings_voxel_size_um = vs
         slices_layout.addWidget(vs)
@@ -885,6 +920,20 @@ class MainWindow(QMainWindow):
         # self.project_view.notifyModified()
         self.settingsSaveDrawSettings()
         self.drawSlices()
+
+    def getShiftClicksCount(self):
+        # print ("scc", self.draw_settings["shift_clicks"]["count"])
+        return self.draw_settings["shift_clicks"]["count"]
+
+    def setShiftClicksCount(self, value):
+        old_value = self.getShiftClicksCount()
+        if old_value == value:
+            return
+        self.draw_settings["shift_clicks"]["count"] = value
+        self.settings_shift_clicks_count.setValue(self.getShiftClicksCount())
+        # self.project_view.notifyModified()
+        self.settingsSaveDrawSettings()
+        # self.drawSlices()
 
     def getVolBoxesVisible(self):
         if self.project_view is None:
@@ -1692,7 +1741,8 @@ class MainWindow(QMainWindow):
         # print("key press event in main window")
         if e.key() == Qt.Key_Shift:
             t = time.time()
-            if self.shift_lock_double_click:
+            # if self.shift_lock_double_click:
+            if self.getShiftClicksCount() == 2:
                 if t - self.last_shift_time < .5:
                     # double click
                     self.add_node_mode = not self.add_node_mode
@@ -1715,6 +1765,10 @@ class MainWindow(QMainWindow):
             self.drawSlices()
         elif e.key() == Qt.Key_V:
             self.toggleFragmentVisibility()
+            w = QApplication.widgetAt(QCursor.pos())
+            method = getattr(w, "keyPressEvent", None)
+            if w != self and method is not None:
+                w.keyPressEvent(e)
         else:
             w = QApplication.widgetAt(QCursor.pos())
             method = getattr(w, "keyPressEvent", None)
@@ -1722,7 +1776,8 @@ class MainWindow(QMainWindow):
                 w.keyPressEvent(e)
 
     def keyReleaseEvent(self, e):
-        if e.key() == Qt.Key_Shift and not self.shift_lock_double_click:
+        # if e.key() == Qt.Key_Shift and not self.shift_lock_double_click:
+        if e.key() == Qt.Key_Shift and self.getShiftClicksCount() == 1:
             t = time.time()
             # print("release", t)
             if t - self.last_shift_time < .5:
