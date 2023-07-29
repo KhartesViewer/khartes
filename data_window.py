@@ -652,7 +652,7 @@ class DataWindow(QLabel):
                 nij[1] -= d[1]
                 self.setNearbyTiffIjk(nij)
                 # self.window.drawSlices()
-            else:
+            elif self.localNearbyNodeIndex >= 0:
                 # move nearby node
                 nij = list(self.getNearbyNodeIjk())
                 nij = [round(x) for x in nij]
@@ -706,6 +706,10 @@ class DataWindow(QLabel):
             ij = self.xyToIj(mxy)
             tijk = self.ijToTijk(ij)
             self.window.setCursorPosition(self, tijk)
+        elif key == Qt.Key_V:
+            pt = self.mapFromGlobal(QCursor.pos())
+            mxy = (pt.x(), pt.y())
+            self.setNearbyTiffAndNode(mxy)
         elif key == Qt.Key_Shift:
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
