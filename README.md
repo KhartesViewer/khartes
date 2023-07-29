@@ -10,7 +10,17 @@ pynrrd to read and write NRRD files (a data format for volume files), and OpenCV
 The main emphasis of khartes is on interactivity and a user-friendly GUI; no computer-vision or machine-learning
 algorithms are currently used.
 
-The video below provides an introduction to khartes.
+## 2 minute video
+
+The video below give a quick, 2-minute overview of khartes.
+
+(If you click on the image below, you will be taken to vimeo.com to watch the video)
+
+[![Watch the video](https://i.vimeocdn.com/video/1670955201-81a75343b71db9c84b6b4275e3447c943d2128ab8b921a822051046e83db0c96-d_640)](https://vimeo.com/827515595)
+
+## 30 minute video
+
+This next video provides a more extensive introduction to khartes.
 Note that it begins with an "artistic" 60-second
 intro sequence which contains no narration, but which quickly highlights some of khartes' features.
 After the intro, the video follows a more traditional format, with a voiceover and a demo.
@@ -54,20 +64,47 @@ which it does even before the first time you invoke "Save".
 
 ## Converting TIFF files to khartes data volumes
 
-In order to perform at interactive speeds, khartes loads data
+In order to perform at interactive speeds, khartes works with data
 volumes (3D volumes of data) rather than individual TIFF files.
-The process of creating a data volume from TIFF files
-is called "importing" the TIFF files.  This process
+Khartes provides an interface to convert a set of TIFF files into
+a data volume.
+This conversion process
 assumes that the TIFF files are already somewhere on your disk;
 khartes does not download TIFF files over the internet.
 
-The `File /Import TIFF files...` menu brings up a dialog box where
+The `File / Create volume from TIFF files...` menu brings up a dialog box where
 you can specify which TIFF files you want to include in your
 data volume, and the x and y ranges of the pixels within each TIFF
 file that you want to include.  The dialog box shows how large the
 resulting data volume will be, in gigabytes.  Be aware that the entire
 data volume will be read into the physical memory (RAM) of your
 computer, so be careful how large you make the volume.
+
+In the dialog box, you specify the `Min` (minimum) 
+and `Max` (maximum) x, y and z (TIFF file)
+values for the data volume you want to create.
+You can also specify a `Step`, which gives the step
+size between pixels that are read in.  Another way to
+look at `Step` is as a decimation factor.  A step
+of 1 means use every pixel, 2 means use every 2nd pixel,
+and so on.  Choosing a higher step size reduces the
+size of the data volume for a given set of ranges,
+but the loss of resolution, even going from a step size
+of 1 to 2, is quite noticeable when you are trying to
+segment the data.  
+
+The main use of `Step` is to allow an
+overview of the data, in order to determine which areas merit
+a closer examination (with a step size of 1).  For instance,
+if you set a step size of 10 in all 3 directions (x, y, and z),
+you can reduce an entire scroll, typically 1.5 Tb or so,
+to a very manageable 1.5 Gb.  This resolution of this volume
+is much too low for segmentation, but it provides a good overview.
+
+Instead of typing the x and y ranges into the dialog box, you
+can interactively specify the area of interest by modifying the
+range bounding box that is displayed in the data slices (the
+3 data windows on the left).
 
 You can import multiple data volumes into your project,
 and then view each volume, one at a time.  Khartes keeps track of
