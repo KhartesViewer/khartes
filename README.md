@@ -237,6 +237,8 @@ that stage, you will be able to navigate within your 3D data volume with confide
 
 ## Creating a high-resolution data volume from TIFFs
 
+<img src="images/tiff_loader clipped.jpg" width="800"/>
+
 If you have been following this tutorial exactly, you have created,
 and have been navigating within, a data volume that
 contains the entire scroll, but at very low resolution.
@@ -356,7 +358,7 @@ attempt, you should start with a sheet that is clearly separated
 from its neighbors; no need to 
 make your learning experience difficult.
 
-<img src="https://github.com/KhartesViewer/khartes/assets/133787404/536c9c8f-b0f7-4079-92d1-b14711a0b7bb" width="360"/>
+<img src="images/easier.JPG" width="360"/>
 
 *This is a an example* of a fairly easy sheet.
 
@@ -377,7 +379,7 @@ merge into each other in a way that seems impossible to track, no
 matter which software is used.  If you try working in these areas,
 prepare to be frustrated. 
 
-![squirmy](https://github.com/KhartesViewer/khartes/assets/133787404/ffa05425-d218-410e-94be-351c4367cfbe)
+![squirmy](images/squirmy.JPG)
 
 *This area* is very difficult or impossible to segment; the sheets
 are too fragmented.
@@ -408,7 +410,7 @@ onto the line.  This is to avoid the situation where a node on the line
 and a node just off of the line end up close to each other, which can
 cause undesirable waviness in the fragment.
 
-<img src="https://github.com/KhartesViewer/khartes/assets/133787404/0a355d1b-25cd-4bf7-87ec-144492900d06" width="800" />
+<img src="images/good start.JPG" width="800" />
 
 *Example of a good start.*  A couple of inline slices (the horizontal lines
 in the fragment view) and a crossline slice (vertical line) have been 
@@ -428,7 +430,7 @@ are the ones that are most likely to contain text.
 Where horizontal and vertical fibers cross, try
 to make sure that the horizontal fibers are the ones that are the most visible
 
-![sheet_skip](https://github.com/KhartesViewer/khartes/assets/133787404/62d4b800-9731-4310-8ecf-01ddca1e6aa5)
+![sheet_skip](images/sheet_skip.JPG)
 
 ***This is bad!***  The horizontal fibers are not continuous.  This needs to be repaired by
 moving nodes so that all the nodes lie on the same sheet.
@@ -444,7 +446,7 @@ until all are on the same sheet.
 So again: pause, verify, repair.  The longer you wait to do this basic check, the
 more repair work you will have to do later.
 
-<img src="https://github.com/KhartesViewer/khartes/assets/133787404/2f685bc9-bf55-4d1a-9c54-f472e3c0dc4b" width="800" />
+<img src="images/repaired.JPG" width="800" />
 
 *The surface has been repaired;* horizontal fibers are now continuous.  The inline and crossline slices show
 the location of the original (magenta) and repaired (cyan) surfaces.  Note that these overlap in one half
