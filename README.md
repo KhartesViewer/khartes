@@ -107,8 +107,9 @@ you specify the `Min` (minimum)
 and `Max` (maximum) x, y and z (TIFF file)
 values for the data volume you want to create.
 
-You can also specify a `Step`, which gives the step
-size between pixels that are read in.  One way to
+You can also specify a `Step`, which is the step
+size (distance) between the pixels from the original
+image that will be incorporated into the data volume.  One way to
 look at `Step` is as a decimation factor.  A step
 of 1 means use every pixel, 2 means use every 2nd pixel,
 and so on.  Choosing a higher step size reduces the
@@ -118,8 +119,8 @@ of 1 to 2, is quite noticeable when you are trying to
 segment the data.
 
 The main use of `Step` is to allow an
-overview of the data, in order to determine which areas merit
-a closer examination at a step size of 1.  For instance,
+overview of the data, in order to determine which areas will
+merit a closer examination later, at a step size of 1.  For instance,
 if you set a step size of 10 in all 3 directions (x, y, and z),
 you can reduce an entire scroll, typically 1.5 Tb or so,
 to a very manageable 1.5 Gb.  This resolution of this volume
