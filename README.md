@@ -286,6 +286,19 @@ Finally, give your volume a name and a color, and hit the `Create` button.
 In general, the time the loader takes to run is proportional to the number
 of TIFF files that need to be loaded.
 
+### Advanced topic: loading TIFF files from vc_layers
+
+This sub-section is not part of the tutorial, but it belongs to the
+current topic: loading TIFF files.
+
+The program `vc_layers` outputs TIFF files that represent flattened
+layers adjacent to a flattened segment.  These files have a different
+orientation than the TIFF files created by X-ray tomography.  To alert
+khartes to this difference, so that the data volume created from these
+`vc_layer` TIFFs
+is properly oriented, check the box labeled `TIFFs are from vc_layers`.
+
+## Creating a segment
 asdf
 
 Instead of typing the x and y ranges into the dialog box, you
@@ -313,7 +326,7 @@ should be sparing of memory, creating data volumes that are no
 larger than half the size of your physical memory,
 if you want to avoid memory swapping.
 
-## Creating a segment
+
 
 ## General segmentation workflow
 
