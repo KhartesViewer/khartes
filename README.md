@@ -337,8 +337,30 @@ Above the list is the `Volume Boxes Visible` checkbox.  When this box is checked
 (bounding boxes) of all the volumes (except the currently-loaded volume) will be overlaid
 on the data slices.
 
-## Creating a segment
-asdf
+## Creating a fragment (segment)
+
+Now you are ready to create your first fragment ("segment" and "fragment" are used
+interchangeably in this tutorial, but khartes prefers "fragment").
+
+In the Control Area, select the Fragments tab.  There you will find
+the button `Start New Fragment`.  Press this button, and a new fragment will
+appear in the list of fragments.
+
+At this point you can begin adding points (called nodes) to define
+the fragment.  To add a node, position the cursor in one of the
+data slices, hold down the shift key (so the cursor turns into
+crosshairs), and click with the left mouse button.
+
+It would take a lot of words and pictures to describe the process of adding
+nodes to create a fragment; better to watch this 2-minute video (this
+is the "2-minute video" mentioned at the top of this README):
+
+[https://vimeo.com/849799186](https://vimeo.com/849799186)
+
+The video shows a slightly older version of khartes; for
+instance, the cursor does not turn into crosshairs before a new
+node is created, and re-centering the view on an existing node
+was more awkward than it is now.
 
 Instead of typing the x and y ranges into the dialog box, you
 can interactively specify the area of interest by modifying the
