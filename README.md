@@ -217,7 +217,43 @@ Your goal is to understand the navigation well enough so that you can predict, w
 one of the slices around, how the other slices and their labels will behave.  Once you reach
 that stage, you will be able to navigate within your 3D data volume with confidence.
 
+## Creating a high-resolution data volume from TIFFs
 
+If you have been following this tutorial exactly, you have created,
+and have been navigating within, data volume that
+contains the entire scroll, but at very low resolution.
+
+Now you will create a high-resolution data volume that contains a much
+smaller range.
+
+To begin, bring up the TIFF loader dialog by selecting the
+`File / Create volume from TIFF files...` menu item.
+
+The dialog box will still have the same settings as you entered
+last time.  This means that you must do the following before proceeding:
+
+**Important step**: Check the `Step` settings in the TIFF loader dialog.
+These must all be set to 1, to ensure that you create a high-resolution
+data volume.  If you previously had set the `Step` value to something different, you
+must set them all back to 1 now.
+
+Move the TIFF loader box to the side, so you can see the data slices.
+Now zoom out, so that you can see your entire data volume (as mentioned
+before, this assumes
+that you are following the tutorial exactly, so that this data volume is
+a low-resolution version of the entire scroll.
+
+There should be a box hugging the outside of the data volume, drawn in
+the color that is shown in the TIFF loader.
+
+This colored box is interactive; you can drag its corners in order to specify the
+volume of interest that you want to load from the TIFF files.  
+
+Place your mouse on one of the corners of this box; the cursor should turn into a
+two-way arrow.  Press and drag the mouse to adjust the position of the corner.
+Notice that as you change the position of the corner, the corresponding values
+change in the TIFF loader dialog.  Likewise, if you change the numbers in
+the TIFF loader dialog, the box will move correspondingly.
 
 asdf
 
