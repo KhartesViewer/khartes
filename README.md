@@ -10,7 +10,7 @@ pynrrd to read and write NRRD files (a data format for volume files), and OpenCV
 The main emphasis of khartes is on interactivity and a user-friendly GUI; no computer-vision or machine-learning
 algorithms are currently used.
 
-## 2 minute video
+## 2-minute video
 
 The video below give a quick, 2-minute overview of khartes.
 
@@ -18,7 +18,7 @@ The video below give a quick, 2-minute overview of khartes.
 
 [![Watch the video](https://i.vimeocdn.com/video/1703962064-7e3db7142e72fe9b85887c02bd8902a65a1a6ef9c644e3e12bb5485b3519ece3-d_640)](https://vimeo.com/849799186)
 
-## 30 minute video
+## 30-minute video
 
 This next video provides a more extensive introduction to khartes.
 Note that it begins with an "artistic" 60-second
@@ -48,7 +48,7 @@ Ideally, khartes should come with both a user manual and a tutorial (and perhaps
 but at this point there exists only a single document, a tutorial that also tries
 to act as a user manual of sorts.
 
-The tutorial will cover the following steps:
+This tutorial covers the following steps:
 * Creating a project
 * Creating a data volume from TIFF files
 * Exploring the user interface and the data volume
@@ -80,8 +80,10 @@ khartes does not download TIFF files over the internet.
 The `File / Create volume from TIFF files...` menu item brings up a dialog box where
 you can specify which TIFF files you want to include in your
 data volume, and the x and y ranges of the pixels within each TIFF
-file that you want to include.  The dialog box shows how large the
-resulting data volume will be, in gigabytes.  **Be aware that the entire
+file that you want to include.  A status bar at the bottom of
+the dialog box shows how large the
+resulting data volume will be, in gigabytes.  **Be aware that
+every time you run khartes, the entire
 data volume will be read into the physical memory (RAM) of your
 computer, so be careful how large you make the volume.**
 
@@ -236,10 +238,10 @@ that stage, you will be able to navigate within your 3D data volume with confide
 ## Creating a high-resolution data volume from TIFFs
 
 If you have been following this tutorial exactly, you have created,
-and have been navigating within, data volume that
+and have been navigating within, a data volume that
 contains the entire scroll, but at very low resolution.
 
-Now you will create a high-resolution data volume that contains a much
+Now you will create a high-resolution data volume that covers a much
 smaller range.
 
 To begin, bring up the TIFF loader dialog by selecting the
@@ -250,17 +252,17 @@ last time.  This means that you must do the following before proceeding:
 
 **Important step**: Check the `Step` settings in the TIFF loader dialog.
 These must all be set to 1, to ensure that you create a high-resolution
-data volume.  If you previously had set the `Step` value to something different, you
+data volume.  If you had previously  set the `Step` values to something different, you
 must set them all back to 1 now.
 
 Move the TIFF loader box to the side, so you can see the data slices.
 Now zoom out, so that you can see your entire data volume (as mentioned
 before, this assumes
 that you are following the tutorial exactly, so that this data volume is
-a low-resolution version of the entire scroll.
+a low-resolution version of the entire scroll).
 
 There should be a box hugging the outside of the data volume, drawn in
-the color that is shown in the TIFF loader.
+the "Volume color" shown in the TIFF loader.
 
 This colored box is interactive; you can drag its corners in order to specify the
 volume of interest that you want to load from the TIFF files.  
