@@ -85,7 +85,23 @@ resulting data volume will be, in gigabytes.  **Be aware that the entire
 data volume will be read into the physical memory (RAM) of your
 computer, so be careful how large you make the volume.**
 
-In the dialog box, you specify the `Min` (minimum) 
+The first step, of course, is to find your TIFF files.  Use
+the file selector in the TIFF loader dialog box to find
+the *directory* that contains all the TIFF files.  Once
+you double-click on the *directory* name, the TIFF loader
+will read the TIFF files, determine how many
+there are and their x and y extent (width and height).
+
+Be aware that the TIFF loader assumes that the TIFF files are
+consecutively numbered (no gaps), and that they all have the
+same width and height.
+
+The TIFF loader will display the maximum possible range of the
+volume that you can create from the TIFF files, which in most
+cases would vastly exceed the capacity of your computer.
+
+By adjusting these numbers in the TIFF loader dialog box,
+you specify the `Min` (minimum) 
 and `Max` (maximum) x, y and z (TIFF file)
 values for the data volume you want to create.
 
@@ -94,7 +110,7 @@ size between pixels that are read in.  One way to
 look at `Step` is as a decimation factor.  A step
 of 1 means use every pixel, 2 means use every 2nd pixel,
 and so on.  Choosing a higher step size reduces the
-size of the data volume over a given ranges,
+size of the data volume over a given range,
 but the loss of resolution, even going from a step size
 of 1 to 2, is quite noticeable when you are trying to
 segment the data.
@@ -254,6 +270,19 @@ two-way arrow.  Press and drag the mouse to adjust the position of the corner.
 Notice that as you change the position of the corner, the corresponding values
 change in the TIFF loader dialog.  Likewise, if you change the numbers in
 the TIFF loader dialog, the box will move correspondingly.
+
+If, as you adjust the box, it disappears from some of the data slices, you can
+find it again by pressing the `Re-center view` button in the TIFF loader.
+This will shift the mutual intersection point of the data slices so that they
+all pass through the current center of the box.
+
+As you adjust the box, keep an eye on the Gb size that is displayed at the bottom
+of the TIFF loader; you want to make sure your data volume will fit in the RAM of
+your computer.
+
+Finally, give your volume a name and a color, and hit the `Create` button.
+In general, the time the loader takes to run is proportional to the number
+of TIFF files that need to be loaded.
 
 asdf
 
