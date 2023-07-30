@@ -1586,6 +1586,7 @@ class MainWindow(QMainWindow):
 
         def closeEvent(self, e):
             print("Loading widget close event", self)
+            e.accept()
 
         def mousePressEvent(self, e):
             print("Loading widget mouse press event", self)
@@ -1613,6 +1614,7 @@ class MainWindow(QMainWindow):
         def __init__(self, parent, text=None):
             super(MainWindow.Loading, self).__init__()
             widget = MainWindow.LoadingWidget(parent, text)
+            widget.setAttribute(Qt.WA_DeleteOnClose)
             self.destroyed.connect(lambda o: parent.loadingDestroyed(widget))
             print("Loading created", self, widget)
 
