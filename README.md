@@ -32,7 +32,7 @@ be found in the file demo1_script.txt.
 
 [![Watch the video](https://i.vimeocdn.com/video/1670955201-81a75343b71db9c84b6b4275e3447c943d2128ab8b921a822051046e83db0c96-d_640)](https://vimeo.com/827515595)
 
-## Installation
+# Installation
 
 You should be able to run simply by
 cloning the repository, making sure you have the proper dependencies 
@@ -40,13 +40,13 @@ cloning the repository, making sure you have the proper dependencies
 
 When khartes starts, you will see some explanatory text on the right-hand side of the interface 
 to help you get started.  This text is fairly limited; you might want to watch the video above to get a better
-idea how to proceed, and read the "General Workflow" section below.
+idea how to proceed, and read the Manual/Tutorial below.
 
 # Manual/Tutorial
 
 Ideally, khartes should come with both a user manual and a tutorial (and perhaps even a "cookbook"),
 but at this point there exists only a single document, a tutorial that also tries
-to act as a user manual, of sort.
+to act as a user manual of sorts.
 
 The tutorial will cover the following steps:
 * Creating a project
@@ -60,7 +60,7 @@ The tutorial will cover the following steps:
 ## Creating a project
 
 If you are running khartes for the first time, or
-if you are starting a new project, select `File / New Project...`
+if you are starting a new project, select the `File / New Project...` menu item
 to create a new project.  When you create a new project, you will
 immediately be asked for the name of your project, and the location
 on disk where you wish it to be created.  This is so that khartes
@@ -77,34 +77,65 @@ This conversion process
 assumes that the TIFF files are already somewhere on your disk;
 khartes does not download TIFF files over the internet.
 
-The `File / Create volume from TIFF files...` menu brings up a dialog box where
+The `File / Create volume from TIFF files...` menu item brings up a dialog box where
 you can specify which TIFF files you want to include in your
 data volume, and the x and y ranges of the pixels within each TIFF
 file that you want to include.  The dialog box shows how large the
-resulting data volume will be, in gigabytes.  Be aware that the entire
+resulting data volume will be, in gigabytes.  **Be aware that the entire
 data volume will be read into the physical memory (RAM) of your
-computer, so be careful how large you make the volume.
+computer, so be careful how large you make the volume.**
 
 In the dialog box, you specify the `Min` (minimum) 
 and `Max` (maximum) x, y and z (TIFF file)
 values for the data volume you want to create.
+
 You can also specify a `Step`, which gives the step
-size between pixels that are read in.  Another way to
+size between pixels that are read in.  One way to
 look at `Step` is as a decimation factor.  A step
 of 1 means use every pixel, 2 means use every 2nd pixel,
 and so on.  Choosing a higher step size reduces the
-size of the data volume for a given set of ranges,
+size of the data volume over a given ranges,
 but the loss of resolution, even going from a step size
 of 1 to 2, is quite noticeable when you are trying to
-segment the data.  
+segment the data.
 
 The main use of `Step` is to allow an
 overview of the data, in order to determine which areas merit
-a closer examination (with a step size of 1).  For instance,
+a closer examination at a step size of 1.  For instance,
 if you set a step size of 10 in all 3 directions (x, y, and z),
 you can reduce an entire scroll, typically 1.5 Tb or so,
 to a very manageable 1.5 Gb.  This resolution of this volume
-is much too low for segmentation, but it provides a good overview.
+is much too low for segmentation, but it is good enough to give you
+an idea of where the interesting areas of the scroll are.
+
+**As the first step of this tutorial**, create a data volume that
+encompasses your entire set of TIFF files.  Use a `Step` of 10
+in all 3 directions, in order to keep the data volume small.
+
+Name this new volume `all10`, to remind yourself that the volume
+encompasses all the data, but with a decimation factor of 10.
+Set the color to something you like.
+
+When you press the `Create` button, if you get a warning that your
+data volume will be large, check to make sure that all 3 `Step`
+values are set to 10.
+
+This process will take some fraction of an hour, depending on
+how fast your computer is, and how many TIFF files you have.
+For instance, if you have a scroll with 14,000 TIFF files, and
+a step size of 10, khartes will need to read 1,400 of these files.
+
+The TIFF file loader has a status bar at the bottom that shows
+the name of the file that is currently being read.
+
+For future reference: if you already have an `all10` data volume,
+typically stored in a file called `all10.nrrd`, you can use the
+`File / Import NRRDs...` menu item to import this file, which
+is quite a bit faster than reading all those TIFFs.
+
+## Exploring the user interface
+
+asdf
 
 Instead of typing the x and y ranges into the dialog box, you
 can interactively specify the area of interest by modifying the
