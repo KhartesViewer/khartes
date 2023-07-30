@@ -286,6 +286,15 @@ Finally, give your volume a name and a color, and hit the `Create` button.
 In general, the time the loader takes to run is proportional to the number
 of TIFF files that need to be loaded.
 
+## Control Area: Volumes
+
+Go to the Control Area (the area in the lower right corner of khartes) and select the Volumes tab.
+Here you should see the two volumes you have created so far: all10, and your high-resolution volume.
+The checkbox in the left column allows you to select which volume should be made visible.
+The next two columns show the name and the color of each volume.  The name cannot be changed.
+However, you can change the volume's color by clicking on the color box.
+The volume's color is used in certain displays that will be explained later.
+
 ### Advanced topic: loading TIFF files from vc_layers
 
 This sub-section is not part of the tutorial, but it belongs with the
