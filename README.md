@@ -313,8 +313,7 @@ should be sparing of memory, creating data volumes that are no
 larger than half the size of your physical memory,
 if you want to avoid memory swapping.
 
-## Overview
-
+## Creating a segment
 
 ## General segmentation workflow
 
