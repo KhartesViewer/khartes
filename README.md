@@ -291,12 +291,35 @@ of TIFF files that need to be loaded.
 
 ## Control Area: Volumes
 
+<img src="images/volumes_tab.jpg" width="400"/>
+
 Go to the Control Area (the area in the lower right corner of khartes) and select the Volumes tab.
-Here you should see the two volumes you have created so far: all10, and your high-resolution volume.
+Here you should see listed the two volumes you have created so far: all10, and your high-resolution volume.
 The checkbox in the left column allows you to select which volume should be made visible.
 The next two columns show the name and the color of each volume.  The name cannot be changed.
 However, you can change the volume's color by clicking on the color box.
-The volume's color is used in certain displays that will be explained later.
+The volume's color is used when the volume's bounding box is drawn in the data slices, an option
+you will learn about later.
+
+The 'Ld' column lets you know whether each volume is currently loaded into memory.  By default,
+only one volume at a time is present in memory, in order to conserve RAM.  A future version of
+khartes may allow multiple volumes to be present in memory simultaneously, in order to
+permit the user to switch more quickly between volumes.
+
+The next column allows you to change the orientation of the volume.  By default, the topmost
+data slice window displays each TIFF image in its original orientationm which in khartes is called the Y
+orientation.  Using the selector
+in the fifth column of the Volumes tab, you can change the orientation of the TIFF image, turning it on
+its side, by selecting the X orientation.  Later on, you will see why this is useful (it has to do with
+the fragments being limited to be single-valued surfaces).
+
+Feel free to change the orientation from Y to X to see how the data volume changes appearance in the
+data slice windows, but change it back to Y when you are done, since the rest of the tutorial assumes
+that you are in the Y orientation.
+
+The next nine columns display the range of the volume within the scroll; these numbers are not editable.
+
+The final column displays the size of the data volume in Gbytes.
 
 ### Advanced topic: loading TIFF files from vc_layers
 
