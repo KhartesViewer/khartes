@@ -289,17 +289,29 @@ Finally, give your volume a name and a color, and hit the `Create` button.
 In general, the time the loader takes to run is proportional to the number
 of TIFF files that need to be loaded.
 
+### Advanced topic: loading TIFF files from vc_layers
+
+This sub-section is not part of the tutorial, but it belongs with the
+current topic: loading TIFF files.
+
+The program `vc_layers` outputs TIFF files that represent flattened
+layers adjacent to a flattened segment.  These files have a different
+orientation than the TIFF files usually read by khartes.  To alert
+khartes to this difference, so that the data volume created from these
+`vc_layer` TIFFs
+is properly oriented, check the box labeled `TIFFs are from vc_layers`.
+
 ## Control Area: Volumes
 
-<img src="images/volumes_tab.jpg" width="400"/>
+<img src="images/volumes_tab.JPG" width="800"/>
 
 Go to the Control Area (the area in the lower right corner of khartes) and select the Volumes tab.
 Here you should see listed the two volumes you have created so far: all10, and your high-resolution volume.
 The checkbox in the left column allows you to select which volume should be made visible.
 The next two columns show the name and the color of each volume.  The name cannot be changed.
 However, you can change the volume's color by clicking on the color box.
-The volume's color is used when the volume's bounding box is drawn in the data slices, an option
-you will learn about later.
+The volume's color is used when the volume's bounding box is drawn as an overlay
+on the data slices.
 
 The 'Ld' column lets you know whether each volume is currently loaded into memory.  By default,
 only one volume at a time is present in memory, in order to conserve RAM.  A future version of
@@ -321,17 +333,9 @@ The next nine columns display the range of the volume within the scroll; these n
 
 The final column displays the size of the data volume in Gbytes.
 
-### Advanced topic: loading TIFF files from vc_layers
-
-This sub-section is not part of the tutorial, but it belongs with the
-current topic: loading TIFF files.
-
-The program `vc_layers` outputs TIFF files that represent flattened
-layers adjacent to a flattened segment.  These files have a different
-orientation than the TIFF files usually read by khartes.  To alert
-khartes to this difference, so that the data volume created from these
-`vc_layer` TIFFs
-is properly oriented, check the box labeled `TIFFs are from vc_layers`.
+Above the list is the `Volume Boxes Visible` checkbox.  When this box is checked, the outlines
+(bounding boxes) of all the volumes (except the currently-loaded volume) will be overlaid
+on the data slices.
 
 ## Creating a segment
 asdf
