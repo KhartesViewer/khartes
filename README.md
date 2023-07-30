@@ -271,7 +271,7 @@ This colored box is interactive; you can drag its corners in order to specify th
 volume of interest that you want to load from the TIFF files.  
 
 Place your mouse on one of the corners of this box; the cursor should turn into a
-two-way arrow.  Press and drag the mouse to adjust the position of the corner.
+diagonal two-way arrow.  Press and drag the mouse to adjust the position of the corner.
 Notice that as you change the position of the corner, the corresponding values
 change in the TIFF loader dialog.  Likewise, if you change the numbers in
 the TIFF loader dialog, the box will move correspondingly.
@@ -287,7 +287,7 @@ your computer.
 
 Finally, give your volume a name and a color, and hit the `Create` button.
 In general, the time the loader takes to run is proportional to the number
-of TIFF files that need to be loaded.
+of TIFF files that need to be processed.
 
 ### Advanced topic: loading TIFF files from vc_layers
 
