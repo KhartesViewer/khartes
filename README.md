@@ -154,21 +154,59 @@ Instead, focus on the 3 data slices.  These 3 windows represent 3 mutually
 perpendicular slices throught the 3D data volume.  The 3 slices meet in the
 middle of each window, where the crosshairs intersect.
 
-There are a couple of cues to help you stay oriented.  In the upper left of each
+### Staying oriented
+
+There are a few cues to help you stay oriented.  
+
+1) In the upper left of each
 window is a label that gives the current position of the given slice.
 For instance, the upper slice, which corresponds to one of the original TIFF files,
 has a label in the upper left indicating which image (TIFF file) it is from.
 
-The other cue is the status bar, below the 3 data slices.  This gives the current
+2) Below the 3 data slices is the status bar.  This gives the current
 3D location of the cursor.  For instance, if you move the cursor around inside of the
 top data slice window, and watch the status bar, you will see that the IMG (image) coordinate
 remains constant (and is the same as in the label of the data slice), while
 the X and Y coordinates change.
 
+3) Each of the 3 data slices has a colored border.  And inside each data slice, the
+two intersecting crosshairs are different colors.  These colors act as an additional orientation
+cue.  Think, for a moment, about the red data slice (the one with a red border).  Somewhere in 3D
+space its plane intersects the plane of the green data slice.  These two planes are mutually
+perpendicular, so the intersection is a line.  In the window of the red data slice, this
+line of intersection is drawn in green; it is the green crosshair, to show that this is where
+the green slice crosses the red slice.  Likewise, in the window of the green data slice, this
+same intersection line is drawn in red, so that when you are looking at the green window,
+you know where the red slice crosses it.
+
+### Navigation by mouse
+
 To navigate within the data volume, simply hold down the left mouse button while inside one
 of the data slice windows, and drag the slice.  The other slices will change, to ensure that
 the mutual intersection point of the three slices remains in the middle of the crosshairs
 of all 3 slices.
+
+You can use the mouse scroll wheel while in any of the data slice windows to zoom in or out.
+The crosshairs are always the center of the zoom, since the mutual intersection point of the three
+slice planes does not change during zooming.
+
+### Navigation by keyboard
+
+You can use the four arrow key to move the current slice (the one where the mouse cursor is
+currently located).  As when navigating with the mouse, the other slices will change to ensure
+that their mutual interesection point remains in the centers of all 3 pairs of crosshairs.
+
+You can also use the page-up and page-down keys to increment or decrement the slice in the current
+window.  To see this, watch the label in the upper left corner of the current data slice, and see
+how this changes as you press page-up and page-down.
+
+If your keyboard offers auto-repeat, you can hold down an arrow key, or a page-up/down key, and
+watch as the current slice slowly moves in the indicated direction.
+
+The `a`, `s`, `w`, and `m` keys behave the same as the arrow keys, and `e` and `c` behave the
+same as the page-up/down keys.
+
+### Getting a feel for 3D navigation
 
 To fully explain the navigation, and the meanings of the 3 slices, would require many diagrams
 that I haven't had time to draw yet.  So for now, get a feeling for how the navigation works by
