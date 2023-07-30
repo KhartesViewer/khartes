@@ -1780,7 +1780,7 @@ class MainWindow(QMainWindow):
         if e.key() == Qt.Key_Shift and self.getShiftClicksCount() == 1:
             t = time.time()
             # print("release", t)
-            if t - self.last_shift_time < .5:
+            if t - self.last_shift_time < .25:
                 # quick click-and-release
                 self.add_node_mode = not self.add_node_mode
                 self.add_node_mode_button.setChecked(self.add_node_mode)
