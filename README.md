@@ -135,6 +135,20 @@ is quite a bit faster than reading all those TIFFs.
 
 ## Exploring the user interface
 
+<img src="images/labelled_overview.jpg" width="800"/>
+
+Now that you have loaded a data set, you can more easily explore the
+user interface of khartes.
+
+Referring to the figure above, the main areas where you will work are the 3 *Data Slices*
+on the left side, and the *Fragment View* in the upper right.
+The *Control Area* in the lower right has tabs that let you
+make adjustments to volumes, fragments, and display parameters.
+At the bottom is the *Status Bar*, which usually shows you the 3D coordinates
+of the cursor.  And at the top is the *Menu*, which handles file import and export.
+
+
+
 asdf
 
 Instead of typing the x and y ranges into the dialog box, you
@@ -164,7 +178,6 @@ if you want to avoid memory swapping.
 
 ## Overview
 
-<img src="images/labelled_overview.jpg" width="800"/>
 
 ## General segmentation workflow
 
