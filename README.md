@@ -42,15 +42,20 @@ When khartes starts, you will see some explanatory text on the right-hand side o
 to help you get started.  This text is fairly limited; you might want to watch the video above to get a better
 idea how to proceed, and read the "General Workflow" section below.
 
-A couple of notes based on early user testing (**you might
-want to review these again** after using khartes for the first
-time):
+# Manual/Tutorial
 
-The `File / Import TIFF Files...` menu option
-creates a khartes data volume
-by reading TIFF files that you already have somewhere on disk.
-You simply need to point the import-TIFF dialog to the folder
-that contains these files.
+Ideally, khartes should come with both a user manual and a tutorial (and perhaps even a "cookbook"),
+but at this point there exists only a single document, a tutorial that also tries
+to act as a user manual, of sort.
+
+The tutorial will cover the following steps:
+* Creating a project
+* Creating a data volume from TIFF files
+* Exploring the user interface and the data volume
+* Creating a fragment ("segmentation")
+* General workflow for creating coherent, consistent fragments
+* Exporting the fragment as a mesh
+* Working with multiple fragments
 
 ## Creating a project
 
@@ -125,6 +130,10 @@ the import process).  This means that at the current time you
 should be sparing of memory, creating data volumes that are no
 larger than half the size of your physical memory,
 if you want to avoid memory swapping.
+
+## Overview
+
+<img src="images/labelled_overview.jpg" width="800"/>
 
 ## General segmentation workflow
 
