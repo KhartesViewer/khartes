@@ -237,7 +237,7 @@ that stage, you will be able to navigate within your 3D data volume with confide
 
 ## Creating a high-resolution data volume from TIFFs
 
-<img src="images/tiff_loader clipped.jpg" width="800"/>
+<img src="images/tiff_loader.jpg" width="800"/>
 
 If you have been following this tutorial exactly, you have created,
 and have been navigating within, a data volume that
