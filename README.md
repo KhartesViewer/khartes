@@ -288,12 +288,12 @@ of TIFF files that need to be loaded.
 
 ### Advanced topic: loading TIFF files from vc_layers
 
-This sub-section is not part of the tutorial, but it belongs to the
+This sub-section is not part of the tutorial, but it belongs with the
 current topic: loading TIFF files.
 
 The program `vc_layers` outputs TIFF files that represent flattened
 layers adjacent to a flattened segment.  These files have a different
-orientation than the TIFF files created by X-ray tomography.  To alert
+orientation than the TIFF files usually read by khartes.  To alert
 khartes to this difference, so that the data volume created from these
 `vc_layer` TIFFs
 is properly oriented, check the box labeled `TIFFs are from vc_layers`.
