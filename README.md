@@ -147,6 +147,38 @@ make adjustments to volumes, fragments, and display parameters.
 At the bottom is the *Status Bar*, which usually shows you the 3D coordinates
 of the cursor.  And at the top is the *Menu*, which handles file import and export.
 
+At the moment, the *Fragment View* is blank, because you have not created
+any fragments.
+
+Instead, focus on the 3 data slices.  These 3 windows represent 3 mutually
+perpendicular slices throught the 3D data volume.  The 3 slices meet in the
+middle of each window, where the crosshairs intersect.
+
+There are a couple of cues to help you stay oriented.  In the upper left of each
+window is a label that gives the current position of the given slice.
+For instance, the upper slice, which corresponds to one of the original TIFF files,
+has a label in the upper left indicating which image (TIFF file) it is from.
+
+The other cue is the status bar, below the 3 data slices.  This gives the current
+3D location of the cursor.  For instance, if you move the cursor around inside of the
+top data slice window, and watch the status bar, you will see that the IMG (image) coordinate
+remains constant (and is the same as in the label of the data slice), while
+the X and Y coordinates change.
+
+To navigate within the data volume, simply hold down the left mouse button while inside one
+of the data slice windows, and drag the slice.  The other slices will change, to ensure that
+the mutual intersection point of the three slices remains in the middle of the crosshairs
+of all 3 slices.
+
+To fully explain the navigation, and the meanings of the 3 slices, would require many diagrams
+that I haven't had time to draw yet.  So for now, get a feeling for how the navigation works by
+dragging slices, observing the labels in the upper left of each slice, and observing the 3D
+coordinates in the status bar.
+
+Your goal is to understand the navigation well enough so that you can predict, when you drag
+one of the slices around, how the other slices and their labels will behave.  Once you reach
+that stage, you will be able to navigate within your 3D data volume with confidence.
+
 
 
 asdf
