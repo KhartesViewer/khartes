@@ -410,12 +410,28 @@ a picture of crosshairs.  When this button is light, khartes is in
 normal mode, and when it is dark, khartes is in add-node mode.
 
 The other, more convenient, way to toggle between normal and add-node mode
-is to quickly hold down and release the shift button.  You can see which
+is to press and then quickly release the shift button.  You can see which
 mode you are in by seeing whether the cursor afterwards is a hand (normal mode)
 or crosshairs (add-node mode).
 
 This advanced topic needed to be introduced now, because you might, by accident, quickly
 press and release the shift button, unintentionally toggling between modes.
+Now that you understand the two modes, you won't be mystified if this happen.
+
+## Choosing a region for segmentation
+
+Before you start creating a fragment, you should make sure that there
+is a region in your high-resolution data volume that is possible to segment.
+
+What you are looking for is a region where the papyrus sheets, as
+seen in the top data slice, are not too tilted (you want an angle
+of less than 45 degrees or so).  This region doesn't have
+to be very large, but if you can't
+find even a small area, then you may
+need to create another high-resolution data volume.
+
+## Building and working with the segment
+
 
 
 Instead of typing the x and y ranges into the dialog box, you
