@@ -531,6 +531,14 @@ shift key will toggle between "normal mode" and "add-node mode".
 you can delete the node by pressing either of these two keys.  As mentioned above, khartes does
 not have an "undo" function, so think carefully before doing this.
 
+* **v**: This hot key controls the visibility of the mesh that is overlaid on the
+data in the Fragment View.  More precisely, it toggles the "visibility" setting of
+the current fragment; the distinction between a fragment being "active" and "visible"
+is an advanced topic discussed near the end of this tutorial.  For now, think of
+`v` as meaning "visible".
+
+* **t**: This key turns on and off an advanced capability called "tracking cursors".
+
 asdf
 
 
