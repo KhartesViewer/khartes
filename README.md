@@ -693,6 +693,8 @@ a regular basis to save your latest work.
 
 ## Control Area: Fragments
 
+<img src="images/fragments_tab.JPG" width="800"/>
+
 (currently working here)
 
 ## Fragment: Visible, Active, accepting nodes
@@ -798,6 +800,8 @@ You might need to use --volume to specify your volume as well, if your volpkg ha
 
 As already mentioned, the .ppm file that `vc_render` creates can be used in `vc_layers_from_ppm` to create a 
 flattened surface volume.
+
+<img src="images/settings_tab.JPG" width="800"/>
 
 ## Things to fix
 
