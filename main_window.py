@@ -963,8 +963,11 @@ class MainWindow(QMainWindow):
         self.createFragment()
 
     def createFragment(self):
-        vv = self.volumeView()
         pv = self.project_view
+        if pv is None:
+            print("Warning, cannot create new fragment without project")
+            return
+        vv = self.volumeView()
         if vv is None:
             print("Warning, cannot create new fragment without volume view set")
             return
