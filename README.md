@@ -524,6 +524,12 @@ will shift so as to place the designated node in the center of all 3 data slices
 helpful if you want to examine the data volume near the node, or add other nodes nearby.  Think
 of `x` as meaning "X marks the spot", or representing crosshairs (slightly tilted).
 
+* **Ctrl-s**: This hot key performs the same function as the `Save` menu item in the `File`
+menu: it saves your current work to the project file.  You should try to remember to hit
+`Ctrl-s` as often as possible; khartes does not create auto-backups.  The "save" operation is
+very quick, since only fragments are written to disk each time; the data volumes never change
+once they have been initially created on disk.
+
 * **shift**: As mentioned in the "Advanced" section above, quickly pressing and releasing the
 shift key will toggle between "normal mode" and "add-node mode".
 
@@ -534,52 +540,21 @@ not have an "undo" function, so think carefully before doing this.
 * **v**: This hot key controls the visibility of the mesh that is overlaid on the
 data in the Fragment View.  More precisely, it toggles the "visibility" setting of
 the current fragment; the distinction between a fragment being "active" and "visible"
-is an advanced topic discussed near the end of this tutorial.  For now, think of
+is an advanced topic discussed below, in the "Control Area: Fragments" section.  For now, think of
 `v` as meaning "visible".
 
 * **t**: This key turns on and off an advanced capability called "tracking cursors".
-
-asdf
-
-
-Instead of typing the x and y ranges into the dialog box, you
-can interactively specify the area of interest by modifying the
-range bounding box that is displayed in the data slices (the
-3 data windows on the left).
-
-You can import multiple data volumes into your project,
-and then view each volume, one at a time.  Khartes keeps track of
-the origin point of each volume, so that coordinate systems remain
-consistent as you switch from volume to volume.
-
-There is **new functionality** in the import-TIFF function:
-you are now able to import the set of TIFF files created by
-`vc_layers` (you could import them before, but they would be transposed
-in a way that made them practically unusable).  
-In the import-TIFF dialog,
-simply check the box labeled "TIFFs are from vc_layers".
-
-Unfortunately, the import-TIFF function 
-currently uses more memory than it should 
-(it unnecessarily duplicates the data volume in memory during
-the import process).  This means that at the current time you
-should be sparing of memory, creating data volumes that are no
-larger than half the size of your physical memory,
-if you want to avoid memory swapping.
-
-
+Tracking cursors are described in the "Tracking Cursors" section below.
 
 ## General segmentation workflow
 
-As the programmer of khartes, I am very familiar with
-how it works internally.
-However,
-I only have a few hours experience as a user of the software.
-The advice that follows is based on this 
-limited experience, but 
-these suggestions
-should not be treated as something engraved in stone, more
-like something written on papyrus in water-based ink.
+This section of the tutorial provides some
+suggestions on how to create large, self-consistent
+fragments.  The key, as you will learn, is to
+follow horizontal papyrus fibers, using them
+as an indicator that you have not accidently
+allowed your fragment to slip onto a neighboring
+sheet.
 
 **Step 0**: The most important step, which you
 must take even before you start segmenting,
@@ -715,6 +690,10 @@ sheet of the scroll in difficult areas.
 
 Remember that khartes does not have auto-save; use Ctrl-S on
 a regular basis to save your latest work.
+
+## Control Area: Fragments
+
+(currently working here)
 
 ## Fragment: Visible, Active, accepting nodes
 
