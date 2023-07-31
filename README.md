@@ -802,3 +802,14 @@ flattened surface volume.
 ## Things to fix
 
 There is no undo function.
+
+## License
+
+Khartes is open-source code, licensed under the GPL 3.0 license.  See LICENSE.txt for details.
+
+## Contact
+
+I prefer not to make my name and email address available on the public internet.
+https://discord.com/invite/6FgWYNjb4N
+
+
