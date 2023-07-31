@@ -803,6 +803,12 @@ flattened surface volume.
 
 There is no undo function.
 
+The "Loading..." overlay, which appears when a file is loading, sometimes fails to
+disappear afterwards.  
+This problem is so intermittent that I have not been able
+to figure out how to prevent it.
+Unfortunately, the only workaround is to save your work, and then exit and restart khartes.
+
 ## License
 
 Khartes is open-source code, licensed under the GPL 3.0 license.  See LICENSE.txt for details.
