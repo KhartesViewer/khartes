@@ -801,24 +801,4 @@ flattened surface volume.
 
 ## Things to fix
 
-When the user exits khartes
-or reads another project, khartes does not warn the
-user if there is unsaved data.
-
-There is no way for the user to delete nodes (my usual practice
-at the moment is to move them out of the way to somewhere harmless).
-
 There is no undo function.
-
-Memory usage during import-TIFFs (and perhaps other operations)
-needs to be optimized, to allow bigger data volumes.
-
-Allow the user to change fragment and volume names.
-
-Allow the user to change display settings such as node size and
-crosshair thickness.
-
-The scale bar is based on a voxel spacing of 7.9 um; allow the user to 
-set this to a different value.
-
-(Many others too uninteresting to list here)
