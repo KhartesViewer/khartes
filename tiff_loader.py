@@ -214,7 +214,8 @@ class TiffLoader(QMainWindow):
         namelabel = QLabel("Volume name:")
         hbox.addWidget(namelabel)
         self.nameedit = QLineEdit()
-        self.nameedit.textEdited.connect(self.onNameEdited)
+        # self.nameedit.textEdited.connect(self.onNameEdited)
+        self.nameedit.textChanged.connect(self.onNameEdited)
         hbox.addWidget(self.nameedit)
         self.vcrender = QCheckBox("TIFFs are from vc_layers")
         self.vcrender.setCheckState(Qt.Unchecked)
@@ -627,7 +628,11 @@ class TiffLoader(QMainWindow):
             vv.setColor(QColor(self.color()))
             # should have been hidden during readerCallback
             self.hide()
-        self.onChange()
+        # unset name of volume
+        self.nameedit.setText("")
+        # setText causes a call to self.onNameEdited which
+        # in turn calls self.onChange
+        # self.onChange()
 
     # Callback as specified in Volume.createFromTiffs
     def readerCallback(self, text):
