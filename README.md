@@ -483,7 +483,7 @@ interactively, so you can instantly judge the quality of your segmentation.**
 ### What the cursor is telling you
 
 As you work, you have probably noticed that the cursor changes its shape,
-depending on the contextwhere it is in the slice.  As a rule, the shape
+depending on where it is in the slice.  As a rule, the shape
 of the cursor tells you
 what the left mouse button will do if you push it.
 
@@ -516,6 +516,20 @@ corner to change the shape of the proposed data volume.
 
 ### Hot keys
 
+Khartes provides a number of hot keys (keys that you can press to take some action).  Here is the list:
+
+* **x**: This extremely useful hot key was suggested by the Vesuvius Challenge Segmentation Team.
+If you place the cursor over a node, so the node changes to cyan, and then press `x`, the view
+will shift so as to place the designated node in the center of all 3 data slices.  This is very
+helpful if you want to examine the data volume near the node, or add other nodes nearby.  Think
+of `x` as meaning "X marks the spot", or representing crosshairs (slightly tilted).
+
+* **shift**: As mentioned in the "Advanced" section above, quickly pressing and releasing the
+shift key will toggle between "normal mode" and "add-node mode".
+
+* **delete** and **backspace**: If you place the cursor over a node, so that the node turns cyan,
+you can delete the node by pressing either of these two keys.  As mentioned above, khartes does
+not have an "undo" function, so think carefully before doing this.
 
 asdf
 
