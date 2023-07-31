@@ -821,21 +821,24 @@ under the name *khartes_chuck* .
 
 ## Acknowledgements
 
-I wrote khartes for my own gratification; I did not receive a grant or salary from any organization
+I wrote khartes for my own gratification, and in the hope that it would be useful; 
+I did not receive a grant or salary from any organization
 to work on this program.
 
 However, I benefitted immensely from the [Vesuvius Challenge](https://scrollprize.org/), who
 provided the following:
 * The X-ray tomography data set, without which I could not have developed khartes (along with
-making the data open, they provided the technical infrastructure that made it possible to
+making the data openly available (under reasonable conditions),
+they provided the technical infrastructure that made it possible to
 download the data over the internet);
 * Permission to use small excerpts from the data set in this README file and the associated videos;
 * A [lively community](https://discord.com/invite/6FgWYNjb4N) of fellow enthusiasts;
 * In particular, the Segmentation Team (@hari_seldon and @djosey most of all),
-which provided invaluable user feedback and suggestions while I
+who provided invaluable user feedback and suggestions while I
 was developing khartes;
 * A [cash prize](https://scrollprize.substack.com/p/segmentation-tooling-winners-new), which I appreciated
-for its monetary value, but more so for the recognition of the work done up to that time, and for the encouragement to continue.
+for its monetary value, but more so for the recognition of the work done up to that time,
+and for the encouragement to continue.
 
 So a big "Thank You" to the sponsors and organizers of the Vesuvius Challenge!
 
