@@ -393,7 +393,7 @@ This advanced topic would preferably be introduced later in the
 tutorial, but you need to be alerted to it now, in case you
 run into it by accident.
 
-**Advanced topic that needs to be introduced now**  Khartes has
+**Advanced topic that needs to be introduced now**:  Khartes has
 two modes of user interaction in the data slices and the fragment
 view: "normal" mode, and "add-node" mode.  In normal mode, the
 cursor usually looks like a hand (unless it is near a node), and
@@ -432,6 +432,53 @@ need to create another high-resolution data volume.
 
 ## Building and working with the segment
 
+At this point you are ready to build the segment.
+As you saw in the video, you simply add nodes to the
+data slices.  Notice that **the order you add nodes does not matter**;
+if you feel your nodes are too far apart, simply add more.
+
+But what do you do if you discover that a node is in the wrong
+place?  You have a couple of options.
+
+### Deleting a node
+
+It is very easy to delete a node.  Simply move the cursor over
+the node, so that the node turns cyan (if you are currently in
+"add-node mode", the node won't change color; you need to switch to normal mode).
+At this point, simply hit the "Delete" or "Backspace" key (either will work).
+But bear this in mind: **There is currently no "undo" in khartes!**
+
+### Moving a node
+
+More often, you want to move a node instead of deleting it.  This is likewise
+easy to do, assuming you are in "normal mode".  Again, move the cursor to the
+node you are interested in moving; the node will turn cyan.  (Notice that
+in any data slice (or the fragment view) where the node is visible, the node
+will be drawn in cyan; this is sometimes a handy way of keeping track of
+which node is which in the different views).
+
+Once the node is cyan, there are a couple of ways to move it.  
+
+If you are
+working in a data slice, you can now press the left mouse button,
+hold it down, and drag the node to where you want it.  But be aware that
+you cannot use the mouse to drag nodes in the fragment view (this is to
+prevent accidents).
+
+If you need more precision, you can use the arrow keys (or `a`, `s`, `w`, and `d`)
+to move the node to where you want it.
+
+If you are working in the Fragment View, you can also use the page-up and page-down
+keys to move the node.  These keys will move the node perpendicular to the plane of
+the fragment view (to see what this means, make sure your node is also visible in the
+top left data slice, and see how the node moves in the data slice while you press
+page-up or page-down in the Fragment View).
+
+The key capability of khartes is that as you move nodes, the data image in the
+fragment view updates
+interactively, so you can instantly judge the quality of your segmentation.
+
+asdf
 
 
 Instead of typing the x and y ranges into the dialog box, you
