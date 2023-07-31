@@ -358,9 +358,65 @@ is the "2-minute video" mentioned at the top of this README):
 [https://vimeo.com/849799186](https://vimeo.com/849799186)
 
 The video shows a slightly older version of khartes; for
-instance, the cursor does not turn into crosshairs before a new
-node is created, and re-centering the view on an existing node
+instance, the cursor did not turn into crosshairs before a new
+node was created, and re-centering the view on an existing node
 was more awkward than it is now.
+
+Also, the video does not mention the key presses and button
+presses made by the user.
+
+But here are some general user-interface aspects that you should
+have gathered from the video.
+
+Each node that the user creates is added to a surface (the fragment)
+that is displayed in map view in the Fragment View.  Of course, if
+the new nodes all form a line, only a line, rather than a surface,
+is shown in the Fragment view.  Once the user begins creating
+nodes in a different data slice, a surface can be created, and
+this surface is shown in the Fragment View.
+
+In each data slice, the fragment is drawn as a line; this represents
+the intersection between the fragment and the data slice.  If any nodes
+lie on the plane of the slice, they are shown as red circles.  When
+the cursor passes near a node, it turns from red to cyan.
+
+The color of the fragment line in the data slices, and the color of
+the triangular mesh in the Fragment View, are the color of the
+fragment, as shown in the Fragments tab in the Control Area (you
+won't actually see the Fragments tab in the video, since in the video
+only the Volumes tab is shown).
+
+It is alomst time for you to begin creating your own fragment,
+but first you need to learn just a little about an advanced topic.
+
+This advanced topic would preferably be introduced later in the
+tutorial, but you need to be alerted to it now, in case you
+run into it by accident.
+
+**Advanced topic that needs to be introduced now**  Khartes has
+two modes of user interaction in the data slices and the fragment
+view: "normal" mode, and "add-node" mode.  In normal mode, the
+cursor usually looks like a hand (unless it is near a node), and
+to add a node, you need to hold down the shift key (so the cursor
+turns into crosshairs) before pressing the left mouse button.
+
+In "add-node" mode, things are reversed.  The cursor always
+takes the form of crosshairs, and to add a node, you simply need to
+click with the left mouse button.
+
+There are two ways to toggle between the two modes.  One way is to
+click on the button, to the right of the `Files` menu, that contains
+a picture of crosshairs.  When this button is light, khartes is in
+normal mode, and when it is dark, khartes is in add-node mode.
+
+The other, more convenient, way to toggle between normal and add-node mode
+is to quickly hold down and release the shift button.  You can see which
+mode you are in by seeing whether the cursor afterwards is a hand (normal mode)
+or crosshairs (add-node mode).
+
+This advanced topic needed to be introduced now, because you might, by accident, quickly
+press and release the shift button, unintentionally toggling between modes.
+
 
 Instead of typing the x and y ranges into the dialog box, you
 can interactively specify the area of interest by modifying the
