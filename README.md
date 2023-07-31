@@ -430,7 +430,7 @@ to be very large, but if you can't
 find even a small area, then you may
 need to create another high-resolution data volume.
 
-## Building and working with the segment
+## Building and modifying the segment
 
 At this point you are ready to build the segment.
 As you saw in the video, you simply add nodes to the
@@ -480,6 +480,41 @@ page-up or page-down in the Fragment View).
 fragment view updates
 interactively, so you can instantly judge the quality of your segmentation.**
 
+### What the cursor is telling you
+
+As you work, you have probably noticed that the cursor changes its shape,
+depending on the contextwhere it is in the slice.  As a rule, the shape
+of the cursor tells you
+what the left mouse button will do if you push it.
+
+Here are the various shapes, and what they mean.  Someday I will attach
+pictures of the different cursors, and not just words...
+
+* **Hand**: This tells you that khartes is in "normal mode" (in contrast to
+"add-node mode").  If you press the left mouse button and drag, the current slice
+will move in synchrony with the mouse.
+
+* **Arrow** (pointing upwards and slightly to the left): If you are in a data slice or
+the fragment view, this tells you that you are in "normal mode", but more specifically,
+you are near a node (you should see a cyan node nearby).  If you press the left mouse
+button and drag, the node will move in synchrony with the mouse.
+
+* **Semi-transparent hand**: You will only see this if the cursor is in the Fragment View and
+near a node (the node will be cyan).  The hand turns semi-transparent so as not to obscure
+the data surface.  If you press the left mouse button, you will be able to drag the data view,
+but not the node.  However, as long as the node is cyan, you will be able to move it with the arrow
+keys, the page-up and page-down keys, and the aswd/ec equivalents.
+
+* **Crosshairs**: If you see this shape, it means either that you are in "add-node mode", or that you
+are currently holding down the shift key.  In either case, when you press the left mouse button,
+a new node will be created at the center of the crosshairs.
+
+* **Diagonal two-way arrow**: You will only see this while using the TIFF Loader to create a new
+data volume.  This cursor shape means that the cursor is over a corner of the box that shows the
+outline of the proposed data volume; if you press the left mouse button, you can drag the
+corner to change the shape of the proposed data volume.
+
+### Hot keys
 
 
 asdf
