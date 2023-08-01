@@ -848,10 +848,11 @@ When you are first starting out, you probably will not need to access this
 tab, but as you continue, you may discover that you would like to customize
 some aspects of khartes.
 
-In the left column of this tab are some settings that control the appearance of
-the entities (nodes, lines, axes, etc) that are overlaid on top of the data windows.
+In the left column of this tab are the
+`Display Settings`; these control the appearance of
+the entities (nodes, lines, axes, etc) that are overlain on top of the data windows.
 For each entity, you can control the size (width in the case of lines, radius in
-the case of circles) by setting the corresponding value.  If you set a
+the case of circles) by setting the corresponding value in the `Size` column.  If you set the
 size to zero, the corresponding entity will be hidden.
 
 The opacity section is a bit more complicated to explain; the complexity is
@@ -863,10 +864,9 @@ An opacity of 1.0 corresponds to no transparency at all; the overlay completely
 hides anything behind it.  An opacity of 1.0 is the default.
 
 For each entity, you have the choice of using the default opacity value (1.0),
-or of using the value set in the `Opacity` box.  If the entity's "Apply opacity"
+or of using the value set in the `Opacity` box.  If the entity's `Apply Opacity`
 checkbox is checked, then the value shown in the `Opacity` box is applied when the
-entity is drawn.  If the
-checkbox is not checked, the entity is drawn fully opaque.
+entity is drawn.  If the checkbox is not checked, the entity is drawn fully opaque.
 
 If you want to return to the original values used by khartes, press the `Restore Defaults`
 button.
