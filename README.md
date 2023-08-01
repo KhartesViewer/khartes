@@ -702,38 +702,64 @@ You have already visited this tab, in order to create new fragments;
 now you will have a chance to study it in detail.
 
 The first thing to notice is that one of the rows is hightlighted with a
-beige background.  The highlighting shows which fragments is
+beige background.  The highlighting shows which fragment is
 accepting new nodes.  That is, if you create a new node
-in one of the data windows, that node will be added to this fragment.
+in one of the data windows, this is where the node will be added.
 
 The first two columns in the fragment list, `Active` and `Visible`, have
 similar, but not identical, meanings.
 
 If a fragment is `Visible`, this means that the fragment's
-mesh and nodes will be overlaid on the Data Slices.
+nodes and cross-section line will be drawn over the
+data in the Data Slices.
 
 When a fragment is `Active`, this means that the data that
 lies on the fragment's surface (also called the fragment's texture)
-is the data that is displayed in the Fragment View.
+will be displayed in the Fragment View.
 (One exception: if a fragment's direction, which can be either X or Y,
 as shown in the fifth column,
 is different than the current volume's direction,
 then that fragment's texture will not be displayed.)
 
-If a fragment is set to be both `Active` and `Visible`, the
-mesh and nodes will be overlaid on the fragment texture in the Fragment View.
-In other words, if you want to view a fragment's texture without
+If a fragment is set to be both `Active` and `Visible`, its
+mesh and nodes will be overlaid on the fragment texture in the Fragment View,
+as well as in the Data Slices.
+This means that if you want to view a fragment's texture without
 the overlying mesh, turn `Visible` off.  (Recall that you can also
 toggle the visibility by using the `v` hot key).
 
 As many fragments as you like can be made visible; their cross sections will all be
 overlaid on the Data Slices.  This is useful if you want to compare different
-fragment.  Note that the mesh of a given `Visible` fragment will not be
+fragments.  Note that the mesh of a given `Visible` fragment will not be
 overlaid on the Fragment View unless that fragment is also `Active`.
 
 In general use, only one fragment at a time can be actve; if you set a fragment to be active
-by clicking its `Active` check box, the currently active fragment will be deactivated.
+by clicking its `Active` check box, the previously active fragment will be deactivated.
 An exception will be discussed as an advanced topic below.
+
+As for the remaining columns in the Fragments tab:
+
+The third column displays the name of the fragment, and the fourth displays
+the color.  These both can be edited.  When you create a new fragment,
+khartes tries (not very cleverly) to guess what to name it, and chooses
+a color at random.  
+
+The list of fragments is always alphabetized by name,
+so if you want to keep two fragments close to each other in the
+list, give them similar name.  A wide range of characters are acceptable
+in the name, so you can give your fragments names like "sheet 1 / fiber 3", "sheet 1 / fiber 4",
+etc.
+
+The fifth column in the fragments list indicates whether the fragment considers the X axis,
+or the Y axis, to be the vertical direction.  The direction of the axis is important because
+khartes only works with single-valued surfaces; the direction of "single value" is the 
+fragment's vertical direction.  This direction is set at the time the fragment is created, and
+is based on the active volume's vertical direction at that time.  The fragment's axis direction
+cannot be changed once the fragment is created.
+
+The sixth column simply shows how many nodes (points) the fragment contains.  The seventh column
+gives the fragment's area in square centimeters.  This is a true area as measured in 3D space;
+it is not based simply on the projected area of the fragment onto the Fragment View.
 
 (currently working here)
 
