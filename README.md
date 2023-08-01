@@ -305,7 +305,7 @@ is properly oriented, check the box labeled `TIFFs are from vc_layers`.
 
 <img src="images/volumes_tab.JPG" width="800"/>
 
-Go to the Control Area (the area in the lower right corner of khartes) and select the Volumes tab.
+Go to the Control Area (the area in the lower right corner of khartes) and select the `Volumes` tab.
 Here you should see listed the two volumes you have created so far: all10, and your high-resolution volume.
 The checkbox in the left column allows you to select which volume should be made visible.
 The next two columns show the name and the color of each volume.  The name cannot be changed.
@@ -695,37 +695,78 @@ a regular basis to save your latest work.
 
 <img src="images/fragments_tab.JPG" width="800"/>
 
+Go to the Control Area and open the `Fragments` tab.
+This tab allows you to control the appearance of your fragments.
+
+You already have visited this tab in order to create new fragments;
+now you will have a chance to study it in detail.
+
+The first thing to notice is that one of the rows is hightlighted with a
+beige background.  The fragment whose row is highlighted is the fragment
+that is currently accepting new nodes.  That is, if you create a new node
+in one of the data windows, that node will be added to this row.  A little
+bit below you will learn why this particular row was chosen.
+
+The first two columns in the list of fragments, 'Active` and `Visible`, have
+similar, but not identical, meanings.
+
+If a fragment is `Visible`, this means that the fragment's
+mesh and nodes will be overlaid on the Data Slices.
+
+If a fragment is `Active`, this means that the data that
+the fragment surface passes intersects (also called the fragment's texture)
+is displayed in the Fragment View.
+(One exception: if a fragment's direction, which can be either X or Y,
+as shown in the fifth column,
+is different than the current volume's direction,
+then that fragment's texture will not be displayed.)
+
+If a fragment is set to be both `Active` and `Visible`, the
+mesh and nodes will be overlaid on the fragment texture in the Fragment View.
+In other words, if you want to view a fragment's texture without
+the overlying mesh, turn `Visible` off.  (Recall that you can also
+toggle the visibility by using the `v` hot key).
+
+As many fragments as you like can be made visible; their cross sections will all be
+overlaid on the Data Slices.  This is useful if you want to compare different
+fragment.  Note that the mesh of a given `Visible` fragment will not be
+overlaid on the Fragment View unless that fragment is also `Active`.
+
+In general use, only one fragment at a time can be actve; if you set a fragment to be active
+by clicking its `Active` check box, the currently active fragment will be deactivated.
+An exception will be discussed as an advanced topic below.
+
 (currently working here)
 
 ## Fragment: Visible, Active, accepting nodes
 
-The `Fragments` tab in the lower right corner allows
+XX The `Fragments` tab in the lower right corner allows
 you to control certain aspects of your fragments.
 The two main visibility controls are `Active` and `Visible`.
 
-If a fragment is `Visible`, this means that the fragment's
+XX If a fragment is `Visible`, this means that the fragment's
 mesh and nodes will be drawn on the data slices in the left column.
 
-If a fragment is `Active`, this means that the data that
+XX If a fragment is `Active`, this means that the data that
 the fragment passes through (also called the fragment's texture)
 is displayed in the fragment display in the upper right.
 (One exception: if a fragment's direction, which can be either X or Y,
 is different than the current volume's direction,
 then that fragment's texture will not be displayed.)
 
-If a fragment is set to be both `Active` and `Visible`, the
+XX If a fragment is set to be both `Active` and `Visible`, the
 mesh and nodes will be overlaid on the fragment texture in the fragment
 display.
 In other words, if you want to view a fragment's texture without
 the overlying mesh, turn `Visible` off.
 
-The `Fragments` tab also allows you to change the name of any
+XX The `Fragments` tab also allows you to change the name of any
 fragment.  Simpy double-click on the name that you want to change,
 type the new name, and hit the `Enter` key.
 The name will change, and the list of fragments will re-sort itself
 to maintain alphabetical order.
 
-Finally, the `Fragment` tab lets you see which fragment is
+XX Finally, the `Fragment` tab lets you see which fragment is
 currently accepting nodes: that is, the fragment that will have
 a new node added to it every time you click in a data window using 
 shift-left-mouse-button.
