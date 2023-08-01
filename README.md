@@ -792,7 +792,8 @@ Khartes allows you to export your fragments to [`MeshLab`](https://www.meshlab.n
 created and maintained by the [Visual Computing Lab](https://vcg.isti.cnr.it/) of [CNR-ISTI](https://www.isti.cnr.it/en/) (Italy),
 as well as to
 `vc_render` and `vc_layers_from_ppm`, which are two components of [`volume-cartographer`](https://github.com/educelab/volume-cartographer),
-created and maintained by [EduceLab](https://educelab.engr.uky.edu/) and/or the [Digital Restoration Initiative](https://www2.cs.uky.edu/dri/)
+created and maintained by the [Digital Restoration Initiative](https://www.cs.uky.edu/dri/), part
+of [EduceLab](https://educelab.engr.uky.edu/)
 at the [University of Kentucky](https://uky.edu/) (USA).
 
 To export your fragment:
@@ -838,9 +839,26 @@ You might need to use `--volume` to specify your volume as well, if your volpkg 
 As already mentioned, the `.ppm` file that `vc_render` creates can be read into `vc_layers_from_ppm` to create a 
 flattened surface volume.
 
-## Control Area: Settings
+## Advanced Topic: Control Area: Settings
 
 <img src="images/settings_tab.JPG" width="800"/>
+
+The Settings tab gives you control of various parameters used by khartes.
+When you are first starting out, you probably will not need to access this
+tab, but as you continue, you may discover that you would like to customize
+some aspects of khartes.
+
+In the left column of this tab are some settings that control the appearance of
+the entities (nodes, lines, axes, etc) that are overlaid on top of the data
+in the data window.
+For each entity, you can control the size (width in the case of lines, radius in
+the case of circles) by setting the corresponding number.  If you set one of the
+sizes to zero, the corresponding entity will be hidden.
+
+The opacity section is a bit more complicated to explain; the complexity is
+due to certain limitations in the computer graphics library that khartes uses.
+
+
 
 
 (currently working here)
