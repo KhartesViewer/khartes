@@ -696,16 +696,16 @@ a regular basis to save your latest work.
 <img src="images/fragments_tab.JPG" width="800"/>
 
 Go to the Control Area and open the `Fragments` tab.
-This tab allows you to control the appearance of your fragments.
+This tab allows you to control various aspects of your fragments.
 
-You already have visited this tab in order to create new fragments;
+You already visited this tab, in order to create new fragments;
 now you will have a chance to study it in detail.
 
 The first thing to notice is that one of the rows is hightlighted with a
 beige background.  The fragment whose row is highlighted is the fragment
 that is currently accepting new nodes.  That is, if you create a new node
-in one of the data windows, that node will be added to this row.  A little
-bit below you will learn why this particular row was chosen.
+in one of the data windows, that node will be added to this fragment.
+A little bit later you will learn why this particular row was chosen.
 
 The first two columns in the list of fragments, 'Active` and `Visible`, have
 similar, but not identical, meanings.
