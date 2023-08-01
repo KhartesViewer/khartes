@@ -789,10 +789,10 @@ new nodes.  When there are multiple active fragments, the
 ## Exporting fragments
 
 Khartes allows you to export your fragments to [`MeshLab`](https://www.meshlab.net/),
-created and maintained by the [Visual Computing Lab](https://vcg.isti.cnr.it/) of [CNR-ISTI](https://www.isti.cnr.it/en/),
+created and maintained by the [Visual Computing Lab](https://vcg.isti.cnr.it/) of [CNR-ISTI](https://www.isti.cnr.it/en/) (Italy),
 as well as to
 `vc_render` and `vc_layers_from_ppm`, which are two components of [`volume-cartographer`](https://github.com/educelab/volume-cartographer),
-created and maintained by [EduceLab](https://educelab.engr.uky.edu/) at the [University of Kentucky](https://uky.edu/).
+created and maintained by [EduceLab](https://educelab.engr.uky.edu/) at the [University of Kentucky](https://uky.edu/) (USA).
 
 To export your fragment:
 
@@ -802,7 +802,7 @@ in the right-hand window.
 
 This will create a `.obj` file, which contains a mesh representing your
 fragment, as well as a `.tif` file and a `.mtl` file.  
-These three files can be loaded directly into the MeshLab 3D viewer,
+These three files can be loaded directly into the `MeshLab` 3D viewer,
 to render
 a 3D view of your surface, with the volume data textured onto
 the surface.
@@ -811,8 +811,8 @@ In addition,
 you can import the .obj file directly into `vc_render`.  Here is how.
 
 (**Note for advanced users**: If multiple fragments are active,
-all the active fragments will be saved into a single .obj file.
-This is convenient for viewing in meshlab, but beware! Multi-fragment
+all the active fragments will be saved into a single `.obj` file.
+This is convenient for viewing in `MeshLab`, but beware! Multi-fragment
 .obj files cannot be imported into `vc_render`.)
 
 First, you need to make sure you know where the following files and
@@ -836,6 +836,8 @@ You might need to use `--volume` to specify your volume as well, if your volpkg 
 
 As already mentioned, the `.ppm` file that `vc_render` creates can be read into `vc_layers_from_ppm` to create a 
 flattened surface volume.
+
+## Control Area: Settings
 
 <img src="images/settings_tab.JPG" width="800"/>
 
