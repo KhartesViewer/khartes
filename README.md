@@ -837,7 +837,10 @@ vc_render -v [your volpkg directory] --input-mesh [your .obj file] --output-ppm 
 You might need to use `--volume` to specify your volume as well, if your volpkg has more than one.
 
 As already mentioned, the `.ppm` file that `vc_render` creates can be read into `vc_layers_from_ppm` to create a 
-flattened surface volume.
+flattened surface volume.  And as explained in the section on importing TIFF files, if you decide to import the
+layer (which a series of TIFF files) created by `vc_layers_from_ppm` back into khartes, be sure to set the
+`TIFFS are from vc_layers` in the TIFF loader dialog box.
+
 
 ## Advanced Topic: Control Area: Settings
 
