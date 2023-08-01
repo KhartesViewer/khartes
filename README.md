@@ -868,7 +868,7 @@ under the name *khartes_chuck* .
 
 I wrote khartes for my own gratification, and in the hope that it will be useful; 
 I did not receive a grant or salary from any organization
-to work on this program.
+to develop this software.
 
 However, I benefitted immensely from the [Vesuvius Challenge](https://scrollprize.org/), who
 provided the following:
@@ -882,7 +882,7 @@ download the data over the internet);
 who provided invaluable user feedback and suggestions while I
 was developing khartes;
 * A [cash prize](https://scrollprize.substack.com/p/segmentation-tooling-winners-new), which I appreciated
-for its monetary value, but more so for the recognition of the work done up to that time,
+for its monetary value, but more so for the recognition of the work done so far,
 and for the encouragement to continue.
 
 So a big "Thank You" to the sponsors and organizers of the Vesuvius Challenge!
