@@ -761,48 +761,13 @@ The sixth column simply shows how many nodes (points) the fragment contains.  Th
 gives the fragment's area in square centimeters.  This is a true area as measured in 3D space;
 it is not based simply on the projected area of the fragment onto the Fragment View.
 
-(currently working here)
+### Advanced topic: Multiple active fragments
 
-## Fragment: Visible, Active, accepting nodes
-
-XX The `Fragments` tab in the lower right corner allows
-you to control certain aspects of your fragments.
-The two main visibility controls are `Active` and `Visible`.
-
-XX If a fragment is `Visible`, this means that the fragment's
-mesh and nodes will be drawn on the data slices in the left column.
-
-XX If a fragment is `Active`, this means that the data that
-the fragment passes through (also called the fragment's texture)
-is displayed in the fragment display in the upper right.
-(One exception: if a fragment's direction, which can be either X or Y,
-is different than the current volume's direction,
-then that fragment's texture will not be displayed.)
-
-XX If a fragment is set to be both `Active` and `Visible`, the
-mesh and nodes will be overlaid on the fragment texture in the fragment
-display.
-In other words, if you want to view a fragment's texture without
-the overlying mesh, turn `Visible` off.
-
-XX The `Fragments` tab also allows you to change the name of any
-fragment.  Simpy double-click on the name that you want to change,
-type the new name, and hit the `Enter` key.
-The name will change, and the list of fragments will re-sort itself
-to maintain alphabetical order.
-
-XX Finally, the `Fragment` tab lets you see which fragment is
-currently accepting nodes: that is, the fragment that will have
-a new node added to it every time you click in a data window using 
-shift-left-mouse-button.
-The row in the `Fragment` tab that has a light beige background 
-is the fragment accepting nodes.
-
-**For advanced users:** There are times when you may want to 
+There are times when you may want to 
 have more than one active fragment at a time.  One scenario is
 where each fragment represents a papyrus fiber rather than an
 entire sheet of a scroll; in this case it is convenient to
-be able to display all the fibers in the fragment view window.
+be able to display simultaneously all the fibers in the fragment view window.
 Another scenario is where a single sheet is divided into more
 than one fragment in order to work around khartes' requirement
 that each fragment be single-valued in either X or Y.
@@ -823,7 +788,11 @@ new nodes.  When there are multiple active fragments, the
 
 ## Exporting fragments
 
-Khartes allows you to export your fragments to `vc_render` and `vc_layers_from_ppm`.
+Khartes allows you to export your fragments to [`MeshLab`](https://www.meshlab.net/),
+created and maintained by the [Visual Computing Lab](https://vcg.isti.cnr.it/) of [CNR-ISTI](https://www.isti.cnr.it/en/),
+as well as to
+`vc_render` and `vc_layers_from_ppm`, which are two components of [`volume-cartographer`](https://github.com/educelab/volume-cartographer),
+created and maintained by [EduceLab](https://educelab.engr.uky.edu/) at the [University of Kentucky](https://uky.edu/).
 
 To export your fragment:
 
@@ -831,16 +800,17 @@ To export your fragment:
 in the right-hand window.
 2. In the File menu, select `Export file as mesh...`.
 
-This will create a .obj file, which contains a mesh representing your
-fragment.  It also creates a .tif file and a .mtl file.  
-These three files are used by the meshlab 3D viewer to render
+This will create a `.obj` file, which contains a mesh representing your
+fragment, as well as a `.tif` file and a `.mtl` file.  
+These three files can be loaded directly into the MeshLab 3D viewer,
+to render
 a 3D view of your surface, with the volume data textured onto
 the surface.
 
 In addition,
-you can import this mesh directly into `vc_render`.  Here is how.
+you can import the .obj file directly into `vc_render`.  Here is how.
 
-(Note for advanced users: If multiple fragments are active,
+(**Note for advanced users**: If multiple fragments are active,
 all the active fragments will be saved into a single .obj file.
 This is convenient for viewing in meshlab, but beware! Multi-fragment
 .obj files cannot be imported into `vc_render`.)
@@ -848,26 +818,29 @@ This is convenient for viewing in meshlab, but beware! Multi-fragment
 First, you need to make sure you know where the following files and
 directories are located:
 
-- Your .volpkg folder, the one that contains the TIFF files that you
+- Your `.volpkg` folder, the one that contains the TIFF files that you
 imported into khartes
-- If your .volpkg directory contains more than one volume, you need
+- If your `.volpkg` directory contains more than one volume, you need
 to know the number of the volume that contains the TIFF files
 that you used.
-- The .obj mesh file that you just created
-- The directory where you want to create a .ppm file, and the name
-that you want to give the .ppm file.  The .ppm file is needed by
+- The `.obj` mesh file that you just created
+- The directory where you want to create a `.ppm` file, and the name
+that you want to give the `.ppm` file.  The `.ppm` file is needed by
 `vc_layers_from_ppm`.
 
 So the command you want to type will look something like:
 ```
 vc_render -v [your volpkg directory] --input-mesh [your .obj file] --output-ppm [the name of the ppm file you want to create]
 ```
-You might need to use --volume to specify your volume as well, if your volpkg has more than one.
+You might need to use `--volume` to specify your volume as well, if your volpkg has more than one.
 
-As already mentioned, the .ppm file that `vc_render` creates can be used in `vc_layers_from_ppm` to create a 
+As already mentioned, the `.ppm` file that `vc_render` creates can be read into `vc_layers_from_ppm` to create a 
 flattened surface volume.
 
 <img src="images/settings_tab.JPG" width="800"/>
+
+
+(currently working here)
 
 ## Things to fix
 
