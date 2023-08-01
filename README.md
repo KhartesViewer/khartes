@@ -698,24 +698,23 @@ a regular basis to save your latest work.
 Go to the Control Area and open the `Fragments` tab.
 This tab allows you to control various aspects of your fragments.
 
-You already visited this tab, in order to create new fragments;
+You have already visited this tab, in order to create new fragments;
 now you will have a chance to study it in detail.
 
 The first thing to notice is that one of the rows is hightlighted with a
-beige background.  The fragment whose row is highlighted is the fragment
-that is currently accepting new nodes.  That is, if you create a new node
+beige background.  The highlighting shows which fragments is
+accepting new nodes.  That is, if you create a new node
 in one of the data windows, that node will be added to this fragment.
-A little bit later you will learn why this particular row was chosen.
 
-The first two columns in the list of fragments, 'Active` and `Visible`, have
+The first two columns in the fragment list, `Active` and `Visible`, have
 similar, but not identical, meanings.
 
 If a fragment is `Visible`, this means that the fragment's
 mesh and nodes will be overlaid on the Data Slices.
 
-If a fragment is `Active`, this means that the data that
-the fragment surface passes intersects (also called the fragment's texture)
-is displayed in the Fragment View.
+When a fragment is `Active`, this means that the data that
+lies on the fragment's surface (also called the fragment's texture)
+is the data that is displayed in the Fragment View.
 (One exception: if a fragment's direction, which can be either X or Y,
 as shown in the fifth column,
 is different than the current volume's direction,
