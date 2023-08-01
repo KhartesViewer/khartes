@@ -873,7 +873,7 @@ to develop this software.
 However, I benefitted immensely from the [Vesuvius Challenge](https://scrollprize.org/), who
 provided the following:
 * The X-ray tomography data set, without which I could not have developed khartes (along with
-making the data openly available under reasonable conditions,
+making the data available under reasonable conditions,
 they provided the technical infrastructure that made it possible to
 download the data over the internet);
 * Permission to use small excerpts from the data set in this README file and the associated videos;
