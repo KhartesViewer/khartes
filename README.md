@@ -843,21 +843,33 @@ flattened surface volume.
 
 <img src="images/settings_tab.JPG" width="800"/>
 
-The Settings tab gives you control of various parameters used by khartes.
+The Settings tab gives you control of some of the internal parameters of khartes.
 When you are first starting out, you probably will not need to access this
 tab, but as you continue, you may discover that you would like to customize
 some aspects of khartes.
 
 In the left column of this tab are some settings that control the appearance of
-the entities (nodes, lines, axes, etc) that are overlaid on top of the data
-in the data window.
+the entities (nodes, lines, axes, etc) that are overlaid on top of the data windows.
 For each entity, you can control the size (width in the case of lines, radius in
-the case of circles) by setting the corresponding number.  If you set one of the
-sizes to zero, the corresponding entity will be hidden.
+the case of circles) by setting the corresponding value.  If you set a
+size to zero, the corresponding entity will be hidden.
 
 The opacity section is a bit more complicated to explain; the complexity is
 due to certain limitations in the computer graphics library that khartes uses.
 
+Opacity is a number ranging from 0.0 to 1.0.  An opacity of 0.0 corresponds to
+total transparency, meaning that the overlay is invisible.
+An opacity of 1.0 corresponds to no transparency at all; the overlay completely
+hides anything behind it.  An opacity of 1.0 is the default.
+
+For each entity, you have the choice of using the default opacity value (1.0),
+or of using the value set in the `Opacity` box.  If the entity's "Apply opacity"
+checkbox is checked, then the value shown in the `Opacity` box is applied when the
+entity is drawn.  If the
+checkbox is not checked, the entity is drawn fully opaque.
+
+If you want to return to the original values used by khartes, press the `Restore Defaults`
+button.
 
 
 
