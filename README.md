@@ -792,7 +792,8 @@ Khartes allows you to export your fragments to [`MeshLab`](https://www.meshlab.n
 created and maintained by the [Visual Computing Lab](https://vcg.isti.cnr.it/) of [CNR-ISTI](https://www.isti.cnr.it/en/) (Italy),
 as well as to
 `vc_render` and `vc_layers_from_ppm`, which are two components of [`volume-cartographer`](https://github.com/educelab/volume-cartographer),
-created and maintained by [EduceLab](https://educelab.engr.uky.edu/) at the [University of Kentucky](https://uky.edu/) (USA).
+created and maintained by [EduceLab](https://educelab.engr.uky.edu/) and/or the [Digital Restoration Initiative](https://www2.cs.uky.edu/dri/)
+at the [University of Kentucky](https://uky.edu/) (USA).
 
 To export your fragment:
 
