@@ -258,8 +258,8 @@ class DataWindow(QLabel):
         return shift_pressed
 
     def findNearbyNode(self, xy):
-        if self.inAddNodeMode():
-            return -1
+        # if self.inAddNodeMode():
+        #     return -1
         xyijks = self.cur_frag_pts_xyijk
         if xyijks is None:
             return -1
@@ -535,8 +535,8 @@ class DataWindow(QLabel):
         self.window.tiff_loader.setCornerValues(gijk, iaxis, jaxis, corner)
 
     def findNearbyTiffCorner(self, xy):
-        if self.inAddNodeMode():
-            return -1
+        # if self.inAddNodeMode():
+        #     return -1
         tiff_corners = self.window.tiff_loader.corners()
         if tiff_corners is None:
             # print("no tiff corners")
@@ -632,7 +632,8 @@ class DataWindow(QLabel):
         if key in opts:
             self.setStatusTextFromMousePosition()
             d = opts[key]
-            if self.inAddNodeMode() or (self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0):
+            # if self.inAddNodeMode() or (self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0):
+            if self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0:
                 # pan
                 tfijk = list(self.volume_view.ijktf)
                 # print(d)
