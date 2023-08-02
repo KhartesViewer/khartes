@@ -901,7 +901,38 @@ khartes project the next time you save the project.
 
 
 ## Advanced Topic: Tracking cursors
-(currently working here)
+
+The "Tracking cursors" feature is experimental; it is not yet clear whether there
+are some circumstances where it is useful.  It is currently turned off by
+default.
+
+Here is the idea behind this feature.
+
+When you move the mouse cursor over a data window, the cursor actually describes
+a position in 3D space.  You can verify this by noting that the Status Bar
+always shows a 3D position when you move the mouse.
+
+There are, perhaps, times when it would be useful to see where this 3D position
+would lie if projected onto the other data windows.  Doing so might allow the
+user to better determine, for instance, whether there are other nearby nodes that
+don't lie in the plane of the current data window.
+
+So when the tracking cursors are turned on, the 3D position specified by the mouse
+cursor is projected onto, and displayed on, the other data windows.  These projected
+positions, the tracking cursors, are drawn as green circles.
+In general, the tracking cursors do not lie exactly in the planes of these other
+windows.  So if a tracking cursor is above the plane of the data window where it
+is drawn, a plus sign is placed inside its green circle.  Likewise, if a tracking
+cursor is below its window's plane, a minus sign is place inside.  If the circle
+is empty inside, it means that the 3D cursor lies exactly on the plane of the
+data window where it is drawn.
+
+To toggle on and off the tracking cursor, you can use the `t` hot key, or you
+can use the `Show tracking cursors` checkbox in the Settings tab of the Control Area.
+
+One thing to keep in mind, especially if you are working over a network, is
+that when the tracking cursors are displayed, all the data slices are redrawn
+every time the mouse is moved.
 
 ## Things to fix
 
