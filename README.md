@@ -871,11 +871,36 @@ or of using the value set in the `Opacity` box.  If the entity's `Apply Opacity`
 checkbox is checked, then the value shown in the `Opacity` box is applied when the
 entity is drawn.  If the checkbox is not checked, the entity is drawn fully opaque.
 
-If you want to return to the original values used by khartes, press the `Restore Defaults`
-button.
+If you want to return the settings to the values originally used by khartes, 
+press the `Restore Defaults` button.
+
+The `Other Settings` section of the `Settings` tab contains other parameters
+that you might want to set at some point.
+
+The `Volume Boxes Visible` checkbox does the same thing as, and is
+linked to, the `Volume Boxes Visible` checkbox in the Volumes tab.
+
+The `Show tracking cursors` checkbox turns on and off the tracking
+cursors, which are an advanced topic; they are described in a section below.
+
+The `Shift lock after [] clicks` control lets you set exactly how the `Shift` hot key
+works.  Recall that if you quickly press and release the `Shift` button, you toggle
+between "normal mode" and "add-node" mode.  If you find yourself often doing this
+unintentionally, you might want to increase the value to 2, which means that
+you will need to double-click (quickly click twice) the `Shift` key.  Or if
+you don't want the `Shift` key to toggle between modes under any circumstances,
+set vhe value to 0.
+
+The `Voxel size in μm` value is, as the name suggests, the physical spacing,
+in μm (micrometers), between adjacent voxels in the image.
+(There is an implicit assumption that the spacing is the same along all 3 axes).
+The default value used by khartes, 7.910 μm, corresponds to the spacing
+for the scrolls used in the Vesuvius Challenge.
+If you change this value, the new value will be stored in your current 
+khartes project the next time you save the project.
 
 
-
+## Advanced Topic: Tracking cursors
 (currently working here)
 
 ## Things to fix
