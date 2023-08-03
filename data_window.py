@@ -644,7 +644,7 @@ class DataWindow(QLabel):
                 self.window.drawSlices()
             elif self.nearby_tiff_corner >= 0:
                 # move nearby tiff corner
-                nij = list(self.ntStartPoint)
+                # nij = list(self.ntStartPoint)
                 nij = list(self.getNearbyTiffIj())
                 nij = [round(x) for x in nij]
                 if d[2] != 0:
