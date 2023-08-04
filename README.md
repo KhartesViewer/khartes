@@ -34,28 +34,30 @@ be found in the file demo1_script.txt.
 
 # Installation
 
-You should be able to run simply by
+You should be able to run khartes simply by
 cloning the repository, making sure you have the proper dependencies 
 (see "anaconda_installation.txt" for a list), and then typing `python khartes.py`.  
 
 When khartes starts, you will see some explanatory text on the right-hand side of the interface 
-to help you get started.  This text is fairly limited; you might want to watch the video above to get a better
+to help you get started.  This text is fairly limited; you might want to watch the videos above to get a better
 idea how to proceed, and read the Manual/Tutorial below.
 
 # Manual/Tutorial
 
 Ideally, khartes should come with both a user manual and a tutorial (and perhaps even a "cookbook"),
-but at this point there exists only a single document, a tutorial that also tries
+but at this point there exists only a single document, the one you are now reading,
+a tutorial that also tries
 to act as a user manual of sorts.
 
 This tutorial covers the following steps:
 * Creating a project
 * Creating a data volume from TIFF files
 * Exploring the user interface and the data volume
-* Creating a fragment ("segmentation")
+* Creating and editing a fragment ("segmentation")
 * General workflow for creating coherent, consistent fragments
-* Exporting the fragment as a mesh
 * Working with multiple fragments
+* Exporting the fragment as a mesh
+* Setting display parameters
 
 ## Creating a project
 
@@ -74,12 +76,12 @@ volumes (3D volumes of data) rather than individual TIFF files.
 Khartes provides an interface to convert a set of TIFF files into
 a data volume.
 This conversion process
-assumes that the TIFF files are already somewhere on your disk;
+assumes that the TIFF files are already somewhere in your filesystem;
 khartes does not download TIFF files over the internet.
 
 The `File / Create volume from TIFF files...` menu item brings up a dialog box where
 you can specify which TIFF files you want to include in your
-data volume, and the x and y ranges of the pixels within each TIFF
+data volume, as well as the x and y ranges of the pixels within each TIFF
 file that you want to include.  A status bar at the bottom of
 the dialog box shows how large the
 resulting data volume will be, in gigabytes.  **Be aware that
@@ -87,10 +89,14 @@ every time you run khartes, the entire
 data volume will be read into the physical memory (RAM) of your
 computer, so be careful how large you make the volume.**
 
-The first step, of course, is to find your TIFF files.  Use
+The first step, of course, is to find your TIFF files.
+If your tiff files are in a `.volpkg` directory, you can
+find them under the `volumes` sub-directory.
+Use
 the file selector in the TIFF loader dialog box to find
 the *directory* that contains all the TIFF files.  Once
-you double-click on the *directory* name, the TIFF loader
+you double-click on the *directory* name (not on
+individual TIFF files inside that directory), the TIFF loader
 will read the TIFF files, determine how many
 there are and their x and y extent (width and height).
 
@@ -100,7 +106,7 @@ same width and height.
 
 The TIFF loader will display the maximum possible range of the
 volume that you can create from the TIFF files, which in most
-cases would vastly exceed the capacity of your computer.
+cases would vastly exceed the memory (RAM) of your computer.
 
 By adjusting these numbers in the TIFF loader dialog box,
 you specify the `Min` (minimum) 
