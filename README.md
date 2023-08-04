@@ -233,10 +233,11 @@ same as the page-up/down keys.
 
 ### Getting a feel for 3D navigation
 
-To fully explain the navigation, and the meanings of the 3 slices, would require many diagrams
-that I haven't had time to draw yet.  So for now, get a feeling for how the navigation works by
-dragging slices, observing the labels in the upper left of each slice, and observing the 3D
-coordinates in the status bar.
+To fully explain the relative orientations of the 3 slices, and how to navigate
+through them, would require many diagrams
+that I haven't had time to draw yet.  So for now, try to get a feeling for how the navigation works by
+dragging slices, observing the labels in the upper left of each slice, and observing how the 3D
+coordinates in the status bar change.
 
 Your goal is to understand the navigation well enough so that you can predict, when you drag
 one of the slices around, how the other slices and their labels will behave.  Once you reach
@@ -251,7 +252,7 @@ and have been navigating within, a data volume that
 contains the entire scroll, but at very low resolution.
 
 Now you will create a high-resolution data volume that covers a much
-smaller range.
+smaller volume.
 
 To begin, bring up the TIFF loader dialog by selecting the
 `File / Create volume from TIFF files...` menu item.
@@ -277,10 +278,11 @@ This colored box is interactive; you can drag its corners in order to specify th
 volume of interest that you want to load from the TIFF files.  
 
 Place your mouse on one of the corners of this box; the cursor should turn into a
-diagonal two-way arrow.  Press and drag the mouse to adjust the position of the corner.
+diagonal two-way arrow.  Press the
+left mouse button and drag the mouse to adjust the position of the corner.
 Notice that as you change the position of the corner, the corresponding values
 change in the TIFF loader dialog.  Likewise, if you change the numbers in
-the TIFF loader dialog, the box will move correspondingly.
+the TIFF loader dialog, the box will move accordingly.
 
 If, as you adjust the box, it disappears from some of the data slices, you can
 find it again by pressing the `Re-center view` button in the TIFF loader.
@@ -300,12 +302,12 @@ of TIFF files that need to be processed.
 This sub-section is not part of the tutorial, but it belongs with the
 current topic: loading TIFF files.
 
-The program `vc_layers` outputs TIFF files that represent flattened
+The program `vc_layers` outputs TIFF files that are images of the flattened
 layers adjacent to a flattened segment.  These files have a different
 orientation than the TIFF files usually read by khartes.  To alert
 khartes to this difference, so that the data volume created from these
 `vc_layer` TIFFs
-is properly oriented, check the box labeled `TIFFs are from vc_layers`.
+is properly oriented, put a check mark in the box labeled `TIFFs are from vc_layers`.
 
 ## Control Area: Volumes
 
@@ -319,13 +321,13 @@ However, you can change the volume's color by clicking on the color box.
 The volume's color is used when the volume's bounding box is drawn as an overlay
 on the data slices.
 
-The 'Ld' column lets you know whether each volume is currently loaded into memory.  By default,
+The 'Ld' column lets you know whether the volume is currently loaded into memory.  By default,
 only one volume at a time is present in memory, in order to conserve RAM.  A future version of
 khartes may allow multiple volumes to be present in memory simultaneously, in order to
-permit the user to switch more quickly between volumes.
+permit the user to switch more quickly among them.
 
 The next column allows you to change the orientation of the volume.  By default, the topmost
-data slice window displays each TIFF image in its original orientationm which in khartes is called the Y
+data slice window displays each TIFF image in its original orientation, which in khartes is called the Y
 orientation.  Using the selector
 in the fifth column of the Volumes tab, you can change the orientation of the TIFF image, turning it on
 its side, by selecting the X orientation.  Later on, you will see why this is useful (it has to do with
@@ -374,37 +376,40 @@ presses made by the user.
 But here are some general user-interface aspects that you should
 have gathered from the video.
 
-Each node that the user creates is added to a surface (the fragment)
-that is displayed in map view in the Fragment View.  Of course, if
+Each node that the user creates is added to a surface (the fragment);
+this surface is displayed in map view in the Fragment View.  Of course, if
 the new nodes all form a line, only a line, rather than a surface,
-is shown in the Fragment view.  Once the user begins creating
-nodes in a different data slice, a surface can be created, and
+is shown in the Fragment view.  Once the user creates nodes
+in more than one data slice, a surface can be created, and
 this surface is shown in the Fragment View.
 
 In each data slice, the fragment is drawn as a line; this represents
 the intersection between the fragment and the data slice.  If any nodes
 lie on the plane of the slice, they are shown as red circles.  When
-the cursor passes near a node, it turns from red to cyan.
+the cursor passes near a node, the node turns from red to cyan.
 
 The color of the fragment line in the data slices, and the color of
 the triangular mesh in the Fragment View, are the color of the
 fragment, as shown in the Fragments tab in the Control Area (you
-won't actually see the Fragments tab in the video, since in the video
+don't actually see the Fragments tab in the video, since in the video
 only the Volumes tab is shown).
 
-It is alomst time for you to begin creating your own fragment,
-but first you need to learn just a little about an advanced topic.
+It is almost time for you to begin creating your own fragment,
+but first you need to learn a little about the two user-interaction modes
+of khartes.
 
-This advanced topic would preferably be introduced later in the
+This topic would preferably be introduced later in the
 tutorial, but you need to be alerted to it now, in case you
 run into it by accident.
 
-**Advanced topic that needs to be introduced now**:  Khartes has
-two modes of user interaction in the data slices and the fragment
-view: "normal" mode, and "add-node" mode.  In normal mode, the
+## Normal Mode and Add-Node Mode  
+
+Khartes has
+two modes of user interaction in the data views:
+"normal" mode, and "add-node" mode.  In normal mode, the
 cursor usually looks like a hand (unless it is near a node), and
-to add a node, you need to hold down the shift key (so the cursor
-turns into crosshairs) before pressing the left mouse button.
+to add a node, you need to hold down the shift key, so the cursor
+turns into crosshairs, before pressing the left mouse button.
 
 In "add-node" mode, things are reversed.  The cursor always
 takes the form of crosshairs, and to add a node, you simply need to
@@ -420,9 +425,9 @@ is to press and then quickly release the shift button.  You can see which
 mode you are in by seeing whether the cursor afterwards is a hand (normal mode)
 or crosshairs (add-node mode).
 
-This advanced topic needed to be introduced now, because you might, by accident, quickly
+This topic needed to be introduced now, because you might, by accident, quickly
 press and release the shift button, unintentionally toggling between modes.
-Now that you understand the two modes, you won't be mystified if this happen.
+Now that you understand the two modes, you won't be mystified if this happens.
 
 ## Choosing a region for segmentation
 
@@ -431,7 +436,7 @@ is a region in your high-resolution data volume that is possible to segment.
 
 What you are looking for is a region where the papyrus sheets, as
 seen in the top data slice, are not too tilted (you want an angle
-of less than 45 degrees or so).  This region doesn't have
+flatter than 45 degrees or so).  This region doesn't have
 to be very large, but if you can't
 find even a small area, then you may
 need to create another high-resolution data volume.
@@ -439,7 +444,7 @@ need to create another high-resolution data volume.
 ## Building and modifying the segment
 
 At this point you are ready to build the segment.
-As you saw in the video, you simply add nodes to the
+As you saw in the video, you do this by simply adding nodes to the
 data slices.  Notice that **the order you add nodes does not matter**;
 if you feel your nodes are too far apart, simply add more.
 
@@ -449,8 +454,7 @@ place?  You have a couple of options.
 ### Deleting a node
 
 It is very easy to delete a node.  Simply move the cursor over
-the node, so that the node turns cyan (if you are currently in
-"add-node mode", the node won't change color; you need to switch to normal mode).
+the node, so that the node turns cyan.
 At this point, simply hit the "Delete" or "Backspace" key (either will work).
 But bear this in mind: **There is currently no "undo" in khartes!**
 
@@ -460,16 +464,17 @@ More often, you want to move a node instead of deleting it.  This is likewise
 easy to do, assuming you are in "normal mode".  Again, move the cursor to the
 node you are interested in moving; the node will turn cyan.  (Notice that
 the node
-will be drawn in cyan wherever it is visible;
+will be drawn in cyan
+in all the data windows where it is visible;
 this is often a handy way of keeping track of
 which node is which in the different views).
 
 Once the node has turned cyan, there are a couple of ways to move it.  
 
 If you are
-working in a data slice, you can now press the left mouse button,
+working in a Data Slice, you can now press the left mouse button,
 hold it down, and drag the node to where you want it.  Be aware that
-you cannot use the mouse to drag nodes in the fragment view (this is to
+you cannot use the mouse to drag nodes in the Fragment View (this is to
 prevent accidents).
 
 If you need more precision, you can use the arrow keys (or `a`, `s`, `w`, and `d`)
@@ -483,27 +488,27 @@ top left data slice, and see how the node moves in the data slice while you pres
 page-up or page-down in the Fragment View).
 
 **The key capability of khartes is that as you move nodes, the data image in the
-fragment view updates
+Fragment View updates
 interactively, so you can instantly judge the quality of your segmentation.**
 
 ### What the cursor is telling you
 
-As you work, you have probably noticed that the cursor changes its shape,
-depending on where it is in the slice.  As a rule, the shape
+As you worked, you probably noticed that the cursor often changed its appearance,
+depending on where it was in the slice.  As a rule, the shape
 of the cursor tells you
-what the left mouse button will do if you push it.
+what will happen when you push the left mouse button.
 
 Here are the various shapes, and what they mean.  Someday I will attach
-pictures of the different cursors, and not just words...
+pictures of the different cursors, and not just describe them in words.
 
-* **Hand**: This tells you that khartes is in "normal mode" (in contrast to
-"add-node mode").  If you press the left mouse button and drag, the current slice
-will move in synchrony with the mouse.
+* **Hand**: This indicates that khartes is in "normal mode" (in contrast to
+"add-node mode").  If you hold down the left mouse button and drag, the current slice
+will slide along with the mouse.
 
-* **Arrow** (pointing upwards and slightly to the left): If you are in a data slice or
-the fragment view, this tells you that you are in "normal mode", but more specifically,
-you are near a node (you should see a cyan node nearby).  If you press the left mouse
-button and drag, the node will move in synchrony with the mouse.
+* **Arrow** (pointing upwards and slightly to the left): If you are in a Data Slice or
+the Fragment View, this indicates that you are in "normal mode", but more specifically,
+that you are near a node (you should see a cyan node nearby).  If you press the left mouse
+button and drag, the node will move with the mouse.
 
 * **Semi-transparent hand**: You will only see this if the cursor is in the Fragment View and
 near a node (the node will be cyan).  The hand turns semi-transparent so as not to obscure
@@ -516,28 +521,32 @@ are currently holding down the shift key.  In either case, when you press the le
 a new node will be created at the center of the crosshairs.
 
 * **Diagonal two-way arrow**: You will only see this while using the TIFF Loader to create a new
-data volume.  This cursor shape means that the cursor is over a corner of the box that shows the
-outline of the proposed data volume; if you press the left mouse button, you can drag the
-corner to change the shape of the proposed data volume.
+data volume.  Thi shape indicates that the cursor is near a corner of the
+outline of the proposed data volume.  If you press the left mouse button, you can drag the
+corner to change the shape of the volume.
 
 ### Hot keys
 
 Khartes provides a number of hot keys (keys that you can press to take some action).  Here is the list:
 
 * **x**: This extremely useful hot key was suggested by the Vesuvius Challenge Segmentation Team.
-If you place the cursor over a node, so the node changes to cyan, and then press `x`, the view
-will shift so as to place the designated node in the center of all 3 data slices.  This is very
-helpful if you want to examine the data volume near the node, or add other nodes nearby.  Think
+If you place the cursor over a node, so that the node changes to cyan, and then press `x`, the view
+will shift so as to place the designated node in the center of all 3 data slices.  If you press
+`x` when you are not close to a node, the view will shift to place the pixel under the cursor
+in the center of the 3 slices.  This is very
+helpful if you want to examine the data volume near the node (or pixel), or add other nodes nearby.  Think
 of `x` as meaning "X marks the spot", or representing crosshairs (slightly tilted).
 
 * **Ctrl-s**: This hot key performs the same function as the `Save` menu item in the `File`
 menu: it saves your current work to the project file.  You should try to remember to hit
 `Ctrl-s` as often as possible; khartes does not create auto-backups.  The "save" operation is
-very quick, since only fragments are written to disk each time; the data volumes never change
+very quick, since only your fragments are written to disk; the data volumes never change
 once they have been initially created on disk.
 
 * **shift**: As mentioned in the "Advanced" section above, quickly pressing and releasing the
-shift key will toggle between "normal mode" and "add-node mode".
+shift key will toggle between "normal mode" and "add-node mode".  See the section below
+entitled "Advanced Topic: Control Area: Settings" for information on how to change this
+behavioor.
 
 * **delete** and **backspace**: If you place the cursor over a node, so that the node turns cyan,
 you can delete the node by pressing either of these two keys.  As mentioned above, khartes does
