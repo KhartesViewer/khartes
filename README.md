@@ -109,14 +109,14 @@ volume that you can create from the TIFF files, which in most
 cases would vastly exceed the memory (RAM) of your computer.
 
 By adjusting these numbers in the TIFF loader dialog box,
-you specify the `Min` (minimum) 
+you can specify the `Min` (minimum) 
 and `Max` (maximum) x, y and z (TIFF file)
 values for the data volume you want to create.
 
 You can also specify a `Step`, which is the step
-size (distance) between the pixels from the original
-image that will be incorporated into the data volume.  One way to
-look at `Step` is as a decimation factor.  A step
+size (distance) between the pixels that will be imported from the original
+image.  One way to
+think of `Step` is as a decimation factor.  A step
 of 1 means use every pixel, 2 means use every 2nd pixel,
 and so on.  Choosing a higher step size reduces the
 size of the data volume over a given range,
@@ -126,10 +126,10 @@ segment the data.
 
 The main use of `Step` is to allow an
 overview of the data, in order to determine which areas will
-merit a closer examination later, at a step size of 1.  For instance,
+merit a closer examination later at a higher resolution.  For instance,
 if you set a step size of 10 in all 3 directions (x, y, and z),
 you can reduce an entire scroll, typically 1.5 Tb or so,
-to a very manageable 1.5 Gb.  This resolution of this volume
+to a very manageable 1.5 Gb.  The resolution of such a volume
 is much too low for segmentation, but it is good enough to give you
 an idea of where the interesting areas of the scroll are.
 
@@ -146,12 +146,12 @@ data volume will be large, check to make sure that all 3 `Step`
 values are set to 10.
 
 This process will take some fraction of an hour, depending on
-how fast your computer is, and how many TIFF files you have.
-For instance, if you have a scroll with 14,000 TIFF files, and
+how fast your computer is, and how many TIFF files are in your dataset.
+For instance, if your scroll is made up of 14,000 TIFF files, and you have set
 a step size of 10, khartes will need to read 1,400 of these files.
 
 The TIFF file loader has a status bar at the bottom that shows
-the name of the file that is currently being read.
+the name of the TIFF file that is currently being read.
 
 For future reference: if you already have an `all10` data volume,
 typically stored in a file called `all10.nrrd`, you can use the
@@ -169,10 +169,10 @@ Referring to the figure above, the main areas where you will work are the 3 *Dat
 on the left side, and the *Fragment View* in the upper right.
 The *Control Area* in the lower right has tabs that let you
 make adjustments to volumes, fragments, and display parameters.
-At the bottom is the *Status Bar*, which usually shows you the 3D coordinates
+At the very bottom is the *Status Bar*, which reports the 3D coordinates
 of the cursor.  And at the top is the *Menu*, which handles file import and export.
 
-At the moment, the *Fragment View* is blank, because you have not created
+At the moment, your *Fragment View* is blank, because you have not created
 any fragments.
 
 Instead, focus on the 3 data slices.  These 3 windows represent 3 mutually
@@ -184,14 +184,14 @@ middle of each window, where the crosshairs intersect.
 There are a few cues to help you stay oriented.  
 
 1) In the upper left of each
-window is a label that gives the current position of the given slice.
+window is a label (some text) that gives the current position of the given slice.
 For instance, the upper slice, which corresponds to one of the original TIFF files,
-has a label in the upper left indicating which image (TIFF file) it is from.
+has a text label in the upper left indicating which image (TIFF file) it is from.
 
 2) Below the 3 data slices is the status bar.  This gives the current
 3D location of the cursor.  For instance, if you move the cursor around inside of the
 top data slice window, and watch the status bar, you will see that the IMG (image) coordinate
-remains constant (and is the same as in the label of the data slice), while
+remains constant (and is the same as in the label in the data slice), while
 the X and Y coordinates change.
 
 3) Each of the 3 data slices has a colored border.  And inside each data slice, the
@@ -199,7 +199,7 @@ two intersecting crosshairs are different colors.  These colors act as an additi
 cue.  Think, for a moment, about the red data slice (the one with a red border).  Somewhere in 3D
 space its plane intersects the plane of the green data slice.  These two planes are mutually
 perpendicular, so the intersection is a line.  In the window of the red data slice, this
-line of intersection is drawn in green; it is the green crosshair, to show that this is where
+line of intersection is drawn in green; it is the green crosshair, showing that this is where
 the green slice crosses the red slice.  Likewise, in the window of the green data slice, this
 same intersection line is drawn in red, so that when you are looking at the green window,
 you know where the red slice crosses it.
@@ -207,12 +207,12 @@ you know where the red slice crosses it.
 ### Navigation by mouse
 
 To navigate within the data volume, simply hold down the left mouse button while inside one
-of the data slice windows, and drag the slice.  The other slices will change, to ensure that
+of the data slice windows, and drag the slice.  The two other slices will also change, to ensure that
 the mutual intersection point of the three slices remains in the middle of the crosshairs
 of all 3 slices.
 
 You can use the mouse scroll wheel while in any of the data slice windows to zoom in or out.
-The crosshairs are always the center of the zoom, since the mutual intersection point of the three
+The crosshairs are always the center of the zoom; the mutual intersection point of the three
 slice planes does not change during zooming.
 
 ### Navigation by keyboard
@@ -222,7 +222,7 @@ currently located).  As when navigating with the mouse, the other slices will ch
 that their mutual interesection point remains in the centers of all 3 pairs of crosshairs.
 
 You can also use the page-up and page-down keys to increment or decrement the slice in the current
-window.  To see this, watch the label in the upper left corner of the current data slice, and see
+window.  To see this, watch the text label in the upper left corner of the current data slice, and see
 how this changes as you press page-up and page-down.
 
 If your keyboard offers auto-repeat, you can hold down an arrow key, or a page-up/down key, and
