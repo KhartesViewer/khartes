@@ -21,7 +21,7 @@ The video below give a quick, 2-minute overview of khartes.
 ## 30-minute video
 
 This next video provides a more extensive introduction to khartes.
-Note that it begins with an "artistic" 60-second
+Note that it begins with a 60-second
 intro sequence which contains no narration, but which quickly highlights some of khartes' features.
 After the intro, the video follows a more traditional format, with a voiceover and a demo.
 The entire video
@@ -38,14 +38,14 @@ You should be able to run khartes simply by
 cloning the repository, making sure you have the proper dependencies 
 (see "anaconda_installation.txt" for a list), and then typing `python khartes.py`.  
 
-When khartes starts, you will see some explanatory text on the right-hand side of the interface 
+When khartes starts, it displays some explanatory text on the right-hand side of the interface 
 to help you get started.  This text is fairly limited; you might want to watch the videos above to get a better
 idea how to proceed, and read the Manual/Tutorial below.
 
 # Manual/Tutorial
 
 Ideally, khartes should come with both a user manual and a tutorial (and perhaps even a "cookbook"),
-but at this point there exists only a single document, the one you are now reading,
+but at this point there exists only a single document, the one you are now reading:
 a tutorial that also tries
 to act as a user manual of sorts.
 
@@ -56,7 +56,7 @@ This tutorial covers the following steps:
 * Creating and editing a fragment ("segmentation")
 * General workflow for creating coherent, consistent fragments
 * Working with multiple fragments
-* Exporting the fragment as a mesh
+* Exporting a fragment as a mesh
 * Setting display parameters
 
 ## Creating a project
@@ -73,16 +73,15 @@ which it does even before the first time you invoke "Save".
 
 In order to perform at interactive speeds, khartes works with data
 volumes (3D volumes of data) rather than individual TIFF files.
-Khartes provides an interface to convert a set of TIFF files into
-a data volume.
-This conversion process
-assumes that the TIFF files are already somewhere in your filesystem;
+To facilitate this,
+khartes provides an interface to a data volume from a set of TIFF files.
+It is assumed that the TIFF files are located somewhere in your filesystem;
 khartes does not download TIFF files over the internet.
 
 The `File / Create volume from TIFF files...` menu item brings up a dialog box where
-you can specify which TIFF files you want to include in your
-data volume, as well as the x and y ranges of the pixels within each TIFF
-file that you want to include.  A status bar at the bottom of
+you can specify the TIFF files you want to include in your
+data volume, as well as the x and y ranges of the pixels within the TIFF images.
+A status bar at the bottom of
 the dialog box shows how large the
 resulting data volume will be, in gigabytes.  **Be aware that
 every time you run khartes, the entire
@@ -93,9 +92,9 @@ The first step, of course, is to find your TIFF files.
 If your tiff files are in a `.volpkg` directory, you can
 find them under the `volumes` sub-directory.
 Use
-the file selector in the TIFF loader dialog box to find
+the file selector in the TIFF loader dialog box to locate
 the *directory* that contains all the TIFF files.  Once
-you double-click on the *directory* name (not on
+you double-click on the *directory* name (not on the
 individual TIFF files inside that directory), the TIFF loader
 will read the TIFF files, determine how many
 there are and their x and y extent (width and height).
@@ -121,7 +120,7 @@ of 1 means use every pixel, 2 means use every 2nd pixel,
 and so on.  Choosing a higher step size reduces the
 size of the data volume over a given range,
 but the loss of resolution, even going from a step size
-of 1 to 2, is quite noticeable when you are trying to
+of 1 to 2, is quite noticeable when you try to
 segment the data.
 
 The main use of `Step` is to allow an
@@ -145,7 +144,7 @@ When you press the `Create` button, if you get a warning that your
 data volume will be large, check to make sure that all 3 `Step`
 values are set to 10.
 
-This process will take some fraction of an hour, depending on
+This process will take a significant fraction of an hour, depending on
 how fast your computer is, and how many TIFF files are in your dataset.
 For instance, if your scroll is made up of 14,000 TIFF files, and you have set
 a step size of 10, khartes will need to read 1,400 of these files.
@@ -172,10 +171,10 @@ make adjustments to volumes, fragments, and display parameters.
 At the very bottom is the *Status Bar*, which reports the 3D coordinates
 of the cursor.  And at the top is the *Menu*, which handles file import and export.
 
-At the moment, your *Fragment View* is blank, because you have not created
+At the moment, your *Fragment View* is blank, because you have not yet created
 any fragments.
 
-Instead, focus on the 3 data slices.  These 3 windows represent 3 mutually
+Instead, focus on the 3 Data Slices.  These 3 windows represent 3 mutually
 perpendicular slices throught the 3D data volume.  The 3 slices meet in the
 middle of each window, where the crosshairs intersect.
 
@@ -183,23 +182,23 @@ middle of each window, where the crosshairs intersect.
 
 There are a few cues to help you stay oriented.  
 
-1) In the upper left of each
-window is a label (some text) that gives the current position of the given slice.
+1) In the upper left of each data
+window is a label (text) that gives the current position of the given slice.
 For instance, the upper slice, which corresponds to one of the original TIFF files,
 has a text label in the upper left indicating which image (TIFF file) it is from.
 
-2) Below the 3 data slices is the status bar.  This gives the current
+2) Below the 3 Data Slices is the Status Bar.  This displays the current
 3D location of the cursor.  For instance, if you move the cursor around inside of the
-top data slice window, and watch the status bar, you will see that the IMG (image) coordinate
+top Data Slice, and watch the Status Bar, you will see that the IMG (image) coordinate
 remains constant (and is the same as in the label in the data slice), while
 the X and Y coordinates change.
 
-3) Each of the 3 data slices has a colored border.  And inside each data slice, the
-two intersecting crosshairs are different colors.  These colors act as an additional orientation
+3) Each of the 3 Data Slices has a colored border.  And inside each Data Slice, the
+two intersecting crosshairs are of different colors.  These colors act as an additional orientation
 cue.  Think, for a moment, about the red data slice (the one with a red border).  Somewhere in 3D
 space its plane intersects the plane of the green data slice.  These two planes are mutually
 perpendicular, so the intersection is a line.  In the window of the red data slice, this
-line of intersection is drawn in green; it is the green crosshair, showing that this is where
+line of intersection is drawn in green; it is in fact the green crosshair, showing that this is where
 the green slice crosses the red slice.  Likewise, in the window of the green data slice, this
 same intersection line is drawn in red, so that when you are looking at the green window,
 you know where the red slice crosses it.
@@ -207,11 +206,11 @@ you know where the red slice crosses it.
 ### Navigation by mouse
 
 To navigate within the data volume, simply hold down the left mouse button while inside one
-of the data slice windows, and drag the slice.  The two other slices will also change, to ensure that
+of the Data Slice windows, and drag the slice.  The two other slices will also change, to ensure that
 the mutual intersection point of the three slices remains in the middle of the crosshairs
 of all 3 slices.
 
-You can use the mouse scroll wheel while in any of the data slice windows to zoom in or out.
+You can use the mouse scroll wheel while in any of the Data Slice windows to zoom in or out.
 The crosshairs are always the center of the zoom; the mutual intersection point of the three
 slice planes does not change during zooming.
 
@@ -222,7 +221,7 @@ currently located).  As when navigating with the mouse, the other slices will ch
 that their mutual interesection point remains in the centers of all 3 pairs of crosshairs.
 
 You can also use the page-up and page-down keys to increment or decrement the slice in the current
-window.  To see this, watch the text label in the upper left corner of the current data slice, and see
+window.  To see this, watch the text label in the upper left corner of the current Data Slice, and see
 how this changes as you press page-up and page-down.
 
 If your keyboard offers auto-repeat, you can hold down an arrow key, or a page-up/down key, and
@@ -257,11 +256,11 @@ smaller volume.
 To begin, bring up the TIFF loader dialog by selecting the
 `File / Create volume from TIFF files...` menu item.
 
-The dialog box will still have the same settings as you entered
+The dialog box may still retain the settings that you entered
 last time.  This means that you must do the following before proceeding:
 
 **Important step**: Check the `Step` settings in the TIFF loader dialog.
-These must all be set to 1, to ensure that you create a high-resolution
+These must all be set to 1, to ensure that you will create a high-resolution
 data volume.  If you had previously  set the `Step` values to something different, you
 must set them all back to 1 now.
 
@@ -302,8 +301,8 @@ of TIFF files that need to be processed.
 This sub-section is not part of the tutorial, but it belongs with the
 current topic: loading TIFF files.
 
-The program `vc_layers` outputs TIFF files that are images of the flattened
-layers adjacent to a flattened segment.  These files have a different
+The program `vc_layers` outputs TIFF files that contain the flattened
+layers adjacent to a given segment.  These files have a different
 orientation than the TIFF files usually read by khartes.  To alert
 khartes to this difference, so that the data volume created from these
 `vc_layer` TIFFs
@@ -315,7 +314,7 @@ is properly oriented, put a check mark in the box labeled `TIFFs are from vc_lay
 
 Go to the Control Area (the area in the lower right corner of khartes) and select the `Volumes` tab.
 Here you should see listed the two volumes you have created so far: all10, and your high-resolution volume.
-The checkbox in the left column allows you to select which volume should be made visible.
+The checkbox in the left column allows you to select which volume is visible.
 The next two columns show the name and the color of each volume.  The name cannot be changed.
 However, you can change the volume's color by clicking on the color box.
 The volume's color is used when the volume's bounding box is drawn as an overlay
@@ -326,10 +325,10 @@ only one volume at a time is present in memory, in order to conserve RAM.  A fut
 khartes may allow multiple volumes to be present in memory simultaneously, in order to
 permit the user to switch more quickly among them.
 
-The next column allows you to change the orientation of the volume.  By default, the topmost
+The 'Dir' column allows you to change the display orientation of the volume.  By default, the topmost
 data slice window displays each TIFF image in its original orientation, which in khartes is called the Y
-orientation.  Using the selector
-in the fifth column of the Volumes tab, you can change the orientation of the TIFF image, turning it on
+orientation.  Using the 'Dir' selector,
+you can change the orientation of the TIFF image, turning it on
 its side, by selecting the X orientation.  Later on, you will see why this is useful (it has to do with
 the fragments being limited to be single-valued surfaces).
 
@@ -356,7 +355,7 @@ appear in the list of fragments.
 
 At this point you can begin adding points (called nodes) to define
 the fragment.  To add a node, position the cursor in one of the
-data slices, hold down the shift key (so the cursor turns into
+Data Slices, hold down the shift key (so the cursor turns into
 crosshairs), and click with the left mouse button.
 
 It would take a lot of words and pictures to describe the process of adding
@@ -370,8 +369,8 @@ instance, the cursor did not turn into crosshairs before a new
 node was created, and re-centering the view on an existing node
 was more awkward than it is now.
 
-Also, the video does not mention the key presses and button
-presses made by the user.
+Also, the video does not describe the user's key presses and button
+presses.
 
 But here are some general user-interface aspects that you should
 have gathered from the video.
@@ -380,19 +379,17 @@ Each node that the user creates is added to a surface (the fragment);
 this surface is displayed in map view in the Fragment View.  Of course, if
 the new nodes all form a line, only a line, rather than a surface,
 is shown in the Fragment view.  Once the user creates nodes
-in more than one data slice, a surface can be created, and
+in more than one Data Slice, a surface can be created, and
 this surface is shown in the Fragment View.
 
-In each data slice, the fragment is drawn as a line; this represents
-the intersection between the fragment and the data slice.  If any nodes
+In each Data Slice, the fragment is drawn as a line; this represents
+the intersection between the fragment and the Data Slice.  If any nodes
 lie on the plane of the slice, they are shown as red circles.  When
 the cursor passes near a node, the node turns from red to cyan.
 
-The color of the fragment line in the data slices, and the color of
-the triangular mesh in the Fragment View, are the color of the
-fragment, as shown in the Fragments tab in the Control Area (you
-don't actually see the Fragments tab in the video, since in the video
-only the Volumes tab is shown).
+The color of the fragment line in the Data Slices, and the color of
+the triangular mesh in the Fragment View, match the color of the
+fragment, as shown in the Fragments tab in the Control Area.
 
 It is almost time for you to begin creating your own fragment,
 but first you need to learn a little about the two user-interaction modes
@@ -421,12 +418,12 @@ a picture of crosshairs.  When this button is light, khartes is in
 normal mode, and when it is dark, khartes is in add-node mode.
 
 The other, more convenient, way to toggle between normal and add-node mode
-is to press and then quickly release the shift button.  You can see which
+is to quickly press and release the shift button.  You can see which
 mode you are in by seeing whether the cursor afterwards is a hand (normal mode)
 or crosshairs (add-node mode).
 
-This topic needed to be introduced now, because you might, by accident, quickly
-press and release the shift button, unintentionally toggling between modes.
+This topic needed to be introduced now, because you might, by accident, 
+hit the shift button, unintentionally toggling between modes.
 Now that you understand the two modes, you won't be mystified if this happens.
 
 ## Choosing a region for segmentation
@@ -435,7 +432,7 @@ Before you start creating a fragment, you should make sure that there
 is a region in your high-resolution data volume that is possible to segment.
 
 What you are looking for is a region where the papyrus sheets, as
-seen in the top data slice, are not too tilted (you want an angle
+seen in the top Data Slice, are not too tilted (you want an angle
 flatter than 45 degrees or so).  This region doesn't have
 to be very large, but if you can't
 find even a small area, then you may
@@ -445,7 +442,7 @@ need to create another high-resolution data volume.
 
 At this point you are ready to build the segment.
 As you saw in the video, you do this by simply adding nodes to the
-data slices.  Notice that **the order you add nodes does not matter**;
+Data Slices.  Notice that **the order you add nodes does not matter**;
 if you feel your nodes are too far apart, simply add more.
 
 But what do you do if you discover that a node is in the wrong
