@@ -817,6 +817,8 @@ To export your fragment:
 1. Make sure your fragment is active, that is, that it is visible
 in the right-hand window.
 2. In the File menu, select `Export file as mesh...`.
+3. After you press the `Save` button, you will be asked to specify
+an "infill spacing".  Just accept the default value.
 
 This will create a `.obj` file, which contains a mesh representing your
 fragment, as well as a `.tif` file and a `.mtl` file.  
@@ -826,14 +828,16 @@ a 3D view of your surface, with the volume data textured onto
 the surface.
 
 In addition,
-you can import the .obj file directly into `vc_render`.  Here is how.
+you can import the .obj file directly into `vc_render`.
 
 (**Note for advanced users**: If multiple fragments are active,
 all the active fragments will be saved into a single `.obj` file.
 This is convenient for viewing in `MeshLab`, but beware! Multi-fragment
 .obj files cannot be imported into `vc_render`.)
 
-First, you need to make sure you know where the following files and
+To import the `.obj` file
+into `vc_render`, you first
+need to make sure you know where the following files and
 directories are located:
 
 - Your `.volpkg` folder, the one that contains the TIFF files that you
@@ -855,7 +859,7 @@ You might need to use `--volume` to specify your volume as well, if your volpkg 
 As already mentioned, the `.ppm` file that `vc_render` creates can be read into `vc_layers_from_ppm` to create a 
 flattened surface volume.  And as explained in the section on importing TIFF files, if you decide to import the
 layer (which a series of TIFF files) created by `vc_layers_from_ppm` back into khartes, be sure to set the
-`TIFFS are from vc_layers` in the TIFF loader dialog box.
+`TIFFS are from vc_layers` checkbox in the TIFF loader dialog.
 
 
 ## Advanced Topic: Control Area: Settings
@@ -863,8 +867,8 @@ layer (which a series of TIFF files) created by `vc_layers_from_ppm` back into k
 <img src="images/settings_tab.JPG" width="800"/>
 
 The Settings tab gives you control of some of the internal parameters of khartes.
-When you are first starting out, you probably will not need to access this
-tab, but as you continue, you may discover that you would like to customize
+When you are first starting out, you probably will not need to
+modify these, but as you continue, you may discover that you would like to customize
 some aspects of khartes.
 
 In the left column of this tab are the
@@ -872,7 +876,7 @@ In the left column of this tab are the
 the entities (nodes, lines, axes, etc) that are overlain on top of the data windows.
 For each entity, you can control the size (width in the case of lines, radius in
 the case of circles) by setting the corresponding value in the `Size` column.  If you set the
-size to zero, the corresponding entity will be hidden.
+size to zero, the corresponding entity will be hidden (a useful trick to keep in mind).
 
 The opacity section is a bit more complicated to explain; the complexity is
 due to certain limitations in the computer graphics library that khartes uses.
@@ -897,7 +901,7 @@ The `Volume Boxes Visible` checkbox does the same thing as, and is
 linked to, the `Volume Boxes Visible` checkbox in the Volumes tab.
 
 The `Show tracking cursors` checkbox turns on and off the tracking
-cursors, which are an advanced topic; they are described in a section below.
+cursors, which are an advanced topic that is described in a section below.
 
 The `Shift lock after [] clicks` control lets you set exactly how the `Shift` hot key
 works.  Recall that if you quickly press and release the `Shift` button, you toggle
@@ -913,27 +917,29 @@ in μm (micrometers), between adjacent voxels in the image.
 The default value used by khartes, 7.910 μm, corresponds to the spacing
 for the scrolls used in the Vesuvius Challenge.
 If you change this value, the new value will be stored in your current 
-khartes project the next time you save the project.
+khartes project the next time you save the project.  This value is
+used to compute the size of the scale bars that are drawn in the data
+windows, and to compute the surface area of the fragments.
 
 
 ## Advanced Topic: Tracking cursors
 
-The "Tracking cursors" feature is experimental; it is not yet clear whether there
-are some circumstances where it is useful.  It is currently turned off by
+The "Tracking cursors" feature is experimental; there
+seem to be some circumstances where it might be useful.  It is currently turned off by
 default.
 
 Here is the idea behind this feature.
 
-When you move the mouse cursor over a data window, the cursor actually describes
+When you move the mouse cursor over a data window, the cursor actually specifies
 a position in 3D space.  You can verify this by noting that the Status Bar
-always shows a 3D position when you move the mouse.
+always shows a 3D position corresponding to the position of the mouse.
 
 There are, perhaps, times when it would be useful to see where this 3D position
 would lie if projected onto the other data windows.  Doing so might allow the
 user to better determine, for instance, whether there are other nearby nodes that
 don't lie in the plane of the current data window.
 
-So when the tracking cursors are turned on, the 3D position specified by the mouse
+So when the tracking cursors are turned on, the 3D position determined by the mouse
 cursor is projected onto, and displayed on, the other data windows.  These projected
 positions, the tracking cursors, are drawn as green circles.
 In general, the tracking cursors do not lie exactly in the planes of these other
@@ -960,6 +966,14 @@ This problem is so intermittent that I have not been able
 to figure out how to prevent it.
 Unfortunately, the only workaround is to save your work, and then exit and restart khartes.
 
+This tutorial needs a fuller description (with drawings) of what is a single-valued surface,
+and how this affects the surfaces built in khartes.
+
+This tutorial needs some drawings explaining the 3D positions of the Data Slices in the
+scroll volume.
+
+This tutorial needs pictures of all the cursor shapes.
+
 ## License
 
 Khartes is open-source code, licensed under the GPL 3.0 license.  See LICENSE.txt for details.
@@ -972,7 +986,7 @@ under my user name, @khartes_chuck .
 
 ## Acknowledgements
 
-I wrote khartes for my own gratification, and in the hope that it will be useful; 
+I wrote khartes for my own gratification, and in the hope that it will prove useful; 
 I did not receive a grant or salary from any organization
 to develop this software.
 
