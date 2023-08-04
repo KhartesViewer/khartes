@@ -464,13 +464,13 @@ the node
 will be drawn in cyan
 in all the data windows where it is visible;
 this is often a handy way of keeping track of
-which node is which in the different views).
+which node is which, in the different views).
 
 Once the node has turned cyan, there are a couple of ways to move it.  
 
 If you are
 working in a Data Slice, you can now press the left mouse button,
-hold it down, and drag the node to where you want it.  Be aware that
+hold it down, and drag the node to where you want it.  Be aware, however, that
 you cannot use the mouse to drag nodes in the Fragment View (this is to
 prevent accidents).
 
@@ -480,8 +480,8 @@ the Fragment View.
 
 If you are working in the Fragment View, you can also use the page-up and page-down
 keys to move the node.  These keys will move the node perpendicular to the plane of
-the fragment view (to see what this means, make sure your node is also visible in the
-top left data slice, and see how the node moves in the data slice while you press
+the Fragment View (to see what this means, make sure your node is also visible in the
+top left Data Slice, and see how the node moves in the data slice while you press
 page-up or page-down in the Fragment View).
 
 **The key capability of khartes is that as you move nodes, the data image in the
@@ -491,7 +491,7 @@ interactively, so you can instantly judge the quality of your segmentation.**
 ### What the cursor is telling you
 
 As you worked, you probably noticed that the cursor often changed its appearance,
-depending on where it was in the slice.  As a rule, the shape
+depending on where it was in the slice.  The rule is that the shape
 of the cursor tells you
 what will happen when you push the left mouse button.
 
@@ -508,7 +508,7 @@ that you are near a node (you should see a cyan node nearby).  If you press the 
 button and drag, the node will move with the mouse.
 
 * **Semi-transparent hand**: You will only see this if the cursor is in the Fragment View and
-near a node (the node will be cyan).  The hand turns semi-transparent so as not to obscure
+near a node (the node will be cyan).  Close to the node, the hand turns semi-transparent, so as not to obscure
 the data surface.  If you press the left mouse button, you will be able to drag the data view,
 but not the node.  However, as long as the node is cyan, you will be able to move it with the arrow
 keys, the page-up and page-down keys, and the aswd/ec equivalents.
@@ -530,7 +530,7 @@ Khartes provides a number of hot keys (keys that you can press to take some acti
 If you place the cursor over a node, so that the node changes to cyan, and then press `x`, the view
 will shift so as to place the designated node in the center of all 3 data slices.  If you press
 `x` when you are not close to a node, the view will shift to place the pixel under the cursor
-in the center of the 3 slices.  This is very
+into the center of the 3 slices.  This is very
 helpful if you want to examine the data volume near the node (or pixel), or add other nodes nearby.  Think
 of `x` as meaning "X marks the spot", or representing crosshairs (slightly tilted).
 
@@ -540,7 +540,7 @@ menu: it saves your current work to the project file.  You should try to remembe
 very quick, since only your fragments are written to disk; the data volumes never change
 once they have been initially created on disk.
 
-* **shift**: As mentioned in the "Advanced" section above, quickly pressing and releasing the
+* **shift**: As mentioned in the "Normal Mode and Add-Node Mode" section above, quickly pressing and releasing the
 shift key will toggle between "normal mode" and "add-node mode".  See the section below
 entitled "Advanced Topic: Control Area: Settings" for information on how to change this
 behavioor.
@@ -599,7 +599,7 @@ prepare to be frustrated.
 ![squirmy](images/squirmy.JPG)
 
 *This area is very difficult or impossible to segment; the sheets
-are too fragmented.*
+are too jumbled.*
 
 Bear in mind that khartes works only with single-valued surfaces;
 it cannot handle sheets that turn over onto themselves.
@@ -614,7 +614,7 @@ Make sure you are happy with what you see
 before expanding.
 
 **Step 2:** Expand by alternating directions.  Use the Fragment Viewer
-to move to a new area on the fragment and create nodes on the inline
+to move to a different area on the fragment and create nodes on the inline
 slice.  Then create nodes on the crossline slice.  You can also add
 nodes to the bottom slice; these act like contour lines on a map.
 
@@ -725,7 +725,7 @@ If a fragment is `Visible`, this means that the fragment's
 nodes and cross-section line will be overlaid on the
 data in the Data Slices.
 
-When a fragment is `Active`, this means that the data that
+If a fragment is `Active`, this means that the data that
 lies on the fragment's surface (also called the fragment's texture)
 will be displayed in the Fragment View.
 (One exception: if a fragment's direction, which can be either X or Y,
@@ -742,7 +742,7 @@ toggle the visibility by using the `v` hot key).
 
 As many fragments as you like can be made visible; their cross sections will all be
 overlaid on the Data Slices.  This is useful if you want to compare different
-fragments.  Note that a given `Visible` fragment's mesh will not be
+fragments.  Recall that a given `Visible` fragment's mesh will not be
 overlaid on the Fragment View unless that fragment is also `Active`.
 
 In general use, only one fragment at a time can be actve; if you set a fragment to be active
@@ -754,7 +754,7 @@ As for the remaining columns in the Fragments tab:
 The third column displays the name of the fragment, and the fourth displays
 the color.  These both can be edited.  When you create a new fragment,
 khartes tries (not very cleverly) to guess what to name it, and chooses
-a color at random.  
+a color at random, so the ability to edit these may be helpful.
 
 The list of fragments is always alphabetized by name,
 so if you want to keep two fragments close to each other in the
@@ -764,8 +764,9 @@ etc.
 
 The fifth column in the fragments list indicates whether the fragment considers the X axis,
 or the Y axis, to be the vertical direction.  The direction of the axis is important because
-khartes only works with single-valued surfaces; the direction of "single value" is the 
-fragment's vertical direction.  This direction is set at the time the fragment is created, and
+khartes only works with single-valued surfaces; the fragment's vertical direction
+is the direction of the "single value".
+This direction is set at the time the fragment is created, and
 is based on the vertical direction
 of the volume that is active at that time.  The fragment's axis direction
 cannot be changed once the fragment is created.
@@ -791,7 +792,7 @@ will be made inactive.  In other words, normally only one fragment
 can be active at a time.
 
 However, if you hold down the Ctrl key while placing a checkmark in an `Active`
-checkbox, that fragment will be made active, while any previous
+checkbox, that fragment will be made active, while any previously active
 fragments will remain active.  So use Ctrl-click in the `Active`
 checkbox to allow mutiple active fragments.
 
@@ -830,7 +831,7 @@ you can import the .obj file directly into `vc_render`.
 (**Note for advanced users**: If multiple fragments are active,
 all the active fragments will be saved into a single `.obj` file.
 This is convenient for viewing in `MeshLab`, but beware! Multi-fragment
-.obj files cannot be imported into `vc_render`.)
+`.obj` files cannot be imported into `vc_render`.)
 
 To import the `.obj` file
 into `vc_render`, you first
@@ -854,8 +855,8 @@ vc_render -v [your volpkg directory] --input-mesh [your .obj file] --output-ppm 
 You might need to use `--volume` to specify your volume as well, if your volpkg has more than one.
 
 As already mentioned, the `.ppm` file that `vc_render` creates can be read into `vc_layers_from_ppm` to create a 
-flattened surface volume.  And as explained in the section on importing TIFF files, if you decide to import the
-layer (which a series of TIFF files) created by `vc_layers_from_ppm` back into khartes, be sure to set the
+flattened surface volume.  And as explained in the section on importing TIFF files, if you decide to import this
+volume (which is a series of TIFF files) back into khartes, be sure to set the
 `TIFFS are from vc_layers` checkbox in the TIFF loader dialog.
 
 
@@ -866,11 +867,21 @@ layer (which a series of TIFF files) created by `vc_layers_from_ppm` back into k
 The Settings tab gives you control of some of the internal parameters of khartes.
 When you are first starting out, you probably will not need to
 modify these, but as you continue, you may discover that you would like to customize
-some aspects of khartes.
+certain aspects of khartes.
 
 In the left column of this tab are the
 `Display Settings`; these control the appearance of
 the entities (nodes, lines, axes, etc) that are overlain on top of the data windows.
+
+Here is what the different entities listed represent:
+* You already know what nodes are
+* Lines are the fragment cross-sections that are drawn on the Data Slices
+* Meshes are the triangles drawn on the Fragment View
+* The Axes are the two crosshairs that meet in the center of each data window
+* The Borders are the borders of the Data Slices
+* The Labels are the text label in the upper left of each Data Slice,
+and the scale bars in the lower left of each data window.
+
 For each entity, you can control the size (width in the case of lines, radius in
 the case of circles) by setting the corresponding value in the `Size` column.  If you set the
 size to zero, the corresponding entity will be hidden (a useful trick to keep in mind).
@@ -892,19 +903,19 @@ If you want to return the settings to the values originally used by khartes,
 press the `Restore Defaults` button.
 
 The `Other Settings` section of the `Settings` tab contains other parameters
-that you might want to set at some point.
+that you might want to modify at some point.
 
 The `Volume Boxes Visible` checkbox does the same thing as, and is
 linked to, the `Volume Boxes Visible` checkbox in the Volumes tab.
 
 The `Show tracking cursors` checkbox turns on and off the tracking
-cursors, which are an advanced topic that is described in a section below.
+cursors, which are an advanced topic that is described below.
 
 The `Shift lock after [] clicks` control lets you set exactly how the `Shift` hot key
 works.  Recall that if you quickly press and release the `Shift` button, you toggle
-between "normal mode" and "add-node" mode.  If you find yourself often doing this
+between "normal mode" and "add-node" mode.  If you often find yourself doing this
 unintentionally, you might want to increase the value to 2, which means that
-you will need to double-click (quickly click twice) the `Shift` key.  Or if
+you will need to double-click (quickly click twice) the `Shift` key in order to toggle between modes.  Or if
 you don't want the `Shift` key to toggle between modes under any circumstances,
 set vhe value to 0.
 
@@ -922,18 +933,18 @@ windows, and to compute the surface area of the fragments.
 ## Advanced Topic: Tracking cursors
 
 The "Tracking cursors" feature is experimental; there
-seem to be some circumstances where it might be useful.  It is currently turned off by
+are some circumstances where it might be useful.  It is currently turned off by
 default.
 
 Here is the idea behind this feature.
 
 When you move the mouse cursor over a data window, the cursor actually specifies
 a position in 3D space.  You can verify this by noting that the Status Bar
-always shows a 3D position corresponding to the position of the mouse.
+always shows the 3D position of the cursor.
 
 There are, perhaps, times when it would be useful to see where this 3D position
 would lie if projected onto the other data windows.  Doing so might allow the
-user to better determine, for instance, whether there are other nearby nodes that
+user to better determine, for instance, whether there are nearby nodes that
 don't lie in the plane of the current data window.
 
 So when the tracking cursors are turned on, the 3D position determined by the mouse
@@ -964,7 +975,7 @@ to figure out how to prevent it.
 Unfortunately, the only workaround is to save your work, and then exit and restart khartes.
 
 This tutorial needs a fuller description (with drawings) of what is a single-valued surface,
-and how this affects the surfaces built in khartes.
+and how this applies to the surfaces built in khartes.
 
 This tutorial needs some drawings explaining the 3D positions of the Data Slices in the
 scroll volume.
