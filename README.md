@@ -568,7 +568,7 @@ suggestions on how to create large, self-consistent
 fragments.  The key, as you will learn, is to
 follow horizontal papyrus fibers, using them
 as an indicator that you have not accidently
-allowed your fragment to slip onto a neighboring
+allowed your fragment to wander onto a neighboring
 sheet.
 
 **Step 0**: The most important step, which you
@@ -580,7 +580,7 @@ make your learning experience difficult.
 
 <img src="images/easier.JPG" width="360"/>
 
-*This is a an example* of a fairly easy sheet.
+*This is a an example of a fairly easy sheet.*
 
 For your next attempt, you might want to start with a sheet
 that is separated on one side from its neighbors.
@@ -593,37 +593,37 @@ So one strategy is to create fragments on a series of sheets that are
 parallel to
 each other, starting with the easiest.
 
-There are some areas in the scroll data volume that I found to be
+There are some areas in the scroll data volume that I find
 too difficult to fragment.  In these areas, sheets appear, disappear, and
-merge into each other in a way that seems impossible to track, no
-matter which software is used.  If you try working in these areas,
+merge into each other in a way that seems impossible to track.
+If you try working in these areas,
 prepare to be frustrated. 
 
 ![squirmy](images/squirmy.JPG)
 
-*This area* is very difficult or impossible to segment; the sheets
-are too fragmented.
+*This area is very difficult or impossible to segment; the sheets
+are too fragmented.*
 
 Bear in mind that khartes works only with single-valued surfaces;
 it cannot handle sheets that turn over onto themselves.
 If you want to work on such a sheet, turn your volume
-on its side (in the lower right corner, find the Volume panel, and
+on its side (in the Control Area, find the Volume tab, and
 change the direction of your volume from "Y" to "X").
 
 **Step 1:** Start in an easy area of your sheet, picking some points
-on the inline (top window) and crossline (middle window) slices.
-This will create a diamond-shaped area in the fragment viewer
-(right-hand window).  Make sure you are happy with what you see
+on the inline (top window) and crossline (middle window) Data Slices.
+This will create a diamond-shaped area in the Fragment Viewer.
+Make sure you are happy with what you see
 before expanding.
 
-**Step 2:** Expand by alternating directions.  Use the fragment viewer
+**Step 2:** Expand by alternating directions.  Use the Fragment Viewer
 to move to a new area on the fragment and create nodes on the inline
 slice.  Then create nodes on the crossline slice.  You can also add
 nodes to the bottom slice; these act like contour lines on a map.
 
 **Hint for step 2:** Before you start adding new nodes onto the 
 inline or crossline slice,
-look in the fragment viewer to see if there are any existing nodes near
+look in the Fragment Viewer to see if there are any existing nodes near
 the line you are working on.
 If there are, and it is feasible, move these existing nodes
 onto the line.  This is to avoid the situation where a node on the line
@@ -633,15 +633,14 @@ cause undesirable waviness in the fragment.
 <img src="images/good start.JPG" width="800" />
 
 *Example of a good start.*  A couple of inline slices (the horizontal lines
-in the fragment view) and a crossline slice (vertical line) have been 
+in the Fragment View) and a crossline slice (the vertical line) have been 
 interpreted.  Nodes near the lines have been moved onto the lines, to
 maintain good node spacing.
 Some contour points have been added to the bottom slice as well.
 The horizontal fibers are continuous, 
 which is a sign that the segmentation has been done correctly (see Step 3).
 The dark spot in the upper right quadrant is 
-due to a lack of data to constrain the interpolation; as more nodes are
-added, the spot will be replaced by the image of the sheet.
+due to a lack of nodes to constrain the interpolation.
 
 **Step 3**: Pause, verify, repair.  The most important criterion for
 a good fragment is that the horizontal fibers (as seen in the fragment view)
@@ -657,8 +656,9 @@ moving nodes so that all the nodes lie on the same sheet.
 
 **Step 3 continued**  The main problem to watch out for, as illustrated above,
 is "sheet skipping": because two adjacent sheets are close together, or
-even merge in some areas, the user has unintentionally started adding nodes onto
-the wrong sheet.  As a result, the fibers on the left side of this picture are from
+even merge in some areas, the user may unintentionally start adding nodes onto
+the wrong sheet.  As the result of such an error, the fibers on the left side of the
+image above are from
 a different sheet than the fibers on the right.  This creates a
 visual discontinuity, which is a signal that the user needs
 to go back, analyze the existing nodes, and move as many as necessary 
@@ -675,26 +675,26 @@ but diverge in the other half.
 
 ## Workflow notes
 
-**Save often.**  You can simply type Ctrl-S to save your work; try to remember to do this whenever
+**Save often.**  You simply need to type Ctrl-S to save your work; try to remember to do this whenever
 you have added or moved a dozen or so nodes.  The "save" operation is very quick, since only 
-fragments are saved; the volume data does not change and thus does not slow down the operation.
+fragments are saved; the data volumes do not change and thus do not slow down the operation.
 
 When you create fragments, pay attention to the triangulation
-that is shown in the fragment window on the right.  Khartes'
+that is shown in the Fragment View.  Khartes'
 interpolation algorithm can become erratic in areas of long,
 skinny triangles, so it is a good idea to distribute enough
 fragment nodes throughout the fragment, to keep the triangles
 more regular.  
 
 Another reason for monitoring the shapes of your triangles is to
-improve speed of interaction.  Every time a fragment node is moved
-or added, khartes updates the fragment window to reflect these changes.
+improve the speed of interaction.  Every time a fragment node is moved
+or added, khartes updates the Fragment View to reflect these changes.
 This means that triangles near the modified node, and the pixels
 that these triangles encompass, need to be recomputed
-and redrawn.  The bigger the triangles, the longer the recomputations
-take.  If a node is surrounded by large triangles that cover most
+and redrawn.  The bigger the triangles, the longer the recomputation
+takes.  If a node is surrounded by large triangles that cover most
 of the data volume, each change may require several seconds to recompute,
-meaning that khartes no longer feels interactive.  You can prevent this problem
+meaning that khartes will no longer feel interactive.  You can prevent this problem
 by keep your triangles regular and local.
 
 So when segmenting, start in the center of a fragment
@@ -703,7 +703,7 @@ of trying to create a huge surface first thing.  This practice
 will also make it less likely that you stray onto the wrong
 sheet of the scroll in difficult areas.
 
-Remember that khartes does not have auto-save; use Ctrl-S on
+Again, remember that khartes does not have auto-save; use Ctrl-S on
 a regular basis to save your latest work.
 
 ## Control Area: Fragments
@@ -711,7 +711,7 @@ a regular basis to save your latest work.
 <img src="images/fragments_tab.JPG" width="800"/>
 
 Go to the Control Area and open the `Fragments` tab.
-This tab allows you to control various aspects of your fragments.
+This tab allows you to control important aspects of your fragments.
 
 You have already visited this tab, in order to create new fragments;
 now you will have a chance to study it in detail.
@@ -725,7 +725,7 @@ The first two columns in the fragment list, `Active` and `Visible`, have
 similar, but not identical, meanings.
 
 If a fragment is `Visible`, this means that the fragment's
-nodes and cross-section line will be drawn over the
+nodes and cross-section line will be overlaid on the
 data in the Data Slices.
 
 When a fragment is `Active`, this means that the data that
@@ -745,7 +745,7 @@ toggle the visibility by using the `v` hot key).
 
 As many fragments as you like can be made visible; their cross sections will all be
 overlaid on the Data Slices.  This is useful if you want to compare different
-fragments.  Note that the mesh of a given `Visible` fragment will not be
+fragments.  Note that a given `Visible` fragment's mesh will not be
 overlaid on the Fragment View unless that fragment is also `Active`.
 
 In general use, only one fragment at a time can be actve; if you set a fragment to be active
@@ -761,7 +761,7 @@ a color at random.
 
 The list of fragments is always alphabetized by name,
 so if you want to keep two fragments close to each other in the
-list, give them similar name.  A wide range of characters are acceptable
+list, give them similar names.  A wide range of characters are acceptable
 in the name, so you can give your fragments names like "sheet 1 / fiber 3", "sheet 1 / fiber 4",
 etc.
 
@@ -769,17 +769,18 @@ The fifth column in the fragments list indicates whether the fragment considers 
 or the Y axis, to be the vertical direction.  The direction of the axis is important because
 khartes only works with single-valued surfaces; the direction of "single value" is the 
 fragment's vertical direction.  This direction is set at the time the fragment is created, and
-is based on the active volume's vertical direction at that time.  The fragment's axis direction
+is based on the vertical direction
+of the volume that is active at that time.  The fragment's axis direction
 cannot be changed once the fragment is created.
 
 The sixth column simply shows how many nodes (points) the fragment contains.  The seventh column
-gives the fragment's area in square centimeters.  This is a true area as measured in 3D space;
+gives the fragment's area in square centimeters.  This is the true area, as measured in 3D space;
 it is not based simply on the projected area of the fragment onto the Fragment View.
 
 ### Advanced topic: Multiple active fragments
 
 There are times when you may want to 
-have more than one active fragment at a time.  One scenario is
+view more than one active fragment simultaneously.  One scenario is
 where each fragment represents a papyrus fiber rather than an
 entire sheet of a scroll; in this case it is convenient to
 be able to display simultaneously all the fibers in the fragment view window.
@@ -792,14 +793,14 @@ order to make a fragment active, the currently active fragment
 will be made inactive.  In other words, normally only one fragment
 can be active at a time.
 
-However, if you hold down the Ctrl key when checking an `Active`
+However, if you hold down the Ctrl key while placing a checkmark in an `Active`
 checkbox, that fragment will be made active, while any previous
 fragments will remain active.  So use Ctrl-click in the `Active`
 checkbox to allow mutiple active fragments.
 
 As before, the beige row denotes the fragment that is accepting
 new nodes.  When there are multiple active fragments, the
-"accepting" row will be the one closest to the bottom of the list.
+"accepting" row is the one closest to the bottom of the list.
 
 ## Exporting fragments
 
