@@ -632,8 +632,11 @@ class Volume():
     # class function
     def createFromTiffs(project, tiff_directory, name, ranges, pattern, filenamedict=None, callback=None, from_vc_render=False):
         axes = None
+        # print("fvcr", from_vc_render)
         if from_vc_render:
-            axes = (0,2,1)
+            # axes = (0,2,1)
+            axes = (1,0,2)
+        # print("axes", axes)
         '''
         # TODO: testing
         pts = name.split()
@@ -753,9 +756,13 @@ class Volume():
         timestamp = Utils.timestamp()
         range0 = [xrange[0], yrange[0], zrange[0]]
         drange = [xrange[2], yrange[2], zrange[2]]
+        # print("r0, dr", range0, drange)
         if axes is not None:
-            range0 = (range0[axes[0]], range0[axes[1]], range0[axes[2]])
-            drange = (drange[axes[0]], drange[axes[1]], drange[axes[2]])
+            # range0 = (range0[axes[0]], range0[axes[1]], range0[axes[2]])
+            # drange = (drange[axes[0]], drange[axes[1]], drange[axes[2]])
+            range0 = (range0[0], range0[2], range0[1])
+            drange = (drange[0], drange[2], drange[1])
+            # print("r0, dr again", range0, drange)
         header = {
                 "khartes_xyz_starts": "%d %d %d"%(range0[0], range0[1], range0[2]),
                 "khartes_xyz_steps": "%d %d %d"%(drange[0], drange[1], drange[2]),
@@ -778,6 +785,10 @@ class Volume():
         # tocube = np.transpose(tocube, axes=[2,1,0])
         # if axes is not None:
         #     tocube = np.transpose(tocube, axes=axes)
+        # print("ocube", ocube.shape)
+        if axes is not None:
+            ocube = np.transpose(ocube, axes=axes)
+            # print("ocube again", ocube.shape)
         print("beginning write to %s"%ofilefull)
         if callback is not None and not callback("Beginning write to %s"%ofilefull):
             return Volume.createErrorVolume("Cancelled by user")
