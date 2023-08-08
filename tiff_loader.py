@@ -163,6 +163,8 @@ class TiffLoader(QMainWindow):
         super(TiffLoader, self).__init__(main_window)
 
         self.main_window = main_window
+        # a bit confusing: vc_render is the flag, vcrender is the widget
+        self.vc_render = False
         # self.font().setPointSize(20)
         self.setStyleSheet("font-size: 12pt;")
         self.setWindowTitle("TIFF file loader")
@@ -218,7 +220,8 @@ class TiffLoader(QMainWindow):
         self.nameedit.textChanged.connect(self.onNameEdited)
         hbox.addWidget(self.nameedit)
         self.vcrender = QCheckBox("TIFFs are from vc_layers")
-        self.vcrender.setCheckState(Qt.Unchecked)
+        self.vcrender.setChecked(self.vc_render)
+        self.vcrender.clicked.connect(self.onVcrenderClicked)
         hbox.addStretch()
         hbox.addWidget(self.vcrender)
         vbox.addLayout(hbox)
@@ -458,6 +461,12 @@ class TiffLoader(QMainWindow):
         self.directory_valid = True
         self.filepathdict = inttif
         self.directory = pdir
+        pv = self.main_window.project_view
+        if pv is not None:
+            cv = pv.cur_volume
+            if cv is not None:
+                self.vc_render = cv.from_vc_render
+                self.vcrender.setChecked(self.vc_render)
         self.onChange()
 
     def createRanges(self):
@@ -473,11 +482,21 @@ class TiffLoader(QMainWindow):
     def setCornerValues(self, ijk, iaxis, jaxis, corner):
         ci = corner%2
         cj = corner//2
+        # print(ijk, iaxis, jaxis)
+
+        iar = iaxis
+        jar = jaxis
+        if self.vc_render:
+            axes = (0,2,1)
+            iar = axes[iaxis]
+            jar = axes[jaxis]
+            # print(iaxis, jaxis)
+
         vi = int(round(ijk[iaxis]))
         vj = int(round(ijk[jaxis]))
         rw = self.range_widgets
-        rwi = rw[iaxis][ci]
-        rwj = rw[jaxis][cj]
+        rwi = rw[iar][ci]
+        rwj = rw[jar][cj]
 
         oki = True
         if vi < rwi.minmax[0] or vi > rwi.minmax[1]:
@@ -522,6 +541,10 @@ class TiffLoader(QMainWindow):
     def color(self):
         return self.color_editor.getColor()
 
+    def onVcrenderClicked(self, s):
+        self.vc_render = self.vcrender.isChecked()
+        self.main_window.drawSlices()
+
     def corners(self):
         if not self.areAllRangesValid():
             return None
@@ -530,8 +553,14 @@ class TiffLoader(QMainWindow):
         # if self.reading:
         #     return None
         self.createRanges()
+        # ranges = [[minx, maxx, dx], [miny, maxy, dy], [minz, maxz, dz]]
         ranges = np.array(self.ranges, dtype=np.int32)
-        return ranges.transpose()[0:2]
+        # rt = [[minx, miny, minz], [maxx, maxy, maxz]]
+        rt = ranges.transpose()[0:2]
+        # print("rt", rt)
+        if self.vc_render:
+            rt = rt[:,[0,2,1]]
+        return rt
 
 
     def onChange(self):
@@ -605,7 +634,7 @@ class TiffLoader(QMainWindow):
         volume_name = self.name
         filenames = self.filepathdict
         callback = self.readerCallback
-        vcrender = self.vcrender.isChecked()
+        vcrender = self.vc_render
 
         old_volume = self.main_window.project_view.cur_volume
         # unloads old volume
