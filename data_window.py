@@ -34,6 +34,7 @@ class DataWindow(QLabel):
         self.isPanning = False
         self.isMovingNode = False
         self.isMovingTiff = False
+        self.fv2zpoints = {}
         self.localNearbyNodeIndex = -1
         self.maxNearbyNodeDistance = 10
         self.nearbyNodeDistance = -1
@@ -412,7 +413,7 @@ class DataWindow(QLabel):
         if self.volume_view is None:
             return
         gijk = self.volume_view.transposedIjkToGlobalPosition(ijk)
-        gi,gj,gk = gijk
+        # gi,gj,gk = gijk
         vol = self.volume_view.volume
 
         labels = ["X", "Y", "Img"]
@@ -431,6 +432,47 @@ class DataWindow(QLabel):
                 # dtxt = " --"
                 dtxt = "("+dtxt+")"
             stxt += "%s %s   "%(labels[i], dtxt)
+
+        ij = self.tijkToIj(ijk)
+        d = 3
+        ijl = (ij[0]-d, ij[1]-d)
+        ijg = (ij[0]+d, ij[1]+d)
+        line_found = False
+        for fv, zpts in self.fv2zpoints.items():
+            if len(zpts) == 0:
+                continue
+            # matches = (zpts == ij).all(axis=1).nonzero()[0]
+            matches = ((zpts >= ijl).all(axis=1) & (zpts <= ijg).all(axis=1)).nonzero()[0]
+            if len(matches) > 0:
+                if not line_found:
+                    stxt += "|  "
+                stxt += " %s"%fv.fragment.name
+                line_found = True
+        if line_found:
+            stxt += "   "
+
+
+        nearbyNode = self.localNearbyNodeIndex
+        if nearbyNode >= 0:
+            fvs = self.cur_frag_pts_fv
+            fv = fvs[nearbyNode]
+            ijks = self.cur_frag_pts_xyijk[:, 2:5]
+            stxt += "|  node: %s " % fv.fragment.name
+            tijk = ijks[nearbyNode]
+            gijk = self.volume_view.transposedIjkToGlobalPosition(tijk)
+            for i,a in enumerate(axes):
+                g = gijk[a]
+                dtxt = "%d"%g
+                mn = ranges[a][0]
+                mx = ranges[a][1]
+                if g < mn or g > mx:
+                    # dtxt = " --"
+                    dtxt = "("+dtxt+")"
+                if i > 0:
+                    stxt += " "
+                stxt += "%s"%(dtxt)
+            stxt += "   "
+
 
         self.window.setStatusText(stxt)
 
@@ -1126,6 +1168,7 @@ into and out of the viewing plane.
         self.cur_frag_pts_fv = []
         xypts = []
         pv = self.window.project_view
+        self.fv2zpoints = {}
         nearbyNode = (pv.nearby_node_fv, pv.nearby_node_index)
         splineLineSize = self.getDrawWidth("line")
         nodeSize = self.getDrawWidth("node")
@@ -1136,6 +1179,8 @@ into and out of the viewing plane.
             pts = frag.getZsurfPoints(self.axis, self.positionOnAxis())
             timera.time("get zsurf points")
             if pts is not None and splineLineSize > 0:
+                # self.fv2zpoints[frag] = np.round(pts).astype(np.int32)
+                self.fv2zpoints[frag] = pts
                 # print(pts)
                 m = 65535
                 color = (0,m,0,65535)
@@ -1323,6 +1368,7 @@ class SurfaceWindow(DataWindow):
         # alpha, but always has the value 65535)
         # outrgbx = np.zeros((wh,ww,4), dtype=np.uint16)
         # outrgbx[:,:,3] = 65535
+        self.fv2zpoints = {}
         for frag in self.fragmentViews():
             # if not frag.activeAndAligned():
             if not frag.active:
