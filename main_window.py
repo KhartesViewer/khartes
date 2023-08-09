@@ -143,6 +143,17 @@ class CreateFragmentButton(QPushButton):
     def onButtonClicked(self, s):
         self.main_window.createFragment()
 
+
+class CopyActiveFragmentButton(QPushButton):
+    def __init__(self, main_window, parent=None):
+        super(CopyActiveFragmentButton, self).__init__("Copy Active Fragment", parent)
+        self.main_window = main_window
+        self.setToolTip("Create a new fragment that is a copy\nof the currently active fragment")
+        self.clicked.connect(self.onButtonClicked)
+
+    def onButtonClicked(self, s):
+        self.main_window.copyActiveFragment()
+
 class CursorModeButton(QPushButton):
     def __init__(self, main_window, parent=None):
         super(CursorModeButton, self).__init__("", parent)
@@ -683,6 +694,10 @@ class MainWindow(QMainWindow):
         create_frag = CreateFragmentButton(self)
         create_frag.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
         hlayout.addWidget(create_frag)
+        self.copy_frag = CopyActiveFragmentButton(self)
+        self.copy_frag.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
+        self.copy_frag.setEnabled(False)
+        hlayout.addWidget(self.copy_frag)
         hlayout.addStretch()
         vlayout.addLayout(hlayout)
         self.fragments_table = QTableView()
@@ -962,6 +977,77 @@ class MainWindow(QMainWindow):
     def onNewFragmentButtonClick(self, s):
         self.createFragment()
 
+    def uniqueFragmentName(self, start):
+        pv = self.project_view
+        if pv is None:
+            print("Warning, cannot find unique fragment names without a project")
+            return None
+        names = set()
+        for frag in pv.fragments.keys():
+            name = frag.name
+            names.add(name)
+        stem = "frag"
+        # mfv = pv.mainActiveVisibleFragmentView(unaligned_ok=True)
+        # if mfv is not None:
+        #     stem = mfv.fragment.name
+        if start is not None:
+            stem = start
+        if stem not in names:
+            return stem
+        for i in range(1,1000):
+            # name = "%s%d"%(stem,i)
+            name = Utils.nextName(stem, i)
+            if name not in names:
+                return name
+        return None
+
+    def enableWidgetsIfActiveFragment(self):
+        pv = self.project_view
+        active = False
+        if pv is not None:
+            active = (len(pv.activeFragmentViews(unaligned_ok=True)) > 0)
+        self.export_mesh_action.setEnabled(active)
+        self.copy_frag.setEnabled(active)
+
+    def copyActiveFragment(self):
+        pv = self.project_view
+        if pv is None:
+            print("Warning, cannot create new fragment without project")
+            return
+        # vv = self.volumeView()
+        # if vv is None:
+        #     print("Warning, cannot create new fragment without volume view set")
+        #     return
+        mfv = pv.mainActiveVisibleFragmentView(unaligned_ok=True)
+        if mfv is None:
+            # this should never be reached; Copy button should be
+            # inactive in this case
+            print("No currently active fragment")
+            return
+        mf = mfv.fragment
+        stem = mf.name+" copy"
+        name = self.uniqueFragmentName(stem)
+        if name is None:
+            print("Can't create unique fragment name from", stem)
+            return
+        # frag = Fragment(name, mf.direction)
+        # frag.setColor(mf.qcolor, no_notify=True)
+        # frag.gpoints = np.copy(mf.gpoints)
+        frag = mf.createCopy(name)
+        print("created fragment %s from %s"%(frag.name, mf.name))
+        self.fragments_table.model().beginResetModel()
+        pv.project.addFragment(frag)
+        self.setFragments()
+        self.fragments_table.model().endResetModel()
+        exclusive = (len(pv.activeFragmentViews(unaligned_ok=True)) == 1)
+        self.setFragmentActive(frag, True, exclusive)
+        self.enableWidgetsIfActiveFragment()
+        # need to make sure new fragment is added to table
+        # before calling scrollToRow
+        self.app.processEvents()
+        index = pv.project.fragments.index(frag)
+        self.fragments_table.model().scrollToRow(index)
+
     def createFragment(self):
         pv = self.project_view
         if pv is None:
@@ -971,6 +1057,7 @@ class MainWindow(QMainWindow):
         if vv is None:
             print("Warning, cannot create new fragment without volume view set")
             return
+        '''
         names = set()
         for frag in pv.fragments.keys():
             name = frag.name
@@ -984,21 +1071,34 @@ class MainWindow(QMainWindow):
             name = Utils.nextName(stem, i)
             if name not in names:
                 break
+        '''
+        stem = "frag"
+        mfv = pv.mainActiveVisibleFragmentView(unaligned_ok=True)
+        if mfv is not None:
+            stem = mfv.fragment.name
+        name = self.uniqueFragmentName(stem)
+        if name is None:
+            print("Can't create unique fragment name from stem", stem)
+            return
         # print("color",color)
         frag = Fragment(name, vv.direction)
         frag.setColor(Utils.getNextColor(), no_notify=True)
+        frag.valid = True
         print("created fragment %s"%frag.name)
         self.fragments_table.model().beginResetModel()
         # print("start cafv")
-        if len(pv.activeFragmentViews(unaligned_ok=True)) == 1:
-            pv.clearActiveFragmentViews()
+        # if len(pv.activeFragmentViews(unaligned_ok=True)) == 1:
+        #     pv.clearActiveFragmentViews()
         # print("end cafv")
         pv.project.addFragment(frag)
-        self.fragments_table.model().endResetModel()
         self.setFragments()
-        fv = pv.fragments[frag]
-        fv.active = True
-        self.export_mesh_action.setEnabled(len(pv.activeFragmentViews(unaligned_ok=True)) > 0)
+        self.fragments_table.model().endResetModel()
+        # fv = pv.fragments[frag]
+        # fv.active = True
+        # self.export_mesh_action.setEnabled(len(pv.activeFragmentViews(unaligned_ok=True)) > 0)
+        exclusive = (len(pv.activeFragmentViews(unaligned_ok=True)) == 1)
+        self.setFragmentActive(frag, True, exclusive)
+        self.enableWidgetsIfActiveFragment()
         # need to make sure new fragment is added to table
         # before calling scrollToRow
         self.app.processEvents()
@@ -1709,7 +1809,8 @@ class MainWindow(QMainWindow):
         fragment_view.notifyModified()
         self.fragments_table.model().endResetModel()
         # self.export_mesh_action.setEnabled(self.project_view.mainActiveVisibleFragmentView() is not None)
-        self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
+        # self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
+        self.enableWidgetsIfActiveFragment()
         self.drawSlices()
 
     def setFragmentColor(self, fragment, color):
@@ -1735,7 +1836,8 @@ class MainWindow(QMainWindow):
         self.import_nrrd_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
         # self.export_mesh_action.setEnabled(project_view.mainActiveFragmentView() is not None)
-        self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
+        # self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
+        self.enableWidgetsIfActiveFragment()
 
     def setProject(self, project):
         project_view = ProjectView(project)
