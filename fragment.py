@@ -245,6 +245,14 @@ class Fragment:
         self.modified = Utils.timestamp()
         self.project = None
 
+    def createCopy(self, name):
+        frag = Fragment(name, self.direction)
+        frag.setColor(self.color, no_notify=True)
+        frag.gpoints = np.copy(self.gpoints)
+        frag.valid = True
+        return frag
+        
+
     def toDict(self):
         info = {}
         info['name'] = self.name
