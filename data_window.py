@@ -128,6 +128,16 @@ class DataWindow(QLabel):
         # print(ij, i, j, tijk)
         return tuple(tijk)
 
+    # slice ijk position to tijk
+    def ijkToTijk(self, ijk):
+        i,j,k = ijk
+        tijk = [0,0,0]
+        tijk[self.axis] = k
+        tijk[self.iIndex] = i
+        tijk[self.jIndex] = j
+        # print(ij, i, j, tijk)
+        return tuple(tijk)
+
     def tijkToIj(self, tijk):
         i = tijk[self.iIndex]
         j = tijk[self.jIndex]
@@ -734,7 +744,8 @@ class DataWindow(QLabel):
                 tijk = self.ijToTijk(ij)
             else:
                 # print("ijk", ijk)
-                tijk = self.ijToTijk(ijk[0:2])
+                # tijk = self.ijToTijk(ijk[0:2])
+                tijk = self.ijkToTijk(ijk)
             # print("tijk", tijk)
             self.volume_view.setIjkTf(tijk)
             self.window.drawSlices()
