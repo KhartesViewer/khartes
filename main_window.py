@@ -989,8 +989,10 @@ class MainWindow(QMainWindow):
         frag.setColor(Utils.getNextColor(), no_notify=True)
         print("created fragment %s"%frag.name)
         self.fragments_table.model().beginResetModel()
+        # print("start cafv")
         if len(pv.activeFragmentViews(unaligned_ok=True)) == 1:
             pv.clearActiveFragmentViews()
+        # print("end cafv")
         pv.project.addFragment(frag)
         self.fragments_table.model().endResetModel()
         self.setFragments()
@@ -1467,6 +1469,7 @@ class MainWindow(QMainWindow):
         if not pv.valid:
             print("Project file %s not opened: %s"%(fname, pv.error))
             return
+        # print("setting project view")
         self.setProjectView(pv)
         self.setWindowTitle("%s - %s"%(MainWindow.appname, Path(fname).name))
         cur_volume = pv.cur_volume
@@ -1475,10 +1478,13 @@ class MainWindow(QMainWindow):
             spv = pv.volumes
             if len(pv.volumes) > 0:
                 cur_volume = list(spv.keys())[0]
+        # print("setting volume")
         self.setVolume(cur_volume, no_notify=True)
+        # print("volume set")
         # intentionally called a second time to use
         # cur_volume information to set fragment view volume
         self.setProjectView(pv)
+        # print("project view set")
         path = Path(fname)
         path = path.absolute()
         parent = path.parent
@@ -1631,6 +1637,7 @@ class MainWindow(QMainWindow):
             loading = self.showLoading()
 
         self.volumes_table.model().beginResetModel()
+        # print("pv set cur vol")
         self.project_view.setCurrentVolume(volume, no_notify)
         self.volumes_table.model().endResetModel()
         vv = None
@@ -1641,11 +1648,14 @@ class MainWindow(QMainWindow):
                 vv.setDefaultParameters(self, no_notify)
             if vv.minZoom == 0.:
                 vv.setDefaultMinZoom(self)
+        # print("pv set updata frag views")
         self.project_view.updateFragmentViews()
+        # print("set vol views")
         self.depth.setVolumeView(vv);
         self.xline.setVolumeView(vv);
         self.inline.setVolumeView(vv);
         self.surface.setVolumeView(vv);
+        # print("draw slices")
         self.drawSlices()
 
     def setVolumeViewColor(self, volume_view, color):
