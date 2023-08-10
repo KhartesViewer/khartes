@@ -797,7 +797,8 @@ fragments will remain active.  So use Ctrl-click in the `Active`
 checkbox to allow mutiple active fragments.
 
 As before, the beige row denotes the fragment that is accepting
-new nodes.  When there are multiple active fragments, the
+new nodes.  When there are multiple fragments that are both active
+and visible, the
 "accepting" row is the one closest to the bottom of the list.
 
 ## Exporting fragments
