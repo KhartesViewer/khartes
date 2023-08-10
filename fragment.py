@@ -901,6 +901,8 @@ class Fragment:
 
 class FragmentView:
 
+    use_linear_interpolation = True
+
     def __init__(self, project_view, fragment):
         self.project_view = project_view
         self.fragment = fragment
@@ -1459,8 +1461,9 @@ class FragmentView:
         # recall that index order is k,j,i
         ixyzs = ixyzs[:,ixyzs[0,:]<ftrdata.shape[0]]
         ixyzs = ixyzs[:,ixyzs[0,:]>=0]
-        use_linear_interpolation = True
-        if use_linear_interpolation:
+        # use_linear_interpolation = True
+        if FragmentView.use_linear_interpolation:
+            # print("linear")
             z0s = ixyzs[0,:]
             ss0 = ftrdata[(z0s, ixyzs[1,:], ixyzs[2,:])]
             z1s = np.minimum(ixyzs[0,:]+1, ftrdata.shape[0]-1)
@@ -1471,6 +1474,7 @@ class FragmentView:
             ssi = ss0*(1.-zfs)+ss1*(zfs)
             self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = np.minimum(ssi, 65535)
         else: # nearest neighbor
+            # print("nn")
             self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = ftrdata[(ixyzs[0,:], ixyzs[1,:], ixyzs[2,:])]
 
 
