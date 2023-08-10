@@ -1703,6 +1703,12 @@ class FragmentView:
         self.fragment.notifyModified()
         self.setLocalPoints(True)
 
+    def moveInK(self, step):
+        self.fpoints[:,2] += step
+        self.fragment.gpoints = self.cur_volume_view.volume.transposedIjksToGlobalPositions(self.fpoints, self.fragment.direction)
+        self.fragment.notifyModified()
+        self.setLocalPoints(True)
+
     # return True if succeeds, False if fails
     def movePoint(self, index, new_vijk):
         old_fijk = self.fpoints[index]

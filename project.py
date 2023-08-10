@@ -263,6 +263,29 @@ class ProjectView:
                     last = fv
         return last
 
+    # Prefer to return last visible active fragment, but
+    # if nothing is both active and visible, return last
+    # active fragment
+    def mainActiveFragmentView(self, unaligned_ok=False):
+        last_visible = None
+        last = None
+        for fv in self.fragments.values():
+            if fv.visible:
+                if fv.activeAndAligned():
+                    last_visible = fv
+                    last = fv
+                elif fv.active and unaligned_ok:
+                    last_visible = fv
+                    last = fv
+            else:
+                if fv.activeAndAligned():
+                    last = fv
+                elif fv.active and unaligned_ok:
+                    last = fv
+        if last_visible is not None:
+            return last_visible
+        return last
+
     def activeFragmentViews(self, unaligned_ok=False):
         fvs = []
         for fv in self.fragments.values():
