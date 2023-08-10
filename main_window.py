@@ -7,7 +7,7 @@ import time
 
 from PyQt5.QtWidgets import (
         QAction, QApplication, QAbstractItemView,
-        QCheckBox,
+        QCheckBox, QComboBox,
         QDialog, QDialogButtonBox,
         QFileDialog, QFrame,
         QGridLayout, QGroupBox,
@@ -35,7 +35,7 @@ from PyQt5.QtXml import QDomDocument
 from tiff_loader import TiffLoader
 from data_window import DataWindow, SurfaceWindow
 from project import Project, ProjectView
-from fragment import Fragment, FragmentsModel
+from fragment import Fragment, FragmentsModel, FragmentView
 from volume import (
         Volume, VolumesModel, 
         DirectionSelectorDelegate,
@@ -132,6 +132,24 @@ class InfillDialog(QDialog):
         else:
             self.edit.setStyleSheet("QLineEdit { color: red }")
 
+class ZInterpolationSetter(QWidget):
+    def __init__(self, main_window, parent=None):
+        super(ZInterpolationSetter, self).__init__(parent)
+        self.main_window = main_window
+        hlayout = QHBoxLayout()
+        self.setLayout(hlayout)
+        label = QLabel("Z interpolation:")
+        hlayout.addWidget(label)
+        cb = QComboBox()
+        cb.addItem("Linear")
+        cb.addItem("Nearest")
+        cb.setCurrentIndex(0)
+        cb.activated.connect(self.onActivated)
+        hlayout.addWidget(cb)
+        hlayout.addStretch()
+
+    def onActivated(self, index):
+        self.main_window.setZInterpolation(index)
 
 class CreateFragmentButton(QPushButton):
     def __init__(self, main_window, parent=None):
@@ -520,6 +538,7 @@ class MainWindow(QMainWindow):
         self.addVolumesPanel()
         self.addFragmentsPanel()
         self.addSettingsPanel()
+        self.addDevToolsPanel()
 
         widget = QWidget()
         widget.setLayout(grid)
@@ -720,6 +739,37 @@ class MainWindow(QMainWindow):
         self.fragments_table.resizeColumnsToContents()
         vlayout.addWidget(self.fragments_table)
         self.tab_panel.addTab(panel, "Fragments")
+
+    def addDevToolsPanel(self):
+        panel = QWidget()
+        vlayout = QVBoxLayout()
+        panel.setLayout(vlayout)
+        ivlayout = QVBoxLayout()
+        label = QLabel("Warning: Developer tools; use at your own risk!")
+        label.setStyleSheet("QLabel { font-weight: bold; color: white ; background-color: red}")
+        label.setAlignment(Qt.AlignCenter)
+        # TODO set style (white letters on dark red background)
+        ivlayout.addWidget(label)
+        label = QLabel("Settings will not be retained after you exit")
+        ivlayout.addWidget(label)
+        vlayout.addLayout(ivlayout)
+        # hlayout = QHBoxLayout()
+        # label = "Z interpolation:"
+        interp = ZInterpolationSetter(self)
+        vlayout.addWidget(interp)
+        vlayout.addStretch()
+        self.tab_panel.addTab(panel, "Dev Tools")
+
+    def setZInterpolation(self, index):
+        linear = True
+        if index != 0:
+            linear = False
+        if FragmentView.use_linear_interpolation == linear:
+            return
+        FragmentView.use_linear_interpolation = linear
+        if self.project_view is not None:
+            self.project_view.updateFragmentViews()
+            self.drawSlices()
 
     def addVolumesPanel(self):
         panel = QWidget()
