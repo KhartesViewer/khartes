@@ -444,9 +444,12 @@ class DataWindow(QLabel):
             stxt += "%s %s   "%(labels[i], dtxt)
 
         ij = self.tijkToIj(ijk)
+        xy = self.ijToXy(ij)
         d = 3
-        ijl = (ij[0]-d, ij[1]-d)
-        ijg = (ij[0]+d, ij[1]+d)
+        ijl = self.xyToIj((xy[0]-d, xy[1]-d))
+        ijg = self.xyToIj((xy[0]+d, xy[1]+d))
+        # ijl = (ij[0]-d, ij[1]-d)
+        # ijg = (ij[0]+d, ij[1]+d)
         line_found = False
         for fv, zpts in self.fv2zpoints.items():
             if len(zpts) == 0:
