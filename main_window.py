@@ -164,13 +164,29 @@ class CreateFragmentButton(QPushButton):
 
 class CopyActiveFragmentButton(QPushButton):
     def __init__(self, main_window, parent=None):
-        super(CopyActiveFragmentButton, self).__init__("Copy Active Fragment", parent)
+        # super(CopyActiveFragmentButton, self).__init__("Copy Active Fragment", parent)
+        super(CopyActiveFragmentButton, self).__init__("Copy", parent)
         self.main_window = main_window
         self.setToolTip("Create a new fragment that is a copy\nof the currently active fragment")
         self.clicked.connect(self.onButtonClicked)
 
     def onButtonClicked(self, s):
         self.main_window.copyActiveFragment()
+
+class MoveActiveFragmentButton(QPushButton):
+    def __init__(self, main_window, text, step, parent=None):
+        super(MoveActiveFragmentButton, self).__init__(text, parent)
+        self.main_window = main_window
+        self.step = step
+        # up and down are opposite signs to what you might expect
+        if step > 0:
+            self.setToolTip("Move active fragment %d pixel(s) down"%step)
+        else:
+            self.setToolTip("Move active fragment %d pixel(s) up"%(-step))
+        self.clicked.connect(self.onButtonClicked)
+
+    def onButtonClicked(self, s):
+        self.main_window.moveActiveFragment(self.step)
 
 class CursorModeButton(QPushButton):
     def __init__(self, main_window, parent=None):
@@ -713,10 +729,27 @@ class MainWindow(QMainWindow):
         create_frag = CreateFragmentButton(self)
         create_frag.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
         hlayout.addWidget(create_frag)
+        label = QLabel("Active fragment:")
+        # label.setStyleSheet("QLabel { background-color : beige; padding-left: 5}")
+        label.setStyleSheet("QLabel { padding-left: 5}")
+        hlayout.addWidget(label)
+        # active_frame = QGroupBox("Actions on active fragment")
+        # af_layout = QHBoxLayout()
+        # active_frame.setLayout(af_layout)
         self.copy_frag = CopyActiveFragmentButton(self)
         self.copy_frag.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
         self.copy_frag.setEnabled(False)
         hlayout.addWidget(self.copy_frag)
+        self.move_frag_up = MoveActiveFragmentButton(self, "Z ↑", -1)
+        self.move_frag_up.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
+        self.move_frag_up.setEnabled(False)
+        hlayout.addWidget(self.move_frag_up)
+        self.move_frag_down = MoveActiveFragmentButton(self, "Z ↓", 1)
+        self.move_frag_down.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
+        self.move_frag_down.setEnabled(False)
+        hlayout.addWidget(self.move_frag_down)
+        # af_layout.addWidget(self.copy_frag)
+        # hlayout.addWidget(active_frame)
         hlayout.addStretch()
         vlayout.addLayout(hlayout)
         self.fragments_table = QTableView()
@@ -1055,9 +1088,27 @@ class MainWindow(QMainWindow):
         pv = self.project_view
         active = False
         if pv is not None:
-            active = (len(pv.activeFragmentViews(unaligned_ok=True)) > 0)
+            # active = (len(pv.activeFragmentViews(unaligned_ok=True)) > 0)
+            active = (pv.mainActiveFragmentView(unaligned_ok=True) is not None)
         self.export_mesh_action.setEnabled(active)
         self.copy_frag.setEnabled(active)
+        self.move_frag_up.setEnabled(active)
+        self.move_frag_down.setEnabled(active)
+
+    def moveActiveFragment(self, step):
+        pv = self.project_view
+        if pv is None:
+            print("Warning, cannot create new fragment without project")
+            return
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            # this should never be reached; button should be
+            # inactive in this case
+            print("No currently active fragment")
+            return
+        # mf = mfv.fragment
+        mfv.moveInK(step)
+        self.drawSlices()
 
     def copyActiveFragment(self):
         pv = self.project_view
@@ -1068,14 +1119,14 @@ class MainWindow(QMainWindow):
         # if vv is None:
         #     print("Warning, cannot create new fragment without volume view set")
         #     return
-        mfv = pv.mainActiveVisibleFragmentView(unaligned_ok=True)
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
             # this should never be reached; Copy button should be
             # inactive in this case
             print("No currently active fragment")
             return
         mf = mfv.fragment
-        stem = mf.name+" copy"
+        stem = mf.name+"-copy"
         name = self.uniqueFragmentName(stem)
         if name is None:
             print("Can't create unique fragment name from", stem)
