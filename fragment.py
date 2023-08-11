@@ -381,8 +381,14 @@ class Fragment:
         if not no_notify:
             self.notifyModified()
 
-    def badTrglsBySkinniness(self, tri, min_plumpness):
+    min_roundness = .1
+
+    def minRoundness(self):
+        return Fragment.min_roundness
+
+    def badTrglsBySkinniness(self, tri, min_roundness):
         simps = tri.simplices
+        # 2D coordinates
         verts = tri.points
         v0 = verts[simps[:,0]]
         v1 = verts[simps[:,1]]
@@ -390,13 +396,19 @@ class Fragment:
         v01 = v1-v0
         v02 = v2-v0
         v12 = v2-v1
+        area = abs(.5*(v01[:,0]*v02[:,1] - v01[:,1]*v02[:,0]))
+        
         l01 = np.sqrt((v01*v01).sum(1))
         l02 = np.sqrt((v02*v02).sum(1))
         l12 = np.sqrt((v12*v12).sum(1))
-        d12 = (v01*v02).sum(1)/(l01*l02)
-        d01 = (v02*v12).sum(1)/(l02*l12)
-        d02 = -(v01*v12).sum(1)/(l01*l12)
-        pass
+
+        circumference = l01+l02+l12
+        pmax = math.sqrt(.25*math.sqrt(3.))/3
+
+        roundness = np.sqrt(area)/(circumference*pmax)
+
+        bads = np.where(roundness < self.minRoundness())[0]
+        return bads
 
     def badTrglsByMaxAngle(self, tri):
         simps = tri.simplices
@@ -540,7 +552,8 @@ class Fragment:
             print("createInfillPoints triangulation error: %s"%err)
             return ngijks
 
-        bads = self.badBorderTrgls(tri, self.badTrglsByNormal(tri, tgijks))
+        # bads = self.badBorderTrgls(tri, self.badTrglsByNormal(tri, tgijks))
+        bads = self.badBorderTrgls(tri, self.badTrglsBySkinniness(tri, self.minRoundness()))
         badlist = bads.tolist()
 
         interp = CloughTocher2DInterpolator(tri, tgijks[:,2])
@@ -611,7 +624,8 @@ class Fragment:
                 print(self.err)
                 return
 
-            bads = frag.badBorderTrgls(tri, frag.badTrglsByNormal(tri, tgps))
+            # bads = frag.badBorderTrgls(tri, frag.badTrglsByNormal(tri, tgps))
+            bads = frag.badBorderTrgls(tri, frag.badTrglsBySkinniness(tri, frag.minRoundness()))
             badlist = bads.tolist()
             for i,trg in enumerate(tri.simplices):
                 if i in badlist:
@@ -1094,18 +1108,48 @@ class FragmentView:
     
     def computeFragRect(self):
         frag_rect = self.nodesBoundingBox(None, None)
+        # print("fr", frag_rect)
         if frag_rect is not None:
            minx, miny, maxx, maxy = frag_rect
            nk,nj,ni = self.cur_volume_view.trdata.shape
            # if self.fragment.direction != self.cur_volume_view.direction:
            if not self.aligned():
                ni,nj,nk = nk,nj,ni
+           minx = int(min(minx-1, ni))
+           miny = int(min(miny-1, nj))
            minx = int(max(minx-1, 0))
            miny = int(max(miny-1, 0))
+           maxx = int(max(maxx+1, 0))
+           maxy = int(max(maxy+1, 0))
            maxx = int(min(maxx+1, ni))
            maxy = int(min(maxy+1, nj))
            frag_rect = (minx, miny, maxx, maxy)
+           # print("fr2", frag_rect)
         return frag_rect
+
+    hide_skinny_triangles = False
+    # Fragment:
+    # min_roundness = 0.
+
+    def hideSkinnyTriangles(self):
+        return FragmentView.hide_skinny_triangles
+
+    # def minRoundness(self):
+    #     return FragmentView.min_roundness
+
+    def interpAndFilter(self, interp_method, tri):
+        # print("wrapper", self.hideSkinnyTriangles())
+        def interp(pts):
+            zs = interp_method(pts)
+            if self.hideSkinnyTriangles():
+                simps = tri.find_simplex(pts)
+                # zs[simps%2 == 0] = np.nan
+                frag = self.fragment
+                bads = frag.badBorderTrgls(tri, frag.badTrglsBySkinniness(tri, self.fragment.minRoundness()))
+                # print("bads", len(bads), "/", len(tri.simplices))
+                zs[np.isin(simps, bads)] = np.nan
+            return zs
+        return interp
 
     def createZsurf(self):
         timer_active = False
@@ -1272,12 +1316,13 @@ class FragmentView:
             inttype = ""
             inttype = self.fragment.params.get('interpolation', '')
             if inttype == "linear":
-                interp = LinearNDInterpolator(self.tri, self.fpoints[:,2])
+                inner_interp = LinearNDInterpolator(self.tri, self.fpoints[:,2])
             elif inttype == "nearest":
-                interp = NearestNDInterpolator(self.tri, self.fpoints[:,2])
+                inner_interp = NearestNDInterpolator(self.tri, self.fpoints[:,2])
             else:
-                interp = CloughTocher2DInterpolator(self.tri, self.fpoints[:,2])
+                inner_interp = CloughTocher2DInterpolator(self.tri, self.fpoints[:,2])
             # for testing:
+            interp = self.interpAndFilter(inner_interp, self.tri)
             if changed_rect is None:
                 if frag_rect is None:
                     print("frag_rect unexpectedly None")
@@ -1290,6 +1335,9 @@ class FragmentView:
                     # print("fr",minx,miny,maxx,maxy)
                     nx = maxx-minx
                     ny = maxy-miny
+                    if nx < 0 or ny < 0:
+                        print("out of order", minx, miny, maxx, maxy)
+                    # print("later", minx, miny, maxx, maxy)
                     pts = np.indices((nx, ny))
                     pts[0,:,:] += int(minx)
                     pts[1,:,:] += int(miny)
