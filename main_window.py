@@ -54,6 +54,90 @@ class ColorBlock(QLabel):
         palette.setColor(QPalette.Window, QColor(color))
         self.setPalette(palette)
 
+class RoundnessSetter(QGroupBox):
+    def __init__(self, main_window, parent=None):
+        super(RoundnessSetter, self).__init__("Skinny border triangles", parent)
+        self.main_window = main_window
+        self.min_roundness = 0.
+        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
+        # gb = QGroupBox("Skinny border triangles", self)
+        vlayout = QVBoxLayout()
+        # gb.setLayout(vlayout)
+        self.setLayout(vlayout)
+        self.cb = QCheckBox("Hide skinny triangles")
+        self.cb.clicked.connect(self.onClicked)
+        vlayout.addWidget(self.cb)
+        hlayout = QHBoxLayout()
+        label = QLabel("Min roundness:")
+        hlayout.addWidget(label)
+        self.edit = QLineEdit()
+        fm = self.edit.fontMetrics()
+        w = 7*fm.width('0')
+        self.edit.setFixedWidth(w)
+        self.edit.editingFinished.connect(self.onEditingFinished)
+        self.edit.textEdited.connect(self.onTextEdited)
+        hlayout.addWidget(self.edit)
+        hlayout.addStretch()
+        vlayout.addLayout(hlayout)
+        vlayout.addStretch()
+
+    def onClicked(self, s):
+        # s is bool
+        # self.main_window.setVolBoxesVisible(s==Qt.Checked)
+        # print("hide skinny trgls", s)
+        self.setHideSkinnyTriangles(s)
+
+    def setHideSkinnyTriangles(self, state):
+        self.cb.setChecked(state)
+        self.main_window.setHideSkinnyTriangles(state)
+
+    def getHideSkinnyTriangles(self):
+        return self.cb.checked()
+
+    def setMinRoundness(self, value):
+        self.min_roundness = value
+        txt = "%.2f"%value
+        self.edit.setText(txt)
+        self.edit.setStyleSheet("")
+        self.main_window.setMinRoundness(value)
+
+    def getMinRoundness(self):
+        return self.min_roundness
+
+    def parseText(self, txt):
+        valid = True
+        f = 0
+        try:
+            f = float(txt)
+        except:
+            valid = False
+        if f < 0 or f > 1:
+            valid = False
+        # f = min(f, 1.)
+        # f = max(f, 0.)
+        return valid, f
+
+    def onTextEdited(self, txt):
+        valid, f = self.parseText(txt)
+        # print("ote", valid)
+        if valid:
+            self.edit.setStyleSheet("")
+        else:
+            self.edit.setStyleSheet("QLineEdit { color: red }")
+
+    def onEditingFinished(self):
+        txt = self.edit.text()
+        valid, value = self.parseText(txt)
+        if not valid:
+            self.setMinRoundness(self.min_roundness)
+            return
+        self.setMinRoundness(value)
+        # if value != self.min_roundness:
+        #     # print("oef", valid, value)
+        #     self.min_roundness = value
+        #     self.main_window.setMinRoundness(value)
+
+
 class InfillDialog(QDialog):
     def __init__(self, main_window, parent=None):
         instructions = "In order to fit the curved fragment surface,\ninfill points are added to the exported mesh.\nThe distance between points is given in voxels.\n16 is a good default.\n0 means do not infill."
@@ -790,6 +874,10 @@ class MainWindow(QMainWindow):
         # label = "Z interpolation:"
         interp = ZInterpolationSetter(self)
         vlayout.addWidget(interp)
+        roundness = RoundnessSetter(self)
+        roundness.setHideSkinnyTriangles(False)
+        roundness.setMinRoundness(.5)
+        vlayout.addWidget(roundness)
         vlayout.addStretch()
         self.tab_panel.addTab(panel, "Dev Tools")
 
@@ -800,6 +888,24 @@ class MainWindow(QMainWindow):
         if FragmentView.use_linear_interpolation == linear:
             return
         FragmentView.use_linear_interpolation = linear
+        if self.project_view is not None:
+            self.project_view.updateFragmentViews()
+            self.drawSlices()
+
+    def setHideSkinnyTriangles(self, state):
+        # print("shst", state)
+        if state == FragmentView.hide_skinny_triangles:
+            return
+        FragmentView.hide_skinny_triangles = state
+        if self.project_view is not None:
+            self.project_view.updateFragmentViews()
+            self.drawSlices()
+
+    def setMinRoundness(self, value):
+        # print("smr", value)
+        if value == Fragment.min_roundness:
+            return
+        Fragment.min_roundness = value
         if self.project_view is not None:
             self.project_view.updateFragmentViews()
             self.drawSlices()
