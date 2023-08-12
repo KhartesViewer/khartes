@@ -965,6 +965,42 @@ One thing to keep in mind, especially if you are working over a network, is
 that when the tracking cursors are displayed, all the data slices are redrawn
 every time the mouse is moved.
 
+## Advanced topic: Interpolation
+
+Users sometimes wonder how, and whether, khartes resamples the data that it reads from the TIFF files.
+
+The answer is, "as little as possible".
+
+The input TIFF images are made up of 16-bit unsigned integers, and these values are carried intact in khartes all the way to the display; they are never rounded down to 8-bit integers.
+
+The input data is never compressed, and it is resampled only if the user explicity requests it, by setting the "Step" value in the TIFF loader to something other than 1.
+
+Whenever interpolation is necessary, nearest-neighbor interpolation is used: khartes uses an existing data value, rather than creating a new interpolated value.  You can see this by zooming in on any of the data windows, so that each voxel in the original data covers more that one pixel on the screen.  If you look closely, you will see the voxels look like little rectangles, where each rectangle is drawn in a single shade: the shade representing the value of the input voxel.
+
+There is one exception: vertical interpolation in the Fragment View.
+
+Begin by defining a local coordinate system for the fragment view.
+The sampling is the same, and the origin is the same, as for the original 3D data volume.
+The only thing that changes is the axis naming.
+The X axis in this new system runs in what the user sees as the left-to-right direction.
+The Y axis runs top-to-bottom.  And the Z axis comes up out of  the screen, towards the viewer.
+
+When the user creates a node, or moves a node, the node always has integer X,Y,Z values in this
+new system (and likewise in the original data-volume coordinate system).
+
+But in the areas between the nodes, it is a little more complicated. 
+In these areas, the data needs to be interpolated onto the surface that the nodes define.
+In general, between the nodes, at every X,Y position (where the X and Y are still integers),
+the Z position is not an integer, because of the way the surfaces is interpolated between nodes.
+So how to decide what brightness to assign to this location,
+since we only have data at integer X,Y,Z position?
+The answer is to find the data value at X,Y,Z+ (where Z+ is the integer just greater
+than the non-integer interpolated Z value) and at X,Y,Z- (you can probably guess what Z- is),
+and the value to be drawn in the fragment view is linearly interpolated between these two values.
+
+This linear interpolation is the only time something other than nearest-neighbor interpolation is
+used in khartes.
+
 ## Things to fix
 
 There is no undo function.
