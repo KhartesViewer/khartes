@@ -1940,23 +1940,23 @@ class MainWindow(QMainWindow):
             return loading
 
     def setVolume(self, volume, no_notify=False):
+        pv = self.project_view
         if volume is not None and volume.data is None:
             loading = self.showLoading()
 
         self.volumes_table.model().beginResetModel()
-        # print("pv set cur vol")
-        self.project_view.setCurrentVolume(volume, no_notify)
+        pv.setCurrentVolume(volume, no_notify)
         self.volumes_table.model().endResetModel()
         vv = None
         if volume is not None:
-            vv = self.project_view.cur_volume_view
+            vv = pv.cur_volume_view
             if vv.zoom == 0.:
                 print("setting volume default parameters", volume.name)
                 vv.setDefaultParameters(self, no_notify)
             if vv.minZoom == 0.:
                 vv.setDefaultMinZoom(self)
         # print("pv set updata frag views")
-        self.project_view.updateFragmentViews()
+        pv.updateFragmentViews()
         # print("set vol views")
         self.depth.setVolumeView(vv);
         self.xline.setVolumeView(vv);
