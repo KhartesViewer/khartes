@@ -1772,6 +1772,7 @@ class MainWindow(QMainWindow):
 
     def loadProject(self, fname):
         loading = self.showLoading()
+        self.unsetProjectView()
         pv = ProjectView.open(fname)
         if not pv.valid:
             print("Project file %s not opened: %s"%(fname, pv.error))
@@ -2025,6 +2026,23 @@ class MainWindow(QMainWindow):
         fragment.setColor(color)
         self.fragments_table.model().endResetModel()
         self.drawSlices()
+
+    def unsetProjectView(self):
+        if self.project_view == None:
+            return
+        self.setVolume(None, no_notify=True)
+        self.setFragments()
+        self.project_view = None
+        self.volumes_model = VolumesModel(None, self)
+        self.fragments_model = FragmentsModel(None, self)
+        self.save_project_action.setEnabled(False)
+        self.save_project_as_action.setEnabled(False)
+        self.import_nrrd_action.setEnabled(False)
+        self.import_tiffs_action.setEnabled(False)
+        self.enableWidgetsIfActiveFragment()
+        self.drawSlices()
+        self.app.processEvents()
+
 
     def setProjectView(self, project_view):
         project_view.project.modified_callback = self.projectModifiedCallback
