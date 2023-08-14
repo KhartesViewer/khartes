@@ -558,6 +558,10 @@ is an advanced topic discussed below, in the "Control Area: Fragments" section. 
 * **t**: This key turns on and off an advanced capability called "tracking cursors".
 Tracking cursors are described in the "Tracking Cursors" section below.
 
+* **l**: This key (small L) turns on and off an advanced capability called "live updates".
+Live updates are turned on by default; the concept is described in the "Live Updates"
+section below.
+
 ## General segmentation workflow
 
 This section of the tutorial provides some
@@ -965,17 +969,40 @@ One thing to keep in mind, especially if you are working over a network, is
 that when the tracking cursors are displayed, all the data slices are redrawn
 every time the mouse is moved.
 
+## Advanced topic: Live Updates
+
+Khartes is designed to be interactive, so every time you make a change to a fragment, for instance, by
+moving, adding, or deleting a node, the results of the change are shown instantly.  In the Data Slices,
+the curve passing through the nodes is updated, and in the Fragment View, the surface texture is
+updated.  Though these changes happen quickly, they do require a certain amount of time, and when you have a
+large group of nodes you need to edit, you might find that the updating is delaying your work.
+
+In order to lessen this delay, khartes offers the option to turn off live updates.  You can turn
+off live updates by pressing the `l` (small L) hot key, or by pressing the button marked `LU`
+next to the `File` menu.  When live updates are turned off, the `LU` button turns red.
+
+If you have turned off live updates, the fragment curves and the surface texture are not
+updated as you modify the nodes.  The next time you turn live updates on again, the fragment
+curves and the surface texture are updated to reflect the changes that you have made.
+
 ## Advanced topic: Interpolation
 
 Users sometimes wonder how, and whether, khartes resamples the data that it reads from the TIFF files.
 
 The answer is, "as little as possible".
 
-The input TIFF images are made up of 16-bit unsigned integers, and these values are carried intact in khartes all the way to the display; they are never rounded down to 8-bit integers.
+The input TIFF images are made up of 16-bit unsigned integers, and these values
+are carried intact in khartes all the way to the display; they are never rounded down to 8-bit integers.
 
-The input data is never compressed, and it is resampled only if the user explicity requests it, by setting the "Step" value in the TIFF loader to something other than 1.
+The input data is never compressed, and it is resampled only if the user explicity requests it,
+by setting the "Step" value in the TIFF loader to something other than 1.
 
-Whenever interpolation is necessary, nearest-neighbor interpolation is used: khartes uses an existing data value, rather than creating a new interpolated value.  You can see this by zooming in on any of the data windows, so that each voxel in the original data covers more that one pixel on the screen.  If you look closely, you will see the voxels look like little rectangles, where each rectangle is drawn in a single shade: the shade representing the value of the input voxel.
+Whenever interpolation is necessary, nearest-neighbor interpolation is used: khartes uses an existing data value,
+rather than creating a new interpolated value.
+You can see this by zooming in on any of the data windows, so that each voxel
+in the original data covers more that one pixel on the screen.
+If you look closely, you will see the voxels look like little rectangles,
+where each rectangle is drawn in a single shade: the shade representing the value of the input voxel.
 
 There is one exception: vertical interpolation in the Fragment View.
 
@@ -1004,12 +1031,6 @@ used in khartes.
 ## Things to fix
 
 There is no undo function.
-
-The "Loading..." overlay, which appears when a file is loading, sometimes fails to
-disappear afterwards.  
-This problem is so intermittent that I have not been able
-to figure out how to prevent it.
-Unfortunately, the only workaround is to save your work, and then exit and restart khartes.
 
 This tutorial needs a fuller description (with drawings) of what is a single-valued surface,
 and how this applies to the surfaces built in khartes.
