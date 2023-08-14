@@ -231,6 +231,9 @@ class FragmentsModel(QtCore.QAbstractTableModel):
 # note that FragmentView is defined after Fragment
 class Fragment:
 
+    # class variable
+    min_roundness = .1
+
     def __init__(self, name, direction):
         self.direction = direction
         # self.color = QColor("green")
@@ -380,8 +383,6 @@ class Fragment:
         self.cvcolor = [int(65535*c) for c in rgba] 
         if not no_notify:
             self.notifyModified()
-
-    min_roundness = .1
 
     def minRoundness(self):
         return Fragment.min_roundness
@@ -741,6 +742,7 @@ class Fragment:
     def saveListAsObjMesh(fvs, filename, infill):
         frags = [fv.fragment for fv in fvs]
         print("slaom", len(frags), filename, infill)
+        filename = filename.with_suffix(".obj")
         err = ""
 
         rects = []
@@ -915,7 +917,11 @@ class Fragment:
 
 class FragmentView:
 
+    # class variables
+    # general rule on class variables: they should only be
+    # used if the only way to change them is through the dev-tools UI
     use_linear_interpolation = True
+    hide_skinny_triangles = False
 
     def __init__(self, project_view, fragment):
         self.project_view = project_view
@@ -935,6 +941,7 @@ class FragmentView:
         self.prevZslicePts = None
         self.ssurf = None
         self.nearbyNode = -1
+        self.live_zsurf_update = True
         # gpoints converted to ijk coordinates relative
         # to current volume, using trijk based on 
         # fragment's direction
@@ -1005,7 +1012,7 @@ class FragmentView:
     # recursion_ok determines whether to call setLocalPoints in
     # "echo" fragments.  But this is safe to call only if all
     # fragment views have had their current volume view set.
-    def setLocalPoints(self, recursion_ok):
+    def setLocalPoints(self, recursion_ok, always_update_zsurf=True):
         # print("set local points", self.cur_volume_view.volume.name)
         # print("set local points", self.fragment.name)
         if self.cur_volume_view is None:
@@ -1027,8 +1034,12 @@ class FragmentView:
             # print(self.vpoints[0])
         # print("set fpoints and vpoints")
         # print ("creating zsurf for", self.fragment.name)
-        self.createZsurf()
+        # if always_update_zsurf or self.live_zsurf_update:
+        #     self.createZsurf()
         # print("created zsurf")
+        # else:
+        #     self.triangulate()
+        self.createZsurf(always_update_zsurf or self.live_zsurf_update)
         self.calculateSqCm()
         # print("calculated sq cm")
         if not recursion_ok:
@@ -1037,8 +1048,14 @@ class FragmentView:
             echo = fv.fragment.params.get('echo', '')
             if echo == self.fragment.name:
                 fv.echoPointsFrom(self)
-                fv.setLocalPoints(True)
+                fv.setLocalPoints(True, always_update_zsurf)
 
+    def setLiveZsurfUpdate(self, lzu):
+        if lzu == self.live_zsurf_update:
+            return
+        self.live_zsurf_update = lzu
+        if lzu:
+            self.setLocalPoints(True)
 
     def echoPointsFrom(self, orig):
         # print("echo from",orig.fragment.name,"to",self.fragment.name)
@@ -1127,10 +1144,6 @@ class FragmentView:
            # print("fr2", frag_rect)
         return frag_rect
 
-    hide_skinny_triangles = False
-    # Fragment:
-    # min_roundness = 0.
-
     def hideSkinnyTriangles(self):
         return FragmentView.hide_skinny_triangles
 
@@ -1151,19 +1164,22 @@ class FragmentView:
             return zs
         return interp
 
-    def createZsurf(self):
+    def createZsurf(self, do_update=True):
         timer_active = False
         timer = Utils.Timer(timer_active)
         oldtri = self.tri
         self.triangulate()
         timer.time("triangulate")
+        if not do_update:
+            self.oldzs = None
+            return
         changed_pts_idx = np.zeros((0,), dtype=np.int32)
         added_trgls_idx = np.zeros((0,), dtype=np.int32)
         deleted_trgls_idx = np.zeros((0,), dtype=np.int32)
         changed_rect = None
         frag_rect = self.computeFragRect()
         # https://stackoverflow.com/questions/66674537/python-numpy-get-difference-between-2-two-dimensional-array
-        if oldtri is not None and self.tri is not None:
+        if oldtri is not None and self.tri is not None and self.oldzs is not None:
             # print("diffing")
             oldpts = oldtri.points
             newpts = self.tri.points
@@ -1742,14 +1758,14 @@ class FragmentView:
         gijk = self.cur_volume_view.transposedIjkToGlobalPosition(tijk)
         self.fragment.gpoints = np.append(self.fragment.gpoints, np.reshape(gijk, (1,3)), axis=0)
         # print(self.lpoints)
-        self.setLocalPoints(True)
+        self.setLocalPoints(True, False)
         self.fragment.notifyModified()
 
     def deletePointByIndex(self, index):
         if index >= 0 and index < len(self.fragment.gpoints):
             self.fragment.gpoints = np.delete(self.fragment.gpoints, index, 0)
         self.fragment.notifyModified()
-        self.setLocalPoints(True)
+        self.setLocalPoints(True, False)
 
     def moveInK(self, step):
         self.fpoints[:,2] += step
@@ -1771,5 +1787,5 @@ class FragmentView:
         self.fragment.gpoints[index, :] = new_gijk
         # print(self.fragment.gpoints)
         self.fragment.notifyModified()
-        self.setLocalPoints(True)
+        self.setLocalPoints(True, False)
         return True

@@ -272,6 +272,48 @@ class MoveActiveFragmentButton(QPushButton):
     def onButtonClicked(self, s):
         self.main_window.moveActiveFragment(self.step)
 
+class LiveZsurfUpdateButton(QPushButton):
+    def __init__(self, main_window, parent=None):
+        super(LiveZsurfUpdateButton, self).__init__("", parent)
+        self.main_window = main_window
+        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
+        self.setStyleSheet("QPushButton {padding: 5}")
+        # self.setCheckable(True)
+        self.checked = False
+        self.setText("LU")
+        self.clicked.connect(self.onButtonClicked)
+        self.setChecked(self.main_window.live_zsurf_update)
+
+    def onButtonClicked(self, s):
+        self.setChecked(not self.checked)
+        '''
+        self.checked = not self.checked
+        self.main_window.setLiveZsurfUpdate(self.checked)
+        if self.checked:
+            self.setStyleSheet("QPushButton {padding: 5}")
+        else:
+            self.setStyleSheet("QPushButton { background-color: red ; padding: 5 }")
+        self.doSetToolTip()
+        '''
+
+    def doSetToolTip(self):
+        main_str = "Live Update mode:\nSets whether data slices will be updated in real time\nas nodes are modified"
+        add_strs = [
+                "\n(Currently not in live-update mode)",
+                "\n(Currently in live-update mode)", 
+                ]
+        self.setToolTip(main_str+add_strs[int(self.checked)])
+
+    def setChecked(self, flag):
+        # super(LiveZsurfUpdateButton, self).setChecked(flag)
+        self.checked = flag
+        self.main_window.setLiveZsurfUpdate(self.checked)
+        if self.checked:
+            self.setStyleSheet("QPushButton {padding: 5}")
+        else:
+            self.setStyleSheet("QPushButton { background-color: red ; padding: 5 }")
+        self.doSetToolTip()
+
 class CursorModeButton(QPushButton):
     def __init__(self, main_window, parent=None):
         super(CursorModeButton, self).__init__("", parent)
@@ -578,6 +620,8 @@ class MainWindow(QMainWindow):
             # 5.12 or above is needed for QImage::Format_RGBX64
             exit()
 
+        self.live_zsurf_update = True
+
         self.setWindowTitle(MainWindow.appname)
         self.setMinimumSize(QSize(750,600))
         self.settingsApplySizePos()
@@ -706,6 +750,9 @@ class MainWindow(QMainWindow):
         self.add_node_mode_button = CursorModeButton(self)
         self.toolbar.addWidget(self.add_node_mode_button)
         self.last_shift_time = 0
+
+        self.live_zsurf_update_button = LiveZsurfUpdateButton(self)
+        self.toolbar.addWidget(self.live_zsurf_update_button)
 
         self.toggle_direction_action = QAction("Toggle direction", self)
         self.toggle_direction_action.triggered.connect(self.onToggleDirectionButtonClick)
@@ -880,6 +927,16 @@ class MainWindow(QMainWindow):
         vlayout.addWidget(roundness)
         vlayout.addStretch()
         self.tab_panel.addTab(panel, "Dev Tools")
+
+    def setLiveZsurfUpdate(self, lzu):
+        if lzu == self.live_zsurf_update:
+            return
+        self.live_zsurf_update = lzu
+        pv = self.project_view
+        if pv is not None:
+            for fv in pv.fragments.values():
+                fv.setLiveZsurfUpdate(lzu)
+        self.drawSlices()
 
     def setZInterpolation(self, index):
         linear = True
@@ -1491,6 +1548,7 @@ class MainWindow(QMainWindow):
                 print("New project cancelled by user")
                 return
 
+        self.unsetProjectView()
         new_prj = Project.create(pdir)
         if not new_prj.valid:
             err = new_prj.error
@@ -1976,6 +2034,7 @@ class MainWindow(QMainWindow):
         fragment_views = list(self.project_view.fragments.values())
         for fv in fragment_views:
             fv.setVolumeView(self.volumeView())
+            fv.setLiveZsurfUpdate(self.live_zsurf_update)
         self.drawSlices()
 
     def toggleFragmentVisibility(self):
@@ -2031,6 +2090,8 @@ class MainWindow(QMainWindow):
         if self.project_view == None:
             return
         self.setVolume(None, no_notify=True)
+        self.live_zsurf_update = True
+        self.live_zsurf_update_button.setChecked(self.live_zsurf_update)
         self.setFragments()
         self.project_view = None
         self.volumes_model = VolumesModel(None, self)
@@ -2096,7 +2157,10 @@ class MainWindow(QMainWindow):
                 # print("press", t)
                 self.last_shift_time = t
 
-        if e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_S:
+        if e.key() == Qt.Key_L:
+            self.setLiveZsurfUpdate(not self.live_zsurf_update)
+            self.live_zsurf_update_button.setChecked(self.live_zsurf_update)
+        elif e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_S:
             self.onSaveProjectButtonClick(True)
         elif e.key() == Qt.Key_T:
             self.toggleTrackingCursorsVisible()
