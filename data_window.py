@@ -475,7 +475,7 @@ class DataWindow(QLabel):
             gijk = self.volume_view.transposedIjkToGlobalPosition(tijk)
             for i,a in enumerate(axes):
                 g = gijk[a]
-                dtxt = "%d"%g
+                dtxt = "%g"%round(g,2)
                 mn = ranges[a][0]
                 mx = ranges[a][1]
                 if g < mn or g > mx:
@@ -685,7 +685,6 @@ class DataWindow(QLabel):
             Qt.Key_C:        (0,0,-1*sgn),
         }
         if key in opts:
-            self.setStatusTextFromMousePosition()
             d = opts[key]
             # if self.inAddNodeMode() or (self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0):
             if self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0:
@@ -777,6 +776,7 @@ class DataWindow(QLabel):
             self.isPanning = False
             self.isMovingNode = False
             self.isMovingTiff = False
+        self.setStatusTextFromMousePosition()
         self.checkCursor()
 
     # Note that this is called from MainWindow whenever MainWindow

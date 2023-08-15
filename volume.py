@@ -601,7 +601,7 @@ class Volume():
         dxyz = np.array(self.gijk_steps, dtype=np.int32)
         nxyz = np.array(self.sizes, dtype=np.int32)
         gmin = xyz0
-        gmax = xyz0 + dxyz*nxyz
+        gmax = xyz0 + dxyz*(nxyz-1)
         gs = np.array((gmin, gmax))
         return gs
 
