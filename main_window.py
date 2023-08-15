@@ -251,17 +251,21 @@ class CopyActiveFragmentButton(QPushButton):
         # super(CopyActiveFragmentButton, self).__init__("Copy Active Fragment", parent)
         super(CopyActiveFragmentButton, self).__init__("Copy", parent)
         self.main_window = main_window
+        self.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
+        self.setEnabled(False)
         self.setToolTip("Create a new fragment that is a copy\nof the currently active fragment")
         self.clicked.connect(self.onButtonClicked)
 
     def onButtonClicked(self, s):
         self.main_window.copyActiveFragment()
 
-class MoveActiveFragmentButton(QPushButton):
+class MoveActiveFragmentAlongZButton(QPushButton):
     def __init__(self, main_window, text, step, parent=None):
-        super(MoveActiveFragmentButton, self).__init__(text, parent)
+        super(MoveActiveFragmentAlongZButton, self).__init__(text, parent)
         self.main_window = main_window
         self.step = step
+        self.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
+        self.setEnabled(False)
         # up and down are opposite signs to what you might expect
         if step > 0:
             self.setToolTip("Move active fragment %d pixel(s) down"%step)
@@ -270,7 +274,24 @@ class MoveActiveFragmentButton(QPushButton):
         self.clicked.connect(self.onButtonClicked)
 
     def onButtonClicked(self, s):
-        self.main_window.moveActiveFragment(self.step)
+        self.main_window.moveActiveFragmentAlongZ(self.step)
+
+class MoveActiveFragmentAlongNormalsButton(QPushButton):
+    def __init__(self, main_window, text, step, parent=None):
+        super(MoveActiveFragmentAlongNormalsButton, self).__init__(text, parent)
+        self.main_window = main_window
+        self.step = step
+        self.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
+        self.setEnabled(False)
+        # up and down are opposite signs to what you might expect
+        if step > 0:
+            self.setToolTip("Move active fragment %d pixel(s) downwards along normals"%step)
+        else:
+            self.setToolTip("Move active fragment %d pixel(s) upwards along normals"%(-step))
+        self.clicked.connect(self.onButtonClicked)
+
+    def onButtonClicked(self, s):
+        self.main_window.moveActiveFragmentAlongNormals(self.step)
 
 class LiveZsurfUpdateButton(QPushButton):
     def __init__(self, main_window, parent=None):
@@ -867,18 +888,23 @@ class MainWindow(QMainWindow):
         # active_frame = QGroupBox("Actions on active fragment")
         # af_layout = QHBoxLayout()
         # active_frame.setLayout(af_layout)
+
         self.copy_frag = CopyActiveFragmentButton(self)
-        self.copy_frag.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
-        self.copy_frag.setEnabled(False)
         hlayout.addWidget(self.copy_frag)
-        self.move_frag_up = MoveActiveFragmentButton(self, "Z ↑", -1)
-        self.move_frag_up.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
-        self.move_frag_up.setEnabled(False)
+
+        self.move_frag_up = MoveActiveFragmentAlongZButton(self, "Z ↑", -1)
         hlayout.addWidget(self.move_frag_up)
-        self.move_frag_down = MoveActiveFragmentButton(self, "Z ↓", 1)
-        self.move_frag_down.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
-        self.move_frag_down.setEnabled(False)
+
+        self.move_frag_down = MoveActiveFragmentAlongZButton(self, "Z ↓", 1)
         hlayout.addWidget(self.move_frag_down)
+
+        self.move_frag_up_along_normals = MoveActiveFragmentAlongNormalsButton(self, "N ↑", -1)
+        hlayout.addWidget(self.move_frag_up_along_normals)
+
+        self.move_frag_down_along_normals = MoveActiveFragmentAlongNormalsButton(self, "N ↓", 1)
+        hlayout.addWidget(self.move_frag_down_along_normals)
+
+
         # af_layout.addWidget(self.copy_frag)
         # hlayout.addWidget(active_frame)
         hlayout.addStretch()
@@ -1257,8 +1283,10 @@ class MainWindow(QMainWindow):
         self.copy_frag.setEnabled(active)
         self.move_frag_up.setEnabled(active)
         self.move_frag_down.setEnabled(active)
+        self.move_frag_up_along_normals.setEnabled(active)
+        self.move_frag_down_along_normals.setEnabled(active)
 
-    def moveActiveFragment(self, step):
+    def moveActiveFragmentAlongZ(self, step):
         pv = self.project_view
         if pv is None:
             print("Warning, cannot create new fragment without project")
@@ -1271,6 +1299,21 @@ class MainWindow(QMainWindow):
             return
         # mf = mfv.fragment
         mfv.moveInK(step)
+        self.drawSlices()
+
+    def moveActiveFragmentAlongNormals(self, step):
+        pv = self.project_view
+        if pv is None:
+            print("Warning, cannot create new fragment without project")
+            return
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            # this should never be reached; button should be
+            # inactive in this case
+            print("No currently active fragment")
+            return
+        # mf = mfv.fragment
+        mfv.moveAlongNormals(step)
         self.drawSlices()
 
     def copyActiveFragment(self):
@@ -1340,6 +1383,9 @@ class MainWindow(QMainWindow):
         mfv = pv.mainActiveVisibleFragmentView(unaligned_ok=True)
         if mfv is not None:
             stem = mfv.fragment.name
+        # TODO: need a clever regex to eliminate multiple '-copy(\d*)'
+        if stem.endswith("-copy") and len(stem) > 5:
+            stem = stem[:-5]
         name = self.uniqueFragmentName(stem)
         if name is None:
             print("Can't create unique fragment name from stem", stem)

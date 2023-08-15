@@ -242,7 +242,8 @@ class Fragment:
         self.name = name
         self.params = {}
         # fragment points in global coordinates
-        self.gpoints = np.zeros((0,3), dtype=np.int32)
+        # self.gpoints = np.zeros((0,3), dtype=np.int32)
+        self.gpoints = np.zeros((0,3), dtype=np.float32)
         self.valid = False
         self.created = Utils.timestamp()
         self.modified = Utils.timestamp()
@@ -325,7 +326,8 @@ class Fragment:
         frag.setColor(color, no_notify=True)
         frag.valid = True
         if len(gpoints) > 0:
-            frag.gpoints = np.array(gpoints, dtype=np.int32)
+            # frag.gpoints = np.array(gpoints, dtype=np.int32)
+            frag.gpoints = np.array(gpoints, dtype=np.float32)
         if 'params' in info:
             frag.params = info['params']
         else:
@@ -478,7 +480,8 @@ class Fragment:
     def createInfillPoints(self, infill):
         direction = self.direction
         gijks = self.gpoints
-        ngijks = np.zeros((0,3), dtype=np.int32)
+        # ngijks = np.zeros((0,3), dtype=np.int32)
+        ngijks = np.zeros((0,3), dtype=np.float32)
         if infill <= 0:
             return ngijks
         tgijks = Volume.globalIjksToTransposedGlobalIjks(gijks, direction)
@@ -1716,7 +1719,8 @@ class FragmentView:
 
 
     def getPointsOnSlice(self, axis, i):
-        matches = self.vpoints[(self.vpoints[:, axis] == i)]
+        # matches = self.vpoints[(self.vpoints[:, axis] == i)]
+        matches = self.vpoints[(self.vpoints[:, axis] >= i-.5) & (self.vpoints[:, axis] < i+.5)]
         return matches
 
     def vijkToFijk(self, vijk):
@@ -1767,9 +1771,47 @@ class FragmentView:
         self.fragment.notifyModified()
         self.setLocalPoints(True, False)
 
+    def normals(self):
+        self.triangulate()
+        if self.tri is None or len(self.tri.simplices) == 0:
+            return None
+        zpts = self.fpoints[:,2]
+        pts3d = np.append(self.tri.points, zpts.reshape(-1,1), axis=1)
+        # print("n",self.tri.points.shape, zpts.shape, pts3d.shape)
+        v0 = self.tri.simplices[:,0]
+        v1 = self.tri.simplices[:,1]
+        v2 = self.tri.simplices[:,2]
+        d01 = pts3d[v1] - pts3d[v0]
+        d02 = pts3d[v2] - pts3d[v0]
+        n3d = np.cross(d01, d02)
+        ptn3d = np.zeros((len(pts3d), 3), np.float32)
+        ptn3d[v0] += n3d
+        ptn3d[v1] += n3d
+        ptn3d[v2] += n3d
+        l2 = np.sqrt(np.sum(ptn3d*ptn3d, axis=1)).reshape(-1,1)
+        l2[l2==0] = 1.
+        ptn3d /= l2
+        return ptn3d
+
+    def moveAlongNormals(self, step):
+        ns = self.normals()
+        if ns is None:
+            print("No normals found")
+            return
+        # print("man", self.fpoints.shape, ns.shape)
+        # fpoints has 4 elements; the 4th is the index
+        self.fpoints[:, :3] += step*ns
+        self.fragment.gpoints = self.cur_volume_view.volume.transposedIjksToGlobalPositions(self.fpoints, self.fragment.direction)
+        self.fragment.notifyModified()
+        self.setLocalPoints(True)
+
     def moveInK(self, step):
+        # if len(self.fpoints) > 0:
+        #     print("before", self.fragment.gpoints[0], self.fpoints[0])
         self.fpoints[:,2] += step
         self.fragment.gpoints = self.cur_volume_view.volume.transposedIjksToGlobalPositions(self.fpoints, self.fragment.direction)
+        # if len(self.fpoints) > 0:
+        #     print("after", self.fragment.gpoints[0], self.fpoints[0])
         self.fragment.notifyModified()
         self.setLocalPoints(True)
 
