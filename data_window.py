@@ -1330,6 +1330,8 @@ class SurfaceWindow(DataWindow):
         afvs = self.window.project_view.activeFragmentViews()
         afvs.reverse()
         for fv in afvs:
+            if not hasattr(fv, "zsurf"):
+                continue
             zsurf = fv.zsurf
             if zsurf is None:
                 continue
@@ -1387,7 +1389,7 @@ class SurfaceWindow(DataWindow):
             # if not frag.activeAndAligned():
             if not frag.active:
                 continue
-            if frag.aligned() and frag.ssurf is not None:
+            if frag.aligned() and hasattr(frag, "ssurf") and frag.ssurf is not None:
                 slc = frag.ssurf
                 sw = slc.shape[1]
                 sh = slc.shape[0]
@@ -1509,10 +1511,12 @@ class SurfaceWindow(DataWindow):
             self.nearbyNode = -1
             timer_active = False
             timer = Utils.Timer(timer_active)
-            if frag.tri is not None:
+            # if frag.tri is not None:
+            if frag.trgls() is not None:
                 # pts = frag.tri.points
                 pts = frag.vpoints[:, 0:2]
-                trgs = frag.tri.simplices
+                # trgs = frag.tri.simplices
+                trgs = frag.trgls()
                 vrts = pts[trgs]
                 vrts = self.ijsToXys(vrts)
                 vrts = vrts.reshape(-1,3,1,2).astype(np.int32)
