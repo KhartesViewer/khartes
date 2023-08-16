@@ -15,6 +15,7 @@ from scipy.interpolate import (
 from scipy.interpolate import CubicSpline
 from utils import Utils
 from volume import Volume
+from base_fragment import BaseFragment, BaseFragmentView
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
@@ -166,7 +167,10 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             return fragment.color.name()
         elif column == 4:
             # print("data display role", row, volume_view.direction)
-            return ('X','Y')[fragment.direction]
+            if hasattr(fragment, "direction"):
+                return ('X','Y')[fragment.direction]
+            else:
+                return ""
         elif column == 5:
             return len(fragment.gpoints)
         elif column == 6:
@@ -230,25 +234,29 @@ class FragmentsModel(QtCore.QAbstractTableModel):
 
 
 # note that FragmentView is defined after Fragment
-class Fragment:
+class Fragment(BaseFragment):
 
     # class variable
     min_roundness = .1
 
     def __init__(self, name, direction):
+        super(Fragment, self).__init__(name)
         self.direction = direction
         # self.color = QColor("green")
-        self.color = QColor()
-        self.cvcolor = (0,0,0,0)
-        self.name = name
+        # self.color = QColor()
+        # self.cvcolor = (0,0,0,0)
+        # self.name = name
         self.params = {}
         # fragment points in global coordinates
         # self.gpoints = np.zeros((0,3), dtype=np.int32)
         self.gpoints = np.zeros((0,3), dtype=np.float32)
-        self.valid = False
-        self.created = Utils.timestamp()
-        self.modified = Utils.timestamp()
-        self.project = None
+        # self.valid = False
+        # self.created = Utils.timestamp()
+        # self.modified = Utils.timestamp()
+        # self.project = None
+
+    def createView(self, project_view):
+        return FragmentView(project_view, self)
 
     def createCopy(self, name):
         frag = Fragment(name, self.direction)
@@ -256,7 +264,6 @@ class Fragment:
         frag.gpoints = np.copy(self.gpoints)
         frag.valid = True
         return frag
-        
 
     def toDict(self):
         info = {}
@@ -284,6 +291,8 @@ class Fragment:
     def saveList(frags, path, stem):
         infos = []
         for frag in frags:
+            if not hasattr(frag, "toDict"):
+                continue
             info = frag.toDict()
             infos.append(info)
         info_txt = json.dumps(infos, indent=4)
@@ -293,6 +302,7 @@ class Fragment:
 
     # notify_count = 0
 
+    '''
     def notifyModified(self, tstamp=""):
         if tstamp == "":
             tstamp = Utils.timestamp()
@@ -302,6 +312,7 @@ class Fragment:
         #     print(asdf)
         # Fragment.notify_count += 1
         self.project.notifyModified(tstamp)
+    '''
 
     def createErrorFragment():
         frag = Fragment("", -1)
@@ -380,12 +391,14 @@ class Fragment:
     def sortFragmentList(frags):
         frags.sort(key=lambda f: f.name)
 
+    '''
     def setColor(self, qcolor, no_notify=False):
         self.color = qcolor
         rgba = qcolor.getRgbF()
         self.cvcolor = [int(65535*c) for c in rgba] 
         if not no_notify:
             self.notifyModified()
+    '''
 
     def minRoundness(self):
         return Fragment.min_roundness
@@ -919,7 +932,7 @@ class Fragment:
     '''
 
 
-class FragmentView:
+class FragmentView(BaseFragmentView):
 
     # class variables
     # general rule on class variables: they should only be
@@ -928,15 +941,16 @@ class FragmentView:
     hide_skinny_triangles = False
 
     def __init__(self, project_view, fragment):
-        self.project_view = project_view
-        self.fragment = fragment
+        super(FragmentView, self).__init__(project_view, fragment)
+        # self.project_view = project_view
+        # self.fragment = fragment
         # cur_volume_view holds the volume associated
         # with current zsurf and ssurf
-        self.cur_volume_view = None
-        self.visible = True
-        self.active = False
+        # self.cur_volume_view = None
+        # self.visible = True
+        # self.active = False
         self.tri = None
-        self.sqcm = 0.
+        # self.sqcm = 0.
         self.line = None
         self.lineAxis = -1
         self.lineAxisPosition = 0
@@ -955,12 +969,14 @@ class FragmentView:
         # direction
         self.vpoints = np.zeros((0,4), dtype=np.float32)
 
+    '''
     def notifyModified(self, tstamp=""):
         if tstamp == "":
             tstamp = Utils.timestamp()
         self.modified = tstamp
         # print("fragment view", self.fragment.name,"modified", tstamp)
         self.project_view.notifyModified(tstamp)
+    '''
 
     def calculateSqCm(self):
         if self.tri is None:
@@ -989,12 +1005,14 @@ class FragmentView:
         self.prevZslice = -1
         self.prevZslicePts = None
 
+    '''
     def setVolumeView(self, vol_view):
         if vol_view == self.cur_volume_view:
             return
         self.cur_volume_view = vol_view
         if vol_view is not None:
             self.setLocalPoints(False)
+    '''
 
     def aligned(self):
         if self.cur_volume_view is None:
@@ -1003,15 +1021,19 @@ class FragmentView:
             return False
         return True
 
+    '''
     def activeAndAligned(self):
         if not self.active:
             return False
         return self.aligned()
+    '''
 
+    '''
     # direction is not used here, but this notifies fragment view
     # to recompute things
     def setVolumeViewDirection(self, direction):
         self.setLocalPoints(False)
+    '''
 
     # recursion_ok determines whether to call setLocalPoints in
     # "echo" fragments.  But this is safe to call only if all
@@ -1772,16 +1794,28 @@ class FragmentView:
         self.fragment.notifyModified()
         self.setLocalPoints(True, False)
 
-    def normals(self):
-        self.triangulate()
+    def trgls(self):
         if self.tri is None or len(self.tri.simplices) == 0:
             return None
-        zpts = self.fpoints[:,2]
-        pts3d = np.append(self.tri.points, zpts.reshape(-1,1), axis=1)
+        else:
+            return self.tri.simplices
+
+    '''
+    def normals(self):
+        self.triangulate()
+        trgls = self.trgls()
+        if trgls is None:
+            return
+        # if self.tri is None or len(self.tri.simplices) == 0:
+        #     return None
+        # zpts = self.fpoints[:,2]
+        # pts3d = np.append(self.tri.points, zpts.reshape(-1,1), axis=1)
+        pts3d = self.fpoints[:3]
         # print("n",self.tri.points.shape, zpts.shape, pts3d.shape)
-        v0 = self.tri.simplices[:,0]
-        v1 = self.tri.simplices[:,1]
-        v2 = self.tri.simplices[:,2]
+        trgl
+        v0 = trgls[:,0]
+        v1 = trgls[:,1]
+        v2 = trgls[:,2]
         d01 = pts3d[v1] - pts3d[v0]
         d02 = pts3d[v2] - pts3d[v0]
         n3d = np.cross(d01, d02)
@@ -1815,6 +1849,7 @@ class FragmentView:
         #     print("after", self.fragment.gpoints[0], self.fpoints[0])
         self.fragment.notifyModified()
         self.setLocalPoints(True)
+    '''
 
     # return True if succeeds, False if fails
     def movePoint(self, index, new_vijk):

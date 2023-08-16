@@ -64,7 +64,8 @@ class ProjectView:
 
     def addFragmentView(self, fragment, no_notify=False):
         if fragment not in self.fragments:
-            self.fragments[fragment] = FragmentView(self, fragment)
+            # self.fragments[fragment] = FragmentView(self, fragment)
+            self.fragments[fragment] = fragment.createView(self)
         if not no_notify:
             self.notifyModified()
 

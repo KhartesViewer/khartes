@@ -36,6 +36,7 @@ from tiff_loader import TiffLoader
 from data_window import DataWindow, SurfaceWindow
 from project import Project, ProjectView
 from fragment import Fragment, FragmentsModel, FragmentView
+from trgl_fragment import TrglFragment, TrglFragmentView
 from volume import (
         Volume, VolumesModel, 
         DirectionSelectorDelegate,
@@ -793,6 +794,8 @@ class MainWindow(QMainWindow):
         if len(args) > 1 and args[1].endswith('.khprj'):
             self.loadProject(args[1])
             QTimer.singleShot(100, self.drawSlices)
+            if len(args) > 2 and args[2].endswith('.obj'):
+                self.loadObjFile(args[2])
 
     def setCursorPosition(self, data_window, tijk):
         # show_tracking_cursors = self.draw_settings["tracking_cursors"]["show"]
@@ -1816,6 +1819,16 @@ class MainWindow(QMainWindow):
         path = path.absolute()
         parent = path.parent
         self.settingsSaveDirectory(str(parent), "nrrd_")
+
+    def loadObjFile(self, fname):
+        trgl_frag = TrglFragment.loadObjFile(fname)
+        pv = self.project_view
+        proj = pv.project
+        self.fragments_table.model().beginResetModel()
+        proj.addFragment(trgl_frag)
+        pv.updateFragmentViews()
+        print("lof", len(pv.fragments))
+        self.fragments_table.model().endResetModel()
 
     def onExportAsMeshButtonClick(self, s):
         print("export mesh clicked")
