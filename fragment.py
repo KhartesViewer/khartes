@@ -167,10 +167,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             return fragment.color.name()
         elif column == 4:
             # print("data display role", row, volume_view.direction)
-            if hasattr(fragment, "direction"):
-                return ('X','Y')[fragment.direction]
-            else:
-                return ""
+            return ('X','Y')[fragment.direction]
         elif column == 5:
             return len(fragment.gpoints)
         elif column == 6:

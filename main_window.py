@@ -363,7 +363,7 @@ class CursorModeButton(QPushButton):
         path = os.path.dirname(os.path.realpath(args[0]))
         # print("path is", path, args[0])
         # crosshair.svg is from https://iconduck.com/icons/14824/crosshair
-        self.cross = QIcon(path+"/crosshair.svg")
+        self.cross = QIcon(path+"/icons/crosshair.svg")
         self.setIcon(self.cross)
         self.setChecked(self.main_window.add_node_mode)
         # self.doSetToolTip()
@@ -663,14 +663,14 @@ class MainWindow(QMainWindow):
         args = QCoreApplication.arguments()
         path = os.path.dirname(os.path.realpath(args[0]))
         # https://iconduck.com/icons/163625/openhand
-        px = QPixmap(path+"/openhand.svg")
+        px = QPixmap(path+"/icons/openhand.svg")
         # print("px size",px.size())
         self.cursor_center = (16, 8)
         self.openhand = QCursor(px, *self.cursor_center)
-        px = QPixmap(path+"/openhand transparent.svg")
+        px = QPixmap(path+"/icons/openhand transparent.svg")
         # print("px size",px.size())
         self.openhand_transparent = QCursor(px, *self.cursor_center)
-        self.openhand_transparents = self.transparentSvgs(path+"/openhand transparent.svg", 11)
+        self.openhand_transparents = self.transparentSvgs(path+"/icons/openhand transparent.svg", 11)
         self.openhand_transparent = self.openhand_transparents[0]
 
         # x slice or y slice in data
@@ -1821,7 +1821,10 @@ class MainWindow(QMainWindow):
         self.settingsSaveDirectory(str(parent), "nrrd_")
 
     def loadObjFile(self, fname):
-        trgl_frag = TrglFragment.loadObjFile(fname)
+        trgl_frags = TrglFragment.load(fname)
+        if trgl_frags is None or len(trgl_frags) == 0:
+            return
+        trgl_frag = trgl_frags[0]
         pv = self.project_view
         proj = pv.project
         self.fragments_table.model().beginResetModel()
