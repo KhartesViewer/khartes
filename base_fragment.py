@@ -3,7 +3,6 @@ import numpy as np
 
 from PyQt5.QtGui import QColor
 
-
 class BaseFragment:
     def __init__(self, name):
         self.name = name
@@ -31,6 +30,35 @@ class BaseFragment:
         print("BaseFragment: need to implement this class!")
         return None
 
+    def saveList(frags, path, stem):
+        class_lists = {}
+        for frag in frags:
+            print("bsl", frag.name)
+            # print(type(frag))
+            t = type(frag)
+            # t.asdf()
+            l = class_lists.setdefault(t, [])
+            l.append(frag)
+        for cl, l in class_lists.items():
+            cl.saveList(l, path, stem)
+
+    # class function
+    def normals(pts, trgls):
+        v0 = trgls[:,0]
+        v1 = trgls[:,1]
+        v2 = trgls[:,2]
+        d01 = pts[v1] - pts[v0]
+        d02 = pts[v2] - pts[v0]
+        n3d = np.cross(d01, d02)
+        ptn = np.zeros((len(pts), 3), np.float32)
+        ptn[v0] += n3d
+        ptn[v1] += n3d
+        ptn[v2] += n3d
+        l2 = np.sqrt(np.sum(ptn*ptn, axis=1)).reshape(-1,1)
+        l2[l2==0] = 1.
+        ptn /= l2
+        return ptn
+
 
 class BaseFragmentView:
     def __init__(self, project_view, fragment):
@@ -54,7 +82,22 @@ class BaseFragmentView:
         self.modified = tstamp
         # print("fragment view", self.fragment.name,"modified", tstamp)
         self.project_view.notifyModified(tstamp)
-    
+
+    def getZsurfPoints(self, axis, axis_pos):
+        return None
+
+    def triangulate(self):
+        return None
+
+    def addPoint(self, tijk):
+        return None
+
+    def deletePointByIndex(self, index):
+        return None
+
+    def setLiveZsurfUpdate(self, flag):
+        return None
+
     def activeAndAligned(self):
         if not self.active:
             return False
@@ -64,12 +107,16 @@ class BaseFragmentView:
     # to recompute things
     def setVolumeViewDirection(self, direction):
         self.setLocalPoints(False)
+
     
     def normals(self):
         self.triangulate()
         trgls = self.trgls()
         if trgls is None:
             return
+        pts3d = self.fpoints[:,:3]
+        return BaseFragment.normals(pts3d, trgls)
+        '''
         # if self.tri is None or len(self.tri.simplices) == 0:
         #     return None
         # zpts = self.fpoints[:,2]
@@ -90,6 +137,7 @@ class BaseFragmentView:
         l2[l2==0] = 1.
         ptn3d /= l2
         return ptn3d
+        '''
 
     def moveAlongNormals(self, step):
         ns = self.normals()

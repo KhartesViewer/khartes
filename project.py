@@ -5,6 +5,8 @@ import json
 from utils import Utils
 from volume import Volume, VolumeView
 from fragment import Fragment, FragmentView
+from trgl_fragment import TrglFragment, TrglFragmentView
+from base_fragment import BaseFragment, BaseFragmentView
 from PyQt5.QtGui import QColor 
 
 
@@ -400,8 +402,14 @@ class Project:
         files = list(self.fragments_path.glob("*.json"))
         # print("glob files", files)
         for file in files:
-            file.unlink(missing_ok=True)
-        Fragment.saveList(self.fragments, self.fragments_path, "all")
+            older = file.with_name(file.name+".older")
+            old = file.with_name(file.name+".old")
+            older.unlink(missing_ok=True)
+            if old.exists():
+                old.rename(older)
+            file.rename(old)
+        # Fragment.saveList(self.fragments, self.fragments_path, "all")
+        BaseFragment.saveList(self.fragments, self.fragments_path, "all")
 
         info = {}
         # TODO: set modified-date in info
@@ -490,6 +498,13 @@ class Project:
 
         for ffile in fdir.glob("*.json"):
             frags = Fragment.load(ffile)
+            if frags is not None:
+                for frag in frags:
+                    if frag.valid:
+                        prj.addFragment(frag)
+
+        for ffile in fdir.glob("*.obj"):
+            frags = TrglFragment.load(ffile)
             if frags is not None:
                 for frag in frags:
                     if frag.valid:
