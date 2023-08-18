@@ -175,6 +175,10 @@ class DataWindow(QLabel):
         y = int(zoom*(j-cj)) + wcy
         return (x,y)
 
+    def tijksToIjs(self, tijks):
+        ijs = np.stack((tijks[:,self.iIndex], tijks[:,self.jIndex]), axis=1)
+        return ijs
+
     def ijsToXys(self, ijs):
         zoom = self.getZoom()
         tijk = self.volume_view.ijktf
@@ -1215,6 +1219,18 @@ into and out of the viewing plane.
                     cv2.polylines(original, vrts, True, color, size*2)
                 timera.time("draw zsurf points")
 
+            lines = frag.getLinesOnSlice(self.axis, self.positionOnAxis())
+            if lines is not None:
+                ijkpts = lines.reshape(-1, 3)
+                ijpts = self.tijksToIjs(ijkpts)
+                xys = self.ijsToXys(ijpts)
+                xys = xys.reshape(-1,1,2,2)
+                color = frag.fragment.cvcolor
+                size = splineLineSize
+                cv2.polylines(outrgbx, xys, True, color, size)
+                if not apply_line_opacity:
+                    cv2.polylines(original, xys, True, color, size)
+
             pts = frag.getPointsOnSlice(self.axis, self.positionOnAxis())
             timera.time("get nodes on slice")
             m = 65535
@@ -1238,6 +1254,7 @@ into and out of the viewing plane.
                     if not apply_node_opacity:
                         self.drawNodeAtXy(original, xy, color, nodeSize)
             timera.time("draw nodes on slice")
+
             m = 65535
         timera.time("draw zsurf points")
         self.cur_frag_pts_xyijk = np.array(xypts)
