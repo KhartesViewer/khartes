@@ -1224,12 +1224,15 @@ into and out of the viewing plane.
                 ijkpts = lines.reshape(-1, 3)
                 ijpts = self.tijksToIjs(ijkpts)
                 xys = self.ijsToXys(ijpts)
+                # TODO: figure out how to put a dense-enough set
+                # of points in fv2zpoints, for the status bar
+                # self.fv2zpoints[frag] = ijpts
                 xys = xys.reshape(-1,1,2,2)
                 color = frag.fragment.cvcolor
                 size = splineLineSize
-                cv2.polylines(outrgbx, xys, True, color, size)
+                cv2.polylines(outrgbx, xys, False, color, size)
                 if not apply_line_opacity:
-                    cv2.polylines(original, xys, True, color, size)
+                    cv2.polylines(original, xys, False, color, size)
 
             pts = frag.getPointsOnSlice(self.axis, self.positionOnAxis())
             timera.time("get nodes on slice")
@@ -1347,9 +1350,7 @@ class SurfaceWindow(DataWindow):
         afvs = self.window.project_view.activeFragmentViews()
         afvs.reverse()
         for fv in afvs:
-            if not hasattr(fv, "zsurf"):
-                continue
-            zsurf = fv.zsurf
+            zsurf = fv.workingZsurf()
             if zsurf is None:
                 continue
             ri = round(i)
@@ -1406,7 +1407,7 @@ class SurfaceWindow(DataWindow):
             # if not frag.activeAndAligned():
             if not frag.active:
                 continue
-            if frag.aligned() and hasattr(frag, "ssurf") and frag.ssurf is not None:
+            if frag.aligned() and frag.workingZsurf() is not None and frag.ssurf is not None:
                 slc = frag.ssurf
                 sw = slc.shape[1]
                 sh = slc.shape[0]
@@ -1529,11 +1530,12 @@ class SurfaceWindow(DataWindow):
             timer_active = False
             timer = Utils.Timer(timer_active)
             # if frag.tri is not None:
-            if frag.trgls() is not None:
+            if frag.workingTrgls() is not None:
                 # pts = frag.tri.points
-                pts = frag.vpoints[:, 0:2]
+                vpts = frag.workingVpoints()
+                pts = vpts[:, 0:2]
                 # trgs = frag.tri.simplices
-                trgs = frag.trgls()
+                trgs = frag.workingTrgls()
                 vrts = pts[trgs]
                 vrts = self.ijsToXys(vrts)
                 vrts = vrts.reshape(-1,3,1,2).astype(np.int32)
@@ -1566,14 +1568,14 @@ class SurfaceWindow(DataWindow):
                     if not apply_node_opacity:
                         self.drawNodeAtXy(original, xy, color, nodeSize)
 
-            elif frag.line is not None and frag.lineAxis > -1:
-                line = frag.line
+            elif frag.workingLine() is not None and frag.workingLineAxis > -1:
+                line = frag.workingLine()
                 pts = np.zeros((line.shape[0],3), dtype=np.int32)
                 # print(line.shape, pts.shape)
-                axis = frag.lineAxis
+                axis = frag.workingLineAxis()
                 pts[:,1-axis] = line[:,0]
                 # print(pts.shape)
-                pts[:,axis] = frag.lineAxisPosition
+                pts[:,axis] = frag.workingLineAxisPosition()
                 pts[:,2] = line[:,2]
                 if triLineSize > 0:
                     for i in range(pts.shape[0]-1):
@@ -1583,7 +1585,8 @@ class SurfaceWindow(DataWindow):
                         if not apply_mesh_opacity:
                             cv2.line(original, xy0, xy1, lineColor, triLineSize)
 
-                pts = frag.vpoints[:, 0:2]
+                vpts = frag.workingVpoints()
+                pts = vpts[:, 0:2]
                 if nodeSize > 0:
                     for i,pt in enumerate(pts):
                         xy = self.ijToXy(pt[0:2])
@@ -1600,7 +1603,8 @@ class SurfaceWindow(DataWindow):
 
             elif nodeSize > 0:
                 # pts = frag.fpoints[:, 0:2]
-                pts = frag.vpoints[:, 0:2]
+                vpts = frag.workingVpoints()
+                pts = vpts[:, 0:2]
                 # print("pts shape", pts.shape)
                 color = self.nodeColor
                 # all frags are active at this point
@@ -1621,7 +1625,7 @@ class SurfaceWindow(DataWindow):
 
             if frag.active:
                 i0 = len(xypts)
-                for i,pt in enumerate(frag.vpoints):
+                for i,pt in enumerate(frag.workingVpoints()):
                     ij = self.tijkToIj(pt)
                     xy = self.ijToXy(ij)
                     xypts.append((xy[0], xy[1], pt[0], pt[1], pt[2], pt[3]))

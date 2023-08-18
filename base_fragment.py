@@ -30,6 +30,7 @@ class BaseFragment:
         print("BaseFragment: need to implement this class!")
         return None
 
+    # class function
     def saveList(frags, path, stem):
         class_lists = {}
         for frag in frags:
@@ -47,8 +48,8 @@ class BaseFragment:
         v0 = trgls[:,0]
         v1 = trgls[:,1]
         v2 = trgls[:,2]
-        d01 = pts[v1] - pts[v0]
-        d02 = pts[v2] - pts[v0]
+        d01 = (pts[v1] - pts[v0]).astype(np.float64)
+        d02 = (pts[v2] - pts[v0]).astype(np.float64)
         n3d = np.cross(d01, d02)
         ptn = np.zeros((len(pts), 3), np.float32)
         ptn[v0] += n3d
@@ -59,6 +60,18 @@ class BaseFragment:
         ptn /= l2
         return ptn
 
+    # class function
+    def calculateSqCm(pts, trgls, voxel_size_um):
+        v0 = trgls[:,0]
+        v1 = trgls[:,1]
+        v2 = trgls[:,2]
+        d01 = (pts[v1] - pts[v0]).astype(np.float64)
+        d02 = (pts[v2] - pts[v0]).astype(np.float64)
+        n3d = np.cross(d01, d02)
+        l2 = np.sqrt(np.sum(n3d*n3d, axis=1))
+        area_sq_mm_trg = np.sum(l2)*voxel_size_um*voxel_size_um/(2*1000000)
+        sqcm = area_sq_mm_trg/100.
+        return sqcm
 
 class BaseFragmentView:
     def __init__(self, project_view, fragment):
@@ -86,6 +99,9 @@ class BaseFragmentView:
     def getZsurfPoints(self, axis, axis_pos):
         return None
 
+    def line(self):
+        return None
+
     def getLinesOnSlice(self, axis, axis_pos):
         return None
 
@@ -100,6 +116,24 @@ class BaseFragmentView:
 
     def setLiveZsurfUpdate(self, flag):
         return None
+
+    def workingZsurf(self):
+        return None
+
+    def workingVpoints(self):
+        return np.zeros((0,4), dtype=np.float32)
+
+    def workingTrgls(self):
+        return None
+
+    def workingLine(self):
+        return None
+
+    def workingLineAxis(self):
+        return -1
+
+    def workingLineAxisPosition(self):
+        return 0
 
     def activeAndAligned(self):
         if not self.active:

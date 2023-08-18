@@ -981,6 +981,16 @@ class FragmentView(BaseFragmentView):
             return 0.
         pts = self.fragment.gpoints
         simps = self.tri.simplices
+        voxel_size_um = self.project_view.project.voxel_size_um
+        sqcm = BaseFragment.calculateSqCm(pts, simps, voxel_size_um)
+        self.sqcm = sqcm
+
+    def oldCalculateSqCm(self):
+        if self.tri is None:
+            self.sqcm = 0.
+            return 0.
+        pts = self.fragment.gpoints
+        simps = self.tri.simplices
         # need astype, otherwise does integer arithmetic,
         # which overflows and goes negative at 2^31
         v0 = pts[simps[:,0]].astype(np.float64)
@@ -1186,6 +1196,12 @@ class FragmentView(BaseFragmentView):
                 zs[np.isin(simps, bads)] = np.nan
             return zs
         return interp
+
+    def workingZsurf(self):
+        return self.zsurf
+
+    def workingVpoints(self):
+        return self.vpoints
 
     def createZsurf(self, do_update=True):
         timer_active = False
@@ -1791,11 +1807,20 @@ class FragmentView(BaseFragmentView):
         self.fragment.notifyModified()
         self.setLocalPoints(True, False)
 
-    def trgls(self):
+    def workingTrgls(self):
         if self.tri is None or len(self.tri.simplices) == 0:
             return None
         else:
             return self.tri.simplices
+
+    def workingLine(self):
+        return self.line
+
+    def workingLineAxis(self):
+        return self.lineAxis
+
+    def workingLineAxisPosition(self):
+        return self.lineAxisPosition
 
     '''
     def normals(self):

@@ -156,12 +156,11 @@ class TrglFragment(BaseFragment):
     # with 6 columns (the x,y,z location of each of the two
     # intersections with a given trgl), and as many rows as
     # there are intersected triangles.
-    # NOTE that axis and position are in global coordinates
-    def findIntersections(self, axis, position):
-        gpts = self.gpoints
+    def findIntersections(pts, trgls, axis, position):
+        gpts = pts
         # print("min", np.min(gpts, axis=0))
         # print("max", np.max(gpts, axis=0))
-        trgls = self.trgls
+        # trgls = self.trgls
         # print("trgls", trgls.shape)
         # print(axis, position)
 
@@ -281,7 +280,16 @@ class TrglFragmentView(BaseFragmentView):
             indices = np.reshape(np.arange(npts), (npts,1))
             # print(self.vpoints.shape, indices.shape)
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
+        self.calculateSqCm()
+
         # print("trgl_fragment set local points")
+
+    def calculateSqCm(self):
+        pts = self.fragment.gpoints
+        simps = self.fragment.trgls
+        voxel_size_um = self.project_view.project.voxel_size_um
+        sqcm = BaseFragment.calculateSqCm(pts, simps, voxel_size_um)
+        self.sqcm = sqcm
 
     def getPointsOnSlice(self, axis, i):
         # matches = self.vpoints[(self.vpoints[:, axis] == i)]
@@ -292,6 +300,7 @@ class TrglFragmentView(BaseFragmentView):
     # NOTE that input axis and position are in local tijk coordinates,
     # and that output vertices are in tijk coordinates
     def getLinesOnSlice(self, axis, axis_pos):
+        '''
         tijk = [0,0,0]
         tijk[axis] = axis_pos
         gijk = self.cur_volume_view.transposedIjkToGlobalPosition(tijk)
@@ -301,6 +310,10 @@ class TrglFragmentView(BaseFragmentView):
         gpts = ints.reshape(-1, 3)
         vpts = self.cur_volume_view.globalPositionsToTransposedIjks(gpts)
         plines = vpts.reshape(-1,2,3)
+        return plines
+        '''
+        ints = TrglFragment.findIntersections(self.fpoints, self.trgls(), axis, axis_pos)
+        plines = ints.reshape(-1,2,3)
         return plines
 
     def aligned(self):
