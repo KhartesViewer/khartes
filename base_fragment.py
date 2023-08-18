@@ -86,6 +86,9 @@ class BaseFragmentView:
     def getZsurfPoints(self, axis, axis_pos):
         return None
 
+    def getLinesOnSlice(self, axis, axis_pos):
+        return None
+
     def triangulate(self):
         return None
 

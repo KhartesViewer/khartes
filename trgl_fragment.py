@@ -10,6 +10,7 @@ class TrglFragment(BaseFragment):
         super(TrglFragment, self).__init__(name)
         self.gpoints = np.zeros((0,3), dtype=np.float32)
         self.tpoints = np.zeros((0,2), dtype=np.float32)
+        self.trgls = np.zeros((0,3), dtype=np.int32)
         self.direction = 0
         '''
         self.name = name
@@ -150,6 +151,115 @@ class TrglFragment(BaseFragment):
         print("d 1.0", file=of)
         print("map_Kd %s.tif"%self.name, file=of)
 
+    # find the intersections between a plane defined by axis and position,
+    # and the triangles.  The return value is an array
+    # with 6 columns (the x,y,z location of each of the two
+    # intersections with a given trgl), and as many rows as
+    # there are intersected triangles.
+    # NOTE that axis and position are in global coordinates
+    def findIntersections(self, axis, position):
+        gpts = self.gpoints
+        # print("min", np.min(gpts, axis=0))
+        # print("max", np.max(gpts, axis=0))
+        trgls = self.trgls
+        # print("trgls", trgls.shape)
+        # print(axis, position)
+
+        # shift intersection plane slightly so that
+        # no vertices lie on the plane
+        while len(gpts[gpts[:,axis]==position]) > 0:
+            position += .01
+        
+        # print(axis, position)
+        
+        # -1 or 1 depending on which side gpt is in relation
+        # to the plane defined by axis and position
+        gsgns = np.sign(gpts[:,axis] - position)
+        # print("gsgns", gsgns.shape)
+        # print(gsgns)
+        # -1 or 1 for each vertex of each triangle
+        trglsgns = gsgns[trgls]
+        # sum of the signs for each trgl
+        tssum = trglsgns.sum(axis=1)
+        # if sum is -3 or 3, the trgl is entirely on one
+        # side of the plane, and can be ignored from now on
+        esor = (tssum != -3) & (tssum != 3)
+        trglsgns = trglsgns[esor]
+        trglvs = trgls[esor]
+        # print("trglsgns", trglsgns.shape)
+        # print(trglsgns)
+        # print(trglvs)
+        
+        # shift the trglsgns by one, to compare each vertex to 
+        # its adjacent vertex around the trgl
+        trglroll = np.roll(trglsgns, 1, axis=1)
+        # assuming vertices of each trgl are labeled 0,1,2,
+        # for each trgl set a boolean showing whether each edge
+        # of the trgl crosses the plane, in order:
+        # 1 to 2, 2 to 0, 0 to 1
+        es = np.roll((trglsgns != trglroll), 1, axis=1)
+        
+        # print(es)
+        
+        # repeat each column of es
+        es2 = np.repeat(es, 2, axis=1)
+        
+        # for each trgl, assuming its vertices are numbered 0,1,2,
+        # create a row of six vertices, corresponding to the
+        # edge ordering in es, namely: 1,2,2,0,0,1
+        vs0 = np.roll(np.repeat(trglvs, 2, axis=1), 3, axis=1)
+        
+        # if a given edge does NOT cross the plane, replace its
+        # vertex numbers by -1
+        vs0[~es2] = -1
+        # print(vs0)
+        
+        # find all "-1" vertices in columns 0 and 1 and
+        # roll them to columns 4 and 5
+        m = vs0[:,0] == -1
+        vs0[m] = np.roll(vs0[m], -2, axis=1)
+        
+        # find all "-1" vertices in columns 2 and 3 and
+        # roll them to columns 4 and 5
+        m = vs0[:,2] == -1
+        vs0[m] = np.roll(vs0[m], 2, axis=1)
+        
+        # each row of vs contains two pairs of vertices specifying
+        # the two edges of the triangle that cross the plane
+        vs = vs0[:,:4]
+        # print(vs)
+        
+        # There shouldn't be any "-1" values in vs at this point,
+        # but if there are, filter them out
+        vs = vs[vs[:,0] != -1]
+        vs = vs[vs[:,2] != -1]
+        
+        # gpts projected on the axis
+        gax = gpts[:,axis]
+        
+        # vsh has only one edge (vertex pair) per row
+        vsh = vs.reshape(-1,2)
+        # extract the two vertices of each edge pair
+        v0 = vsh[:,0]
+        v1 = vsh[:,1]
+        
+        # calculate the point where each edge intersects the plane.
+        # d is always non-zero because v0 and v1 lie on opposite
+        # sides of the plane
+        d = gax[v1] - gax[v0]
+        a = (position - gax[v0])/d
+        a = a.reshape(-1,1)
+        i = (1-a)*gpts[v0] + a*gpts[v1]
+        
+        # put the two intersection points, for the two edges of the single
+        # triangle, back into a single row
+        i01 = i.reshape(-1,6)
+        # print(i01)
+        # print("i01", i01.shape)
+
+        return i01
+
+
 class TrglFragmentView(BaseFragmentView):
     def __init__(self, project_view, trgl_fragment):
         super(TrglFragmentView, self).__init__(project_view, trgl_fragment)
@@ -163,7 +273,7 @@ class TrglFragmentView(BaseFragmentView):
             self.vpoints = np.zeros((0,4), dtype=np.float32)
             self.fpoints = self.vpoints
             return
-        self.vpoints = self.cur_volume_view.volume.globalPositionsToTransposedIjks(self.fragment.gpoints, self.cur_volume_view.direction)
+        self.vpoints = self.cur_volume_view.globalPositionsToTransposedIjks(self.fragment.gpoints)
         self.fpoints = self.vpoints
         self.fragment.direction = self.cur_volume_view.direction
         npts = self.vpoints.shape[0]
@@ -171,12 +281,27 @@ class TrglFragmentView(BaseFragmentView):
             indices = np.reshape(np.arange(npts), (npts,1))
             # print(self.vpoints.shape, indices.shape)
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
-        print("trgl_fragment set local points")
+        # print("trgl_fragment set local points")
 
     def getPointsOnSlice(self, axis, i):
         # matches = self.vpoints[(self.vpoints[:, axis] == i)]
         matches = self.vpoints[(self.vpoints[:, axis] >= i-.5) & (self.vpoints[:, axis] < i+.5)]
         return matches
+
+    # outputs a list of lines; each line has two vertices
+    # NOTE that input axis and position are in local tijk coordinates,
+    # and that output vertices are in tijk coordinates
+    def getLinesOnSlice(self, axis, axis_pos):
+        tijk = [0,0,0]
+        tijk[axis] = axis_pos
+        gijk = self.cur_volume_view.transposedIjkToGlobalPosition(tijk)
+        gaxis = self.cur_volume_view.globalAxisFromTransposedAxis(axis)
+        gpos = gijk[gaxis]
+        ints = self.fragment.findIntersections(gaxis, gpos)
+        gpts = ints.reshape(-1, 3)
+        vpts = self.cur_volume_view.globalPositionsToTransposedIjks(gpts)
+        plines = vpts.reshape(-1,2,3)
+        return plines
 
     def aligned(self):
         return True
