@@ -474,7 +474,8 @@ class DataWindow(QLabel):
             fvs = self.cur_frag_pts_fv
             fv = fvs[nearbyNode]
             ijks = self.cur_frag_pts_xyijk[:, 2:5]
-            stxt += "|  node: %s " % fv.fragment.name
+            index = int(self.cur_frag_pts_xyijk[nearbyNode, 5])
+            stxt += "|  node: #%d %s " % (index, fv.fragment.name)
             tijk = ijks[nearbyNode]
             gijk = self.volume_view.transposedIjkToGlobalPosition(tijk)
             for i,a in enumerate(axes):
@@ -1525,18 +1526,37 @@ class SurfaceWindow(DataWindow):
                 continue
             if not frag.visible or opacity == 0.:
                 continue
+            '''
+            nni = -1
+            if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0 and nodeSize > 0:
+                wpts = frag.workingVpoints()
+                nni = pv.nearby_node_index
+                if len(vpts) < nni or vpts[nni,3] != nni:
+                    w = np.where(vpts[:,3] == nni)[0]
+                    if len(w) == 0:
+                        nni = -1
+                    else:
+                        nni = w[0]
+            '''
             lineColor = frag.fragment.cvcolor
             self.nearbyNode = -1
             timer_active = False
             timer = Utils.Timer(timer_active)
             # if frag.tri is not None:
-            if frag.workingTrgls() is not None:
+            # if frag.workingTrgls() is not None:
+            if frag.workingTrgls().any():
                 # pts = frag.tri.points
-                vpts = frag.workingVpoints()
-                pts = vpts[:, 0:2]
+                wvflags = frag.workingVpoints()
+                # pts = vpts[:, 0:2]
+                allpts = frag.vpoints[:, 0:2]
+                wpts = allpts[wvflags]
                 # trgs = frag.tri.simplices
-                trgs = frag.workingTrgls()
-                vrts = pts[trgs]
+                wtflags = frag.workingTrgls()
+                alltrgs = frag.trgls()
+                wtrgs = alltrgs[wtflags]
+                # allpts = frag.vpoints[:,:2]
+                # vpts = allpts
+                vrts = allpts[wtrgs]
                 vrts = self.ijsToXys(vrts)
                 vrts = vrts.reshape(-1,3,1,2).astype(np.int32)
                 timer.time("compute lines")
@@ -1552,7 +1572,7 @@ class SurfaceWindow(DataWindow):
                 # if not frag.activeAndAligned():
                 #     color = self.inactiveNodeColor
                 timer.time("compute points")
-                vrts = self.ijsToXys(pts)
+                vrts = self.ijsToXys(wpts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
                 if nodeSize > 0:
                     cv2.polylines(outrgbx, vrts, True, color, 2*nodeSize)
@@ -1561,14 +1581,16 @@ class SurfaceWindow(DataWindow):
                 timer.time("draw points")
 
                 if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0 and nodeSize > 0:
-                    pt = pts[pv.nearby_node_index]
-                    xy = self.ijToXy(pt)
-                    color = self.highlightNodeColor
-                    self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
-                    if not apply_node_opacity:
-                        self.drawNodeAtXy(original, xy, color, nodeSize)
+                    nni = pv.nearby_node_index
+                    if wvflags[nni]:
+                        pt = allpts[nni]
+                        xy = self.ijToXy(pt)
+                        color = self.highlightNodeColor
+                        self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
+                        if not apply_node_opacity:
+                            self.drawNodeAtXy(original, xy, color, nodeSize)
 
-            elif frag.workingLine() is not None and frag.workingLineAxis > -1:
+            elif frag.workingLine() is not None and frag.workingLineAxis() > -1:
                 line = frag.workingLine()
                 pts = np.zeros((line.shape[0],3), dtype=np.int32)
                 # print(line.shape, pts.shape)
@@ -1595,7 +1617,7 @@ class SurfaceWindow(DataWindow):
                         # if not frag.activeAndAligned():
                         #     color = self.inactiveNodeColor
                         ijk = frag.vpoints[i]
-                        if frag == pv.nearby_node_fv and i == pv.nearby_node_index:
+                        if frag == pv.nearby_node_fv and vpts[i,3] == pv.nearby_node_index:
                             color = self.highlightNodeColor
                         self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
                         if not apply_node_opacity:
@@ -1603,34 +1625,41 @@ class SurfaceWindow(DataWindow):
 
             elif nodeSize > 0:
                 # pts = frag.fpoints[:, 0:2]
-                vpts = frag.workingVpoints()
-                pts = vpts[:, 0:2]
+                # vpts = frag.workingVpoints()
+                # pts = vpts[:, 0:2]
+                wvflags = frag.workingVpoints()
+                allpts = frag.vpoints[:, 0:2]
+                wpts = allpts[wvflags]
                 # print("pts shape", pts.shape)
                 color = self.nodeColor
                 # all frags are active at this point
                 # if not frag.activeAndAligned():
                 #     color = self.inactiveNodeColor
-                vrts = self.ijsToXys(pts)
+                vrts = self.ijsToXys(wpts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
                 cv2.polylines(outrgbx, vrts, True, color, 2*nodeSize)
                 if not apply_node_opacity:
                     cv2.polylines(original, vrts, True, color, 2*nodeSize)
                 if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0:
-                    pt = pts[pv.nearby_node_index]
-                    xy = self.ijToXy(pt)
-                    color = self.highlightNodeColor
-                    self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
-                    if not apply_node_opacity:
-                        self.drawNodeAtXy(original, xy, color, nodeSize)
+                    nni = pv.nearby_node_index
+                    if wvflags[nni]:
+                        pt = pts[nni]
+                        xy = self.ijToXy(pt)
+                        color = self.highlightNodeColor
+                        self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
+                        if not apply_node_opacity:
+                            self.drawNodeAtXy(original, xy, color, nodeSize)
 
             if frag.active:
+                wvflags = frag.workingVpoints()
+                wpts = allpts[wvflags]
                 i0 = len(xypts)
-                for i,pt in enumerate(frag.workingVpoints()):
+                for i,pt in enumerate(frag.vpoints[wvflags]):
                     ij = self.tijkToIj(pt)
                     xy = self.ijToXy(ij)
                     xypts.append((xy[0], xy[1], pt[0], pt[1], pt[2], pt[3]))
                     self.cur_frag_pts_fv.append(frag)
-                    if frag == pv.nearby_node_fv and i == pv.nearby_node_index:
+                    if frag == pv.nearby_node_fv and pt[3] == pv.nearby_node_index:
                         self.nearbyNode = i+i0
             timer.time("compute cur_frag_pts")
         timera.time("draw frag")
