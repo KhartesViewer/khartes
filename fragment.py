@@ -1073,6 +1073,11 @@ class FragmentView(BaseFragmentView):
         #     self.triangulate()
         self.createZsurf(always_update_zsurf or self.live_zsurf_update)
         self.calculateSqCm()
+        self.working_vpoints = np.full((len(self.vpoints),),True)
+        ntrgl = 0
+        if self.tri is not None:
+            ntrgl = len(self.tri.simplices)
+        self.working_trgls = np.full((ntrgl,),True)
         # print("calculated sq cm")
         if not recursion_ok:
             return
@@ -1200,7 +1205,7 @@ class FragmentView(BaseFragmentView):
         return self.zsurf
 
     def workingVpoints(self):
-        return self.vpoints
+        return self.working_vpoints
 
     def createZsurf(self, do_update=True):
         timer_active = False
@@ -1807,10 +1812,13 @@ class FragmentView(BaseFragmentView):
         self.setLocalPoints(True, False)
 
     def workingTrgls(self):
+        '''
         if self.tri is None or len(self.tri.simplices) == 0:
             return None
         else:
             return self.tri.simplices
+        '''
+        return self.working_trgls
 
     def workingLine(self):
         return self.line
@@ -1820,6 +1828,11 @@ class FragmentView(BaseFragmentView):
 
     def workingLineAxisPosition(self):
         return self.lineAxisPosition
+
+    def trgls(self):
+        if self.tri is None:
+            return None
+        return self.tri.simplices
 
     '''
     def normals(self):

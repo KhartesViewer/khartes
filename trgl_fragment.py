@@ -1,5 +1,7 @@
+import math
 import numpy as np
 from pathlib import Path
+from collections import deque
 from utils import Utils
 from base_fragment import BaseFragment, BaseFragmentView
 
@@ -90,7 +92,9 @@ class TrglFragment(BaseFragment):
             color = Utils.getNextColor()
         trgl_frag.setColor(color, no_notify=True)
         trgl_frag.valid = True
+        trgl_frag.neighbors = BaseFragment.neighbors(trgl_frag.trgls)
         print(trgl_frag.name, trgl_frag.color.name(), trgl_frag.gpoints.shape, trgl_frag.tpoints.shape, trgl_frag.trgls.shape)
+        # print("tindexes", BaseFragment.trglsAroundPoint(100, trgl_frag.trgls))
 
         return [trgl_frag]
 
@@ -271,6 +275,7 @@ class TrglFragmentView(BaseFragmentView):
         if self.cur_volume_view is None:
             self.vpoints = np.zeros((0,4), dtype=np.float32)
             self.fpoints = self.vpoints
+            self.working_vpoints = np.zeros((0,4), dtype=np.float32)
             return
         self.vpoints = self.cur_volume_view.globalPositionsToTransposedIjks(self.fragment.gpoints)
         self.fpoints = self.vpoints
@@ -282,7 +287,30 @@ class TrglFragmentView(BaseFragmentView):
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
         self.calculateSqCm()
 
+        tbn = self.regionByNormals(35555, 60.)
+        # print("tbn", len(tbn))
+        wt = np.full((len(self.trgls()),), False)
+        wt[tbn] = True
+        # self.working_trgls = self.trgls()[tbn]
+        self.working_trgls = wt
+        vs = np.unique(self.trgls()[tbn].flatten())
+        wv = np.full((len(self.vpoints),), False)
+        # print(vs.shape, wv.shape)
+        # print(vs)
+        wv[(vs)] = True
+        self.working_vpoints = wv
+        # self.working_vpoints = self.vpoints[vs]
+        # print("wvp", len(self.working_vpoints))
         # print("trgl_fragment set local points")
+
+    def moveAlongNormalsSign(self):
+        return -1.
+
+    def workingVpoints(self):
+        return self.working_vpoints
+
+    def workingTrgls(self):
+        return self.working_trgls
 
     def calculateSqCm(self):
         pts = self.fragment.gpoints
@@ -290,6 +318,7 @@ class TrglFragmentView(BaseFragmentView):
         voxel_size_um = self.project_view.project.voxel_size_um
         sqcm = BaseFragment.calculateSqCm(pts, simps, voxel_size_um)
         self.sqcm = sqcm
+
 
     def getPointsOnSlice(self, axis, i):
         # matches = self.vpoints[(self.vpoints[:, axis] == i)]
@@ -331,4 +360,57 @@ class TrglFragmentView(BaseFragmentView):
         self.fragment.notifyModified()
         self.setLocalPoints(True, False)
         return True
+
+    # returns list of trgl indexes
+    def regionByNormals(self, ptind, max_angle):
+        pts = self.fpoints
+        trgls = self.fragment.trgls
+        neighbors = self.fragment.neighbors
+        minz = math.cos(math.radians(max_angle))
+        # print("minz", minz)
+        normals = BaseFragment.faceNormals(pts, trgls)
+        trgl_stack = deque()
+        tap = BaseFragment.trglsAroundPoint(ptind, trgls)
+        zsgn = np.sum(normals[tap,2])
+        # print("zsgn", zsgn)
+        if zsgn < 0:
+            zsgn = -1
+        else:
+            zsgn = 1
+        # print("tap", tap)
+        trgl_stack.extend(tap)
+        done = set()
+        out_trgls = []
+        while len(trgl_stack) > 0:
+            trgl = trgl_stack.pop()
+            # print("1", trgl)
+            if trgl in done:
+                continue
+            done.add(trgl)
+            # print("2", trgl)
+            n = normals[trgl]
+            # print("n", n)
+            # if abs(n[2]) < minz:
+            if zsgn*n[2] < minz:
+                continue
+            # print("3", trgl)
+            out_trgls.append(trgl)
+            for neigh in neighbors[trgl]:
+                # print("4", neigh)
+                if neigh < 0:
+                    continue
+                # print("5", neigh)
+                if neigh in done:
+                    continue
+                # print("6", neigh)
+                trgl_stack.append(neigh)
+            # print("ts", len(trgl_stack))
+        return out_trgls
+
+
+
+
+
+
+
 
