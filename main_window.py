@@ -593,7 +593,7 @@ class MainWindow(QMainWindow):
             "apply_opacity": True,
         },
         "line": {
-            "width": 1,
+            "width": 2,
             "opacity": 1.0,
             "apply_opacity": True,
         },

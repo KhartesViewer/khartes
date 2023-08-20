@@ -160,7 +160,7 @@ class BaseFragmentView:
         return None
 
     def getLinesOnSlice(self, axis, axis_pos):
-        return None
+        return None, None
 
     def triangulate(self):
         return None
