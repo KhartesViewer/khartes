@@ -49,6 +49,7 @@ class DataWindow(QLabel):
         self.zoomMult = 1.
         m = 65535
         self.nodeColor = (m,0,0,m)
+        self.mutedNodeColor = ((3*m)//4,0,0,m)
         self.highlightNodeColor = (0,m,m,m)
         self.inactiveNodeColor = (m//2,m//4,m//4,m)
         self.triLineColor = (3*m//4,2*m//4,3*m//4,m)
@@ -1205,24 +1206,48 @@ into and out of the viewing plane.
                 color = (0,m,0,65535)
                 color = frag.fragment.cvcolor
                 # if frag == self.currentFragmentView():
+                size = (3*splineLineSize)//2
                 if frag.active:
                     # color = self.splineLineColor
                     # size = self.splineLineSize
-                    size = splineLineSize
                     if len(pts) == 1:
                         size += 2 
                 else:
-                    size = splineLineSize
+                    # size = splineLineSize
+                    pass
                 vrts = self.ijsToXys(pts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
-                cv2.polylines(outrgbx, vrts, True, color, size*2)
+                cv2.polylines(outrgbx, vrts, True, color, size)
                 if not apply_line_opacity:
-                    cv2.polylines(original, vrts, True, color, size*2)
+                    cv2.polylines(original, vrts, True, color, size)
                 timera.time("draw zsurf points")
 
-            lines = frag.getLinesOnSlice(self.axis, self.positionOnAxis())
-            if lines is not None:
-                ijkpts = lines.reshape(-1, 3)
+            lines, trglist = frag.getLinesOnSlice(self.axis, self.positionOnAxis())
+            if lines is not None and splineLineSize > 0:
+                trgls = frag.trgls()
+                wtrgls = frag.workingTrgls()
+                # working = np.full((len(trgls),), False)
+                # working[wtrgls] = True
+                # working_bools = working[trglist]
+                working_bools = wtrgls[trglist]
+                working_lines = lines[working_bools]
+                non_working_lines = lines[~working_bools]
+                # print(len(lines),"lines",len(working_lines),"working lines")
+                llen = len(lines)
+                wlen = len(working_lines)
+                all_working = (wlen == llen)
+                no_working = (wlen == 0)
+                if all_working:
+                    normal_lines = working_lines
+                    thin_lines = None
+                elif no_working:
+                    normal_lines = non_working_lines
+                    thin_lines = None
+                else:
+                    normal_lines = working_lines
+                    thin_lines = non_working_lines
+
+                ijkpts = normal_lines.reshape(-1, 3)
                 ijpts = self.tijksToIjs(ijkpts)
                 xys = self.ijsToXys(ijpts)
                 # TODO: figure out how to put a dense-enough set
@@ -1235,7 +1260,39 @@ into and out of the viewing plane.
                 if not apply_line_opacity:
                     cv2.polylines(original, xys, False, color, size)
 
+                size -= 1
+                if thin_lines is not None and size > 0:
+                    ijkpts = thin_lines.reshape(-1, 3)
+                    ijpts = self.tijksToIjs(ijkpts)
+                    xys = self.ijsToXys(ijpts)
+                    # TODO: figure out how to put a dense-enough set
+                    # of points in fv2zpoints, for the status bar
+                    # self.fv2zpoints[frag] = ijpts
+                    xys = xys.reshape(-1,1,2,2)
+                    color = frag.fragment.cvcolor
+                    size = splineLineSize-1
+                    cv2.polylines(outrgbx, xys, False, color, size)
+                    if not apply_line_opacity:
+                        cv2.polylines(original, xys, False, color, size)
+
             pts = frag.getPointsOnSlice(self.axis, self.positionOnAxis())
+            # working is an array of bools, one per pt
+            working = frag.workingVpoints()
+            '''
+            working_bools = working[working_list]
+            working_pts = pts[working_bools]
+            non_working_pts = pts[~working_bools]
+            llen = len(pts)
+            wlen = len(working_pts)
+            all_working = (wlen == llen)
+            no_working = (wlen == 0)
+            '''
+            all_working = working.all()
+            none_working = (~working).all()
+            emphasize = working
+            if none_working:
+                emphasize[:] = True
+
             timera.time("get nodes on slice")
             m = 65535
             self.nearbyNode = -1
@@ -1247,16 +1304,20 @@ into and out of the viewing plane.
                 self.cur_frag_pts_fv.append(frag)
                 # print("circle at",ij, xy)
                 color = self.nodeColor
+                size = nodeSize
+                if not emphasize[int(pt[3])]:
+                    # color = self.mutedNodeColor
+                    size = nodeSize-1
                 if not frag.active:
                     color = self.inactiveNodeColor
                 # print(pt, self.volume_view.nearbyNode)
                 if (frag, pt[3]) == nearbyNode:
                     color = self.highlightNodeColor
                     self.nearbyNode = i0+i
-                if nodeSize > 0:
-                    self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
+                if size > 0:
+                    self.drawNodeAtXy(outrgbx, xy, color, size)
                     if not apply_node_opacity:
-                        self.drawNodeAtXy(original, xy, color, nodeSize)
+                        self.drawNodeAtXy(original, xy, color, size)
             timera.time("draw nodes on slice")
 
             m = 65535

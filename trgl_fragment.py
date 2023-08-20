@@ -156,10 +156,13 @@ class TrglFragment(BaseFragment):
         print("map_Kd %s.tif"%self.name, file=of)
 
     # find the intersections between a plane defined by axis and position,
-    # and the triangles.  The return value is an array
+    # and the triangles.  
+    # The first return value is an array
     # with 6 columns (the x,y,z location of each of the two
     # intersections with a given trgl), and as many rows as
     # there are intersected triangles.
+    # The second return value is a vector, as long as the first
+    # array, with the trgl index of each intersected triangle.
     def findIntersections(pts, trgls, axis, position):
         gpts = pts
         # print("min", np.min(gpts, axis=0))
@@ -260,7 +263,11 @@ class TrglFragment(BaseFragment):
         # print(i01)
         # print("i01", i01.shape)
 
-        return i01
+        trglist = np.indices((len(trgls),))[0]
+        # print(trgls.shape, trglist.shape, esor.shape)
+        trglist = trglist[esor]
+
+        return i01, trglist
 
 
 class TrglFragmentView(BaseFragmentView):
@@ -341,9 +348,9 @@ class TrglFragmentView(BaseFragmentView):
         plines = vpts.reshape(-1,2,3)
         return plines
         '''
-        ints = TrglFragment.findIntersections(self.fpoints, self.trgls(), axis, axis_pos)
+        ints, trglist = TrglFragment.findIntersections(self.fpoints, self.trgls(), axis, axis_pos)
         plines = ints.reshape(-1,2,3)
-        return plines
+        return plines, trglist
 
     def aligned(self):
         return True
