@@ -1758,6 +1758,14 @@ class MainWindow(QMainWindow):
         self.settings.beginGroup("MainWindow")
         sdir = self.settings.value(prefix+"directory", None)
         self.settings.endGroup()
+        p = Path(sdir)
+        # if sdir does not exist (or is not a directory),
+        # and if this bad sdir is passed to a file dialog to be
+        # used as a starting directory, the file dialog closes
+        # immediately, without giving the user a chance to select
+        # a file.
+        if not p.is_dir():
+            return None
         return sdir
 
     def settingsSaveDirectory(self, directory, prefix=""):
