@@ -150,7 +150,8 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         fragment = list(fragments.keys())[row]
         fragment_view = fragments[fragment]
         if self.project_view.mainActiveVisibleFragmentView() == fragment_view:
-            return QtGui.QColor('beige')
+            # return QtGui.QColor('beige')
+            return QtGui.QColor(self.main_window.highlightedBackgroundColor())
 
     def dataDisplayRole(self, index, role):
         row = index.row()

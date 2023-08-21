@@ -251,7 +251,7 @@ class CopyActiveFragmentButton(QPushButton):
         # super(CopyActiveFragmentButton, self).__init__("Copy Active Fragment", parent)
         super(CopyActiveFragmentButton, self).__init__("Copy", parent)
         self.main_window = main_window
-        self.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
+        self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
         self.setEnabled(False)
         self.setToolTip("Create a new fragment that is a copy\nof the currently active fragment")
         self.clicked.connect(self.onButtonClicked)
@@ -264,7 +264,7 @@ class MoveActiveFragmentAlongZButton(QPushButton):
         super(MoveActiveFragmentAlongZButton, self).__init__(text, parent)
         self.main_window = main_window
         self.step = step
-        self.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
+        self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
         self.setEnabled(False)
         # up and down are opposite signs to what you might expect
         if step > 0:
@@ -281,7 +281,7 @@ class MoveActiveFragmentAlongNormalsButton(QPushButton):
         super(MoveActiveFragmentAlongNormalsButton, self).__init__(text, parent)
         self.main_window = main_window
         self.step = step
-        self.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
+        self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
         self.setEnabled(False)
         # up and down are opposite signs to what you might expect
         if step > 0:
@@ -870,6 +870,28 @@ class MainWindow(QMainWindow):
 
         return cursors
 
+    def isDarkMode(self):
+        palette = QPalette()
+        # https://www.qt.io/blog/dark-mode-on-windows-11-with-qt-6.5
+        # explains how to detect dark mode
+        # Also explains how to set env variable in Windows so that
+        # Qt 5 will respond to Window's light/dark settings
+        return palette.color(QPalette.WindowText).lightness() > palette.color(QPalette.Window).lightness()
+
+    # https://doc.qt.io/qt-5/stylesheet-reference.html#paletterole
+    # shows how to use palette roles rather
+    # than hardwired colors in the style sheet.  Unfortunately,
+    # in practice these roles didn't provide the contrast
+    # I wanted.
+    def highlightedBackgroundColor(self):
+        if self.isDarkMode():
+            return "darkslategray"
+        else:
+            return "beige"
+        
+    def highlightedBackgroundStyle(self):
+        return "background-color: %s"%self.highlightedBackgroundColor()
+
     def addFragmentsPanel(self):
         panel = QWidget()
         vlayout = QVBoxLayout()
@@ -879,7 +901,8 @@ class MainWindow(QMainWindow):
         label.setAlignment(Qt.AlignCenter)
         hlayout.addWidget(label)
         create_frag = CreateFragmentButton(self)
-        create_frag.setStyleSheet("QPushButton { background-color : beige; padding: 5; }")
+        # print("dark mode", self.isDarkMode())
+        create_frag.setStyleSheet("QPushButton { %s; padding: 5; }"%self.highlightedBackgroundStyle())
         hlayout.addWidget(create_frag)
         label = QLabel("Active fragment:")
         # label.setStyleSheet("QLabel { background-color : beige; padding-left: 5}")
@@ -1006,7 +1029,8 @@ class MainWindow(QMainWindow):
         # vbv.setAutoFillBackground(True)
         # palette = vbv.palette()
         # palette.setColor(QPalette.Window, QColor("green"))
-        vbv.setStyleSheet("QCheckBox { background-color : beige; padding: 5; }")
+        # vbv.setStyleSheet("QCheckBox { background-color : beige; padding: 5; }")
+        vbv.setStyleSheet("QCheckBox { %s; padding: 5; }"%self.highlightedBackgroundStyle())
         # vbv.setPalette(palette)
         hlayout.addWidget(vbv)
         hlayout.addStretch()
