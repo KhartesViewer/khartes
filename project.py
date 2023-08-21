@@ -173,15 +173,20 @@ class ProjectView:
 
         if 'fragments' in info:
             finfos = info['fragments']
+            # print("finfos", finfos)
             for fv in pv.fragments.values():
                 name = fv.fragment.name
                 created = fv.fragment.created
+                print(name, created)
                 finfo = None
                 if name in finfos:
                     finfo = finfos[name]
+                    # print("found by name")
                 elif created in finfos:
                     finfo = finfos[created]
+                    # print("found by created")
                 if finfo is None:
+                    # print("not found")
                     continue
                 if 'visible' in finfo:
                     fv.visible = finfo['visible']
@@ -399,6 +404,83 @@ class Project:
 
     def save(self):
         print("called project save")
+        frag_path = self.fragments_path
+        frag_path_old = self.fragments_path.with_name('fragments.old')
+        frag_path_older = self.fragments_path.with_name('fragments.older')
+        timestamp = Utils.timestampToVc(Utils.timestamp())
+        if frag_path_older.exists() and frag_path_older.is_dir():
+            files = list(frag_path_older.glob('*'))
+            for file in files:
+                try:
+                    file.unlink()
+                except Exception as e:
+                    print(e)
+                    print("failed to unlink",file,"in",frag_path_older.name)
+            try:
+                frag_path_older.rmdir()
+            except Exception as e:
+                print(e)
+                print("failed to rmdir", frag_path_older.name)
+        if frag_path_older.exists():
+            try:
+                newname = "fragments.older."+timestamp
+                newpath = frag_path.with_name(newname)
+                frag_path_older.rename(newpath)
+            except Exception as e:
+                print(e)
+                print("failed to rename",frag_path_older.name,"to",newname)
+        if frag_path_older.exists():
+            try:
+                newname = "fragments.old."+timestamp
+                newpath = frag_path.with_name(newname)
+                frag_path_old.rename(newpath)
+            except Exception as e:
+                print(e)
+                print("failed to rename",frag_path_old.name,"to",newname)
+        if frag_path_old.exists():
+            try:
+                newname = "fragments.older"
+                newpath = frag_path.with_name(newname)
+                frag_path_old.rename(newpath)
+            except Exception as e:
+                print(e)
+                print("failed to rename",frag_path_old.name,"to",newname)
+                pass
+        if frag_path_old.exists():
+            try:
+                newname = "fragments.old."+timestamp
+                newpath = frag_path.with_name(newname)
+                frag_path_old.rename(newpath)
+            except Exception as e:
+                print(e)
+                print("failed to rename",frag_path_old.name,"to",newname)
+        if frag_path_old.exists():
+            try:
+                newname = "fragments."+timestamp
+                newpath = frag_path.with_name(newname)
+                frag_path.rename(newpath)
+            except Exception as e:
+                print(e)
+                print("failed to rename",frag_path.name,"to",newname)
+        else:
+            try:
+                newname = "fragments.old"
+                newpath = frag_path.with_name(newname)
+                frag_path.rename(newpath)
+            except Exception as e:
+                print(e)
+                print("failed to rename",frag_path.name,"to",newname)
+        if frag_path.exists():
+            files = list(frag_path.glob('*'))
+            for file in files:
+                try:
+                    file.unlink()
+                except:
+                    print("failed to unlink",file,"in",frag_path.name)
+            
+        else:
+            frag_path.mkdir()
+        '''
         files = list(self.fragments_path.glob("*.json"))
         # print("glob files", files)
         for file in files:
@@ -409,6 +491,7 @@ class Project:
                 old.rename(older)
             file.rename(old)
         # Fragment.saveList(self.fragments, self.fragments_path, "all")
+        '''
         BaseFragment.saveList(self.fragments, self.fragments_path, "all")
 
         info = {}

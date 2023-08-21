@@ -147,6 +147,20 @@ for word in ["frag", "frag1", "frag23", "45"]:
         print(word, inc, Utils.getNextName(word, inc))
 '''
 
+'''
+ts = Utils.timestamp()
+# ts = ts.replace("-","_")
+print("timestamp", ts)
+vc = Utils.timestampToVc(ts)
+print("vc", vc)
+if vc is None:
+    exit()
+ts = Utils.vcToTimestamp(vc)
+print("ts", ts)
+exit()
+'''
+
+
 app = QApplication(sys.argv)
 
 # for i in range(5):
