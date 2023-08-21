@@ -4,6 +4,7 @@ from pathlib import Path
 from collections import deque
 from utils import Utils
 from base_fragment import BaseFragment, BaseFragmentView
+from fragment import Fragment, FragmentView
 
 from PyQt5.QtGui import QColor
 
@@ -38,29 +39,41 @@ class TrglFragment(BaseFragment):
         tvrtl = []
         trgl = []
         
+        created = ""
+        frag_name = ""
         for line in fd:
             line = line.strip()
-            if line[0] == '#':
-                continue
             words = line.split()
-            if words[0] == 'v':
-                if len(words) != 4:
-                    continue
-                vrtl.append([float(w) for w in words[1:]])
+            if words[0][0] == '#':
+                if len(words) > 2: 
+                    if words[1] == "Created:":
+                        created = words[2]
+                    if words[1] == "Name:":
+                        frag_name = words[2]
+            elif words[0] == 'v':
+                if len(words) == 4:
+                    vrtl.append([float(w) for w in words[1:]])
             elif words[0] == 'vt':
-                if len(words) != 3:
-                    continue
-                tvrtl.append([float(w) for w in words[1:]])
+                if len(words) == 3:
+                    tvrtl.append([float(w) for w in words[1:]])
             elif words[0] == 'f':
-                if len(words) != 4:
-                    continue
-                # implicit assumption that v == vt
-                trgl.append([int(w.split('/')[0])-1 for w in words[1:]])
+                if len(words) == 4:
+                    # implicit assumption that v == vt
+                    trgl.append([int(w.split('/')[0])-1 for w in words[1:]])
         
-        trgl_frag = TrglFragment(name)
+        if frag_name == "":
+        #     frag_name = name.replace("_",":").replace("p",".")
+            frag_name = name
+        trgl_frag = TrglFragment(frag_name)
         trgl_frag.gpoints = np.array(vrtl, dtype=np.float32)
         trgl_frag.tpoints = np.array(tvrtl, dtype=np.float32)
         trgl_frag.trgls = np.array(trgl, dtype=np.int32)
+        if created == "":
+            ts = Utils.vcToTimestamp(name)
+            if ts is not None:
+                created = ts
+        if created != "":
+            trgl_frag.created = created
         trgl_frag.params = {}
         
         mname = pname.with_suffix(".mtl")
@@ -92,7 +105,7 @@ class TrglFragment(BaseFragment):
             color = Utils.getNextColor()
         trgl_frag.setColor(color, no_notify=True)
         trgl_frag.valid = True
-        trgl_frag.neighbors = BaseFragment.neighbors(trgl_frag.trgls)
+        trgl_frag.neighbors = BaseFragment.findNeighbors(trgl_frag.trgls)
         print(trgl_frag.name, trgl_frag.color.name(), trgl_frag.gpoints.shape, trgl_frag.tpoints.shape, trgl_frag.trgls.shape)
         # print("tindexes", BaseFragment.trglsAroundPoint(100, trgl_frag.trgls))
 
@@ -105,6 +118,9 @@ class TrglFragment(BaseFragment):
         frag = TrglFragment(name)
         frag.setColor(self.color, no_notify=True)
         frag.gpoints = np.copy(self.gpoints)
+        frag.tpoints = np.copy(self.tpoints)
+        frag.trgls = np.copy(self.trgls)
+        frag.neighbors = np.copy(self.neighbors)
         frag.valid = True
         return frag
 
@@ -115,25 +131,33 @@ class TrglFragment(BaseFragment):
             frag.save(path)
 
     def save(self, path):
-        fpath = path / self.name
+        # cfixed = self.created.replace(':',"_").replace('.',"p")
+        cfixed = Utils.timestampToVc(self.created)
+        if cfixed is None:
+            print("Could not convert self.created", self.created, "to vc")
+            cfixed = self.created.replace(':',"_").replace('.',"p")
+        fpath = path / cfixed
         obj_path = fpath.with_suffix(".obj")
         of = obj_path.open("w")
         # print("hello", file=of)
         print("# Khartes OBJ File", file=of)
+        print("# Created: %s"%self.created, file=of)
+        print("# Name: %s"%self.name, file=of)
         print("# Vertices: %d"%len(self.gpoints), file=of)
-        ns = BaseFragment.normals(self.gpoints, self.trgls)
+        ns = BaseFragment.pointNormals(self.gpoints, self.trgls)
         for i, pt in enumerate(self.gpoints):
             print("v %f %f %f"%(pt[0], pt[1], pt[2]), file=of)
             if ns is not None:
                 n = ns[i]
                 print("vn %f %f %f"%(n[0], n[1], n[2]), file=of)
         print("# Color and texture information", file=of)
-        print("mtllib %s.mtl"%self.name, file=of)
+        # print("mtllib %s.mtl"%self.name, file=of)
+        print("mtllib %s.mtl"%cfixed, file=of)
         print("usemtl default", file=of)
         has_texture = (len(self.tpoints) == len(self.gpoints))
         if has_texture:
-            for i, pt in enumerate(self.gpoints):
-                print("vt %f %f %f"%(pt[0], pt[1], pt[2]), file=of)
+            for i, pt in enumerate(self.tpoints):
+                print("vt %f %f"%(pt[0], pt[1]), file=of)
         print("# Faces: %d"%len(self.trgls), file=of)
         for trgl in self.trgls:
             ostr = "f"
@@ -153,7 +177,8 @@ class TrglFragment(BaseFragment):
         print("Ks 0.0 0.0 0.0", file=of)
         print("illum 2", file=of)
         print("d 1.0", file=of)
-        print("map_Kd %s.tif"%self.name, file=of)
+        if has_texture:
+            print("map_Kd %s.tif"%cfixed, file=of)
 
     # find the intersections between a plane defined by axis and position,
     # and the triangles.  
@@ -277,12 +302,14 @@ class TrglFragmentView(BaseFragmentView):
         # self.fragment = trgl_fragment
         # TODO fix:
         self.line = None
+        self.setWorkingRegion(-1, 0.)
 
     def setLocalPoints(self, recursion_ok=True, always_update_zsurfs=True):
         if self.cur_volume_view is None:
             self.vpoints = np.zeros((0,4), dtype=np.float32)
             self.fpoints = self.vpoints
-            self.working_vpoints = np.zeros((0,4), dtype=np.float32)
+            # self.working_vpoints = np.zeros((0,4), dtype=np.float32)
+            self.setWorkingRegion(-1, 0.)
             return
         self.vpoints = self.cur_volume_view.globalPositionsToTransposedIjks(self.fragment.gpoints)
         self.fpoints = self.vpoints
@@ -293,8 +320,15 @@ class TrglFragmentView(BaseFragmentView):
             # print(self.vpoints.shape, indices.shape)
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
         self.calculateSqCm()
+        self.setWorkingRegion(35555, 60.)
 
-        tbn = self.regionByNormals(35555, 60.)
+    def setWorkingRegion(self, index, max_angle):
+        if index < 0:
+            self.working_trgls = np.zeros((0, 3), dtype=np.int32)
+            self.working_vpoints = np.zeros((0,4), dtype=np.float32)
+            self.working_fragment = None
+            return
+        tbn = self.regionByNormals(index, max_angle)
         # print("tbn", len(tbn))
         wt = np.full((len(self.trgls()),), False)
         wt[tbn] = True
@@ -309,6 +343,12 @@ class TrglFragmentView(BaseFragmentView):
         # self.working_vpoints = self.vpoints[vs]
         # print("wvp", len(self.working_vpoints))
         # print("trgl_fragment set local points")
+
+        working_fragment = Fragment("working", self.fragment.direction)
+        working_fragment.setColor(self.fragment.color)
+        working_fv = FragmentView(None, working_fragment)
+        working_fv.setVolumeView(self.cur_volume_view)
+
 
     def moveAlongNormalsSign(self):
         return -1.

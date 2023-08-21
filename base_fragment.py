@@ -17,7 +17,10 @@ class BaseFragment:
         if tstamp == "":
             tstamp = Utils.timestamp()
         self.modified = tstamp
-        self.project.notifyModified(tstamp)
+        # self.project can be None if BaseFragment is
+        # a working Fragment of a TrglFragment
+        if self.project is not None:
+            self.project.notifyModified(tstamp)
 
     def setColor(self, qcolor, no_notify=False):
         self.color = qcolor
@@ -89,7 +92,7 @@ class BaseFragment:
         return sqcm
 
     # class function
-    def neighbors(trgls):
+    def findNeighbors(trgls):
         index = np.indices((len(trgls),1))[0]
         ones = np.ones((len(trgls),1), dtype=np.int32)
         zeros = np.zeros((len(trgls),1), dtype=np.int32)

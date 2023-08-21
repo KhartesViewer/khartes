@@ -32,6 +32,24 @@ class Utils:
         # print("timer", txt, txt2)
         return txt2
 
+    def timestampToVc(ts):
+        try:
+            dt = datetime.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%fZ")
+        except:
+            print("Couldn't parse %s as Utils timestamp"%ts)
+            return None
+        odt = dt.strftime("%Y%m%d%H%M%S")
+        return odt
+
+    def vcToTimestamp(vc):
+        try:
+            dt = datetime.datetime.strptime(vc, "%Y%m%d%H%M%S")
+        except:
+            print("Couldn't parse %s as VC timestamp"%vc)
+            return None
+        odt = dt.strftime("%Y-%m-%dT%H:%M:%S.00Z")
+        return odt
+
     def getNextColor():
         h = random.randrange(359)
         s = random.randrange(128,255)
@@ -46,6 +64,7 @@ class Utils:
         return color
 
 
+    # TODO deal intelligently with nested '-copy'
     def nextName(name, inc):
         # print(name, inc)
         m = re.match(r'^(.*\D)(\d*)$', name)

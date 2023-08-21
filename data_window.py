@@ -1704,7 +1704,7 @@ class SurfaceWindow(DataWindow):
                 if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0:
                     nni = pv.nearby_node_index
                     if wvflags[nni]:
-                        pt = pts[nni]
+                        pt = allpts[nni]
                         xy = self.ijToXy(pt)
                         color = self.highlightNodeColor
                         self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
