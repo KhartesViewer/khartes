@@ -88,7 +88,6 @@ class ProjectView:
 
     def save(self):
         print("called project_view save")
-        self.project.save()
 
         info = {}
         prj = {}
@@ -118,6 +117,7 @@ class ProjectView:
         # info_txt = json.dumps(info, sort_keys=True, indent=4)
         info_txt = json.dumps(info, indent=4)
         (self.project.path / 'views.json').write_text(info_txt, encoding="utf8")
+        self.project.save()
 
     def createErrorProjectView(project, err):
         pv = ProjectView(project)
@@ -402,8 +402,28 @@ class Project:
         (fp / 'project.json').write_text(info_txt, encoding="utf8")
         return prj
 
-    def save(self):
-        print("called project save")
+
+    def preservePreviousVersion(self):
+        frag_path = self.fragments_path
+        frag_path_old = self.fragments_path.with_name('fragments_prev')
+        frag_path_older = self.fragments_path.with_name('fragments_prev_2')
+
+        frag_path_old.mkdir(exist_ok=True)
+        frag_path_older.mkdir(exist_ok=True)
+
+        files = list(frag_path_older.glob('*'))
+        for file in files:
+            file.unlink()
+        files = list(frag_path_old.glob('*'))
+        for file in files:
+            name = file.name
+            file.rename(frag_path_older / name)
+        files = list(frag_path.glob('*'))
+        for file in files:
+            name = file.name
+            file.rename(frag_path_old / name)
+
+    def preservePreviousVersionOld(self):
         frag_path = self.fragments_path
         frag_path_old = self.fragments_path.with_name('fragments.old')
         frag_path_older = self.fragments_path.with_name('fragments.older')
@@ -492,6 +512,14 @@ class Project:
             file.rename(old)
         # Fragment.saveList(self.fragments, self.fragments_path, "all")
         '''
+
+    def save(self):
+        print("called project save")
+        try:
+            self.preservePreviousVersion()
+        except Exception as e:
+            print(e)
+            print("failed to preserve previous version")
         BaseFragment.saveList(self.fragments, self.fragments_path, "all")
 
         info = {}

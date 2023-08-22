@@ -1499,7 +1499,20 @@ class MainWindow(QMainWindow):
             return
         print("calling project save")
         # self.project_view.project.save()
-        self.project_view.save()
+
+        try:
+            self.project_view.save()
+        except Exception as e:
+            # TODO show an error dialog
+            print(e)
+            print("Project save failed!")
+            msg = QMessageBox()
+            msg.setWindowTitle("Save project")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("'Save Project' failed: %s\n\nTo safeguard your data, immediately execute\n'Save Project As...'"%e)
+            msg.exec()
+            return
+
         self.projectModifiedCallback(self.project_view.project)
 
     # Qt trickery to get around a problem with QFileDialog
@@ -1682,7 +1695,19 @@ class MainWindow(QMainWindow):
         old_prj.volumes_path = new_prj.volumes_path
         old_prj.fragments_path = new_prj.fragments_path
 
-        self.project_view.save()
+        try:
+            self.project_view.save()
+        except Exception as e:
+            # TODO show an error dialog
+            print(e)
+            print("Project save-as failed!")
+            msg = QMessageBox()
+            msg.setWindowTitle("Save project as...")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("'Save as' failed: %s"%e)
+            msg.exec()
+            return
+
         self.projectModifiedCallback(old_prj)
 
         path = pdir.absolute()
