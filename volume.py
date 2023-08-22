@@ -292,7 +292,8 @@ tiff files is aligned with the slice vertical axes""",
         # volume_view = volumes[volume]
         if self.project_view.cur_volume == volume:
             # return QtGui.QColor('lightgray')
-            return QtGui.QColor('beige')
+            # return QtGui.QColor('beige')
+            return QtGui.QColor(self.main_window.highlightedBackgroundColor())
 
     def dataDisplayRole(self, index, role):
         row = index.row()
