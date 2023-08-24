@@ -1758,6 +1758,8 @@ class MainWindow(QMainWindow):
         self.settings.beginGroup("MainWindow")
         sdir = self.settings.value(prefix+"directory", None)
         self.settings.endGroup()
+        if sdir is None:
+            return None
         p = Path(sdir)
         # if sdir does not exist (or is not a directory),
         # and if this bad sdir is passed to a file dialog to be
