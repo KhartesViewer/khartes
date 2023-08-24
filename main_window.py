@@ -726,6 +726,10 @@ class MainWindow(QMainWindow):
         self.save_project_as_action.triggered.connect(self.onSaveProjectAsButtonClick)
         self.save_project_as_action.setEnabled(False)
 
+        self.import_obj_action = QAction("Import .obj files...", self)
+        self.import_obj_action.triggered.connect(self.onImportObjButtonClick)
+        self.import_obj_action.setEnabled(False)
+
         self.import_nrrd_action = QAction("Import NRRD files...", self)
         self.import_nrrd_action.triggered.connect(self.onImportNRRDButtonClick)
         self.import_nrrd_action.setEnabled(False)
@@ -754,6 +758,7 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(self.new_project_action)
         self.file_menu.addAction(self.save_project_action)
         self.file_menu.addAction(self.save_project_as_action)
+        self.file_menu.addAction(self.import_obj_action)
         self.file_menu.addAction(self.import_nrrd_action)
         self.file_menu.addAction(self.import_tiffs_action)
         self.file_menu.addAction(self.export_mesh_action)
@@ -1786,6 +1791,8 @@ class MainWindow(QMainWindow):
         self.settings.beginGroup("MainWindow")
         sdir = self.settings.value(prefix+"directory", None)
         self.settings.endGroup()
+        if sdir is None:
+            return None
         p = Path(sdir)
         # if sdir does not exist (or is not a directory),
         # and if this bad sdir is passed to a file dialog to be
@@ -1843,6 +1850,38 @@ class MainWindow(QMainWindow):
         parent = path.parent
         self.settingsSaveDirectory(str(parent), "nrrd_")
 
+    def onImportObjButtonClick(self, s):
+        print("import obj clicked")
+        if self.project_view is None or self.project_view.project is None:
+            print("No project currently loaded")
+            return
+        sdir = self.settingsGetDirectory("obj_")
+        if sdir is None:
+            sdir = self.settingsGetDirectory()
+        if sdir is None:
+            sdir = ""
+
+        files = QFileDialog.getOpenFileNames(self, "Select one or more files to import", sdir, "Segments (*.obj)")
+        if len(files) == 0:
+            print("No files selected")
+            return
+        files = files[0]
+        if len(files) == 0:
+            print("No files selected")
+            return
+        print("obj files", files)
+        project = self.project_view.project
+
+        for robj in files:
+            obj = Path(robj)
+            print ("obj:", obj.name)
+            self.loadObjFile(obj)
+
+        path = Path(files[0])
+        path = path.absolute()
+        parent = path.parent
+        self.settingsSaveDirectory(str(parent), "obj_")
+
     def loadObjFile(self, fname):
         trgl_frags = TrglFragment.load(fname)
         if trgl_frags is None or len(trgl_frags) == 0:
@@ -1853,7 +1892,7 @@ class MainWindow(QMainWindow):
         self.fragments_table.model().beginResetModel()
         proj.addFragment(trgl_frag)
         pv.updateFragmentViews()
-        print("lof", len(pv.fragments))
+        print("lof", len(pv.fragments), len(trgl_frag.gpoints))
         self.fragments_table.model().endResetModel()
 
     def onExportAsMeshButtonClick(self, s):
@@ -2239,6 +2278,7 @@ class MainWindow(QMainWindow):
         self.save_project_action.setEnabled(False)
         self.save_project_as_action.setEnabled(True)
         self.import_nrrd_action.setEnabled(True)
+        self.import_obj_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
         # self.export_mesh_action.setEnabled(project_view.mainActiveFragmentView() is not None)
         # self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
