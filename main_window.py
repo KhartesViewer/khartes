@@ -37,6 +37,7 @@ from data_window import DataWindow, SurfaceWindow
 from project import Project, ProjectView
 from fragment import Fragment, FragmentsModel, FragmentView
 from trgl_fragment import TrglFragment, TrglFragmentView
+from base_fragment import BaseFragment, BaseFragmentView
 from volume import (
         Volume, VolumesModel, 
         DirectionSelectorDelegate,
@@ -1902,9 +1903,12 @@ class MainWindow(QMainWindow):
             return
         frags = []
         fvs = []
+        needs_infill = False
         for frag, fv in self.project_view.fragments.items():
             if fv.active:
                 frags.append(frag)
+                if frag.meshExportNeedsInfill():
+                    needs_infill = True
                 fvs.append(fv)
         if len(frags) == 0:
             print("No active fragment")
@@ -1927,13 +1931,17 @@ class MainWindow(QMainWindow):
 
         name = pname.name
 
-        dialog = InfillDialog(self)
-        dialog.exec()
-        infill = dialog.getValue()
-        if infill < 0:
-            print("Export mesh cancelled by user")
-            return
-        err = Fragment.saveListAsObjMesh(fvs, pname, infill)
+        if needs_infill:
+            dialog = InfillDialog(self)
+            dialog.exec()
+            infill = dialog.getValue()
+            if infill < 0:
+                print("Export mesh cancelled by user")
+                return
+        else:
+            infill = -1
+
+        err = BaseFragment.saveListAsObjMesh(fvs, pname, infill)
 
         if err != "":
             msg = QMessageBox()

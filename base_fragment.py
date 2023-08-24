@@ -46,6 +46,26 @@ class BaseFragment:
         for cl, l in class_lists.items():
             cl.saveList(l, path, stem)
 
+    def meshExportNeedsInfill(self):
+        return False
+
+    # class function
+    def saveListAsObjMesh(fvs, path, infill):
+        class_lists = {}
+        for fv in fvs:
+            frag = fv.fragment
+            print("bsl", frag.name)
+            # print(type(frag))
+            t = type(frag)
+            # t.asdf()
+            l = class_lists.setdefault(t, [])
+            l.append(fv)
+        for cl, l in class_lists.items():
+            err = cl.saveListAsObjMesh(l, path, infill, len(class_lists.items()))
+            if err != "":
+                return err
+        return ""
+
     # class function
     # returns normals at points
     def pointNormals(pts, trgls):

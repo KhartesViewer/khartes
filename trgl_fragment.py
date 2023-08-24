@@ -126,18 +126,37 @@ class TrglFragment(BaseFragment):
 
     # class function
     def saveList(frags, path, stem):
-        for frag in frags:
-            print("tsl", frag.name)
-            frag.save(path)
-
-    def save(self, path):
         # cfixed = self.created.replace(':',"_").replace('.',"p")
-        cfixed = Utils.timestampToVc(self.created)
-        if cfixed is None:
-            print("Could not convert self.created", self.created, "to vc")
-            cfixed = self.created.replace(':',"_").replace('.',"p")
-        fpath = path / cfixed
+        for frag in frags:
+            cfixed = Utils.timestampToVc(frag.created)
+            if cfixed is None:
+                print("Could not convert self.created", self.created, "to vc")
+                cfixed = frag.created.replace(':',"_").replace('.',"p")
+            print("tsl", frag.name)
+            fpath = path / cfixed
+            frag.save(fpath)
+
+    # class function
+    def saveListAsObjMesh(fvs, path, infill, class_count):
+        print("TF slaom", len(fvs), class_count)
+        name = path.name
+        stem = path.stem
+        for fv in fvs:
+            frag = fv.fragment
+            if class_count > 1 or len(fvs) > 1:
+                newname = stem+"_"+frag.name
+                opath = path.with_name(newname)
+            else:
+                opath = path
+            print("TF slaom", opath)
+            frag.save(opath)
+
+        return ""
+
+    def save(self, fpath):
         obj_path = fpath.with_suffix(".obj")
+        name = fpath.name
+        print("TF save", obj_path)
         of = obj_path.open("w")
         # print("hello", file=of)
         print("# Khartes OBJ File", file=of)
@@ -152,7 +171,7 @@ class TrglFragment(BaseFragment):
                 print("vn %f %f %f"%(n[0], n[1], n[2]), file=of)
         print("# Color and texture information", file=of)
         # print("mtllib %s.mtl"%self.name, file=of)
-        print("mtllib %s.mtl"%cfixed, file=of)
+        print("mtllib %s.mtl"%name, file=of)
         print("usemtl default", file=of)
         has_texture = (len(self.tpoints) == len(self.gpoints))
         if has_texture:
@@ -177,8 +196,9 @@ class TrglFragment(BaseFragment):
         print("Ks 0.0 0.0 0.0", file=of)
         print("illum 2", file=of)
         print("d 1.0", file=of)
-        if has_texture:
-            print("map_Kd %s.tif"%cfixed, file=of)
+        # TODO: print this only if TIFF file exists
+        # if has_texture:
+        #     print("map_Kd %s.tif"%name, file=of)
 
     # find the intersections between a plane defined by axis and position,
     # and the triangles.  
