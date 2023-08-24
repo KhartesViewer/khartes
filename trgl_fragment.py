@@ -303,7 +303,9 @@ class TrglFragmentView(BaseFragmentView):
         # TODO fix:
         self.line = None
         self.setWorkingRegion(-1, 0.)
+        self.has_working_non_working = (False, False)
 
+    # TODO: if cur_volume_view changed, unset working region
     def setLocalPoints(self, recursion_ok=True, always_update_zsurfs=True):
         if self.cur_volume_view is None:
             self.vpoints = np.zeros((0,4), dtype=np.float32)
@@ -320,13 +322,37 @@ class TrglFragmentView(BaseFragmentView):
             # print(self.vpoints.shape, indices.shape)
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
         self.calculateSqCm()
-        self.setWorkingRegion(35555, 60.)
+        # self.setWorkingRegion(35555, 60.)
+        # TODO:
+        # update positions of working points
+        if self.working_fv is not None:
+            self.working_fragment.gpoints = self.fragment.gpoints[self.working_vpoints]
+            # recursion_ok=True causes crash due to FragmentView.setLocalPoints
+            # looping over project_view.fragments
+            # print("before wfv slp")
+            self.working_fv.setLocalPoints(False)
+            # print("after wfv slp")
+        
+    def setVolumeViewDirection(self, direction):
+        self.setWorkingRegion(-1, 0.)
+        super(TrglFragmentView, self).setVolumeViewDirection(direction)
+        
+    def setVolumeView(self, vol_view):
+        self.setWorkingRegion(-1, 0.)
+        super(TrglFragmentView, self).setVolumeView(vol_view)
 
     def setWorkingRegion(self, index, max_angle):
         if index < 0:
-            self.working_trgls = np.zeros((0, 3), dtype=np.int32)
-            self.working_vpoints = np.zeros((0,4), dtype=np.float32)
+            # self.working_trgls = np.zeros((0, 3), dtype=np.int32)
+            # self.working_vpoints = np.zeros((0,4), dtype=np.float32)
+            self.working_trgls = np.full((len(self.trgls()),), False)
+            self.working_vpoints = np.full((len(self.fragment.gpoints),), False)
             self.working_fragment = None
+            self.working_fv = None
+            self.has_working_non_working = (False, True)
+            self.working_fragment = None
+            self.working_fv = None
+            # print("swr cleared all")
             return
         tbn = self.regionByNormals(index, max_angle)
         # print("tbn", len(tbn))
@@ -340,21 +366,39 @@ class TrglFragmentView(BaseFragmentView):
         # print(vs)
         wv[(vs)] = True
         self.working_vpoints = wv
+
+        lworking = len(vs)
+        lnonworking = len(self.vpoints)-lworking
+        self.has_working_non_working = (lworking>0, lnonworking>0)
+        # print("lwlnw wnw", lworking, lnonworking, self.has_working_non_working)
         # self.working_vpoints = self.vpoints[vs]
         # print("wvp", len(self.working_vpoints))
         # print("trgl_fragment set local points")
 
-        working_fragment = Fragment("working", self.fragment.direction)
-        working_fragment.setColor(self.fragment.color)
-        working_fv = FragmentView(None, working_fragment)
-        working_fv.setVolumeView(self.cur_volume_view)
+        self.working_fragment = Fragment("working", self.fragment.direction)
+        self.working_fragment.setColor(self.fragment.color)
+        # self.working_fragment.gpoints = np.copy(self.fragment.gpoints)
+        self.working_fragment.gpoints = self.fragment.gpoints[self.working_vpoints]
+        self.working_fv = FragmentView(None, self.working_fragment)
+        self.working_fv.setVolumeView(self.cur_volume_view)
+        # print("swr set all")
 
+    def workingZsurf(self):
+        if self.working_fv is not None:
+            return self.working_fv.workingZsurf()
+
+    def workingSsurf(self):
+        if self.working_fv is not None:
+            return self.working_fv.workingSsurf()
 
     def moveAlongNormalsSign(self):
         return -1.
 
     def workingVpoints(self):
         return self.working_vpoints
+
+    def hasWorkingNonWorking(self):
+        return self.has_working_non_working
 
     def workingTrgls(self):
         return self.working_trgls
@@ -405,6 +449,9 @@ class TrglFragmentView(BaseFragmentView):
         self.fragment.gpoints[index, :] = new_gijk
         # print(self.fragment.gpoints)
         self.fragment.notifyModified()
+        # modifyZsurf = False
+        # if len(self.workingVpoints()) > 0 and self.workingVpoints()[index]:
+        #     modifyZsurf = True
         self.setLocalPoints(True, False)
         return True
 

@@ -522,6 +522,9 @@ class VolumeView():
     def transposedIjkToIjk(self, ijkt):
         return self.volume.transposedIjkToIjk(ijkt, self.direction)
 
+    def transposedIjksToGlobalPositions(self, ijkts):
+        return self.volume.transposedIjksToGlobalPositions(ijkts, self.direction)
+
     def transposedIjkToGlobalPosition(self, ijkt):
         return self.volume.transposedIjkToGlobalPosition(ijkt, self.direction)
 
