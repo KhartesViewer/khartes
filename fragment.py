@@ -749,11 +749,14 @@ class Fragment(BaseFragment):
             
             
 
+    def meshExportNeedsInfill(self):
+        return True
+
     # class function
     # takes a list of FragmentView's as input
     # texture is taken from current volume, which may not
     # be full resolution
-    def saveListAsObjMesh(fvs, filename, infill):
+    def saveListAsObjMesh(fvs, filename, infill, class_count):
         frags = [fv.fragment for fv in fvs]
         print("slaom", len(frags), filename, infill)
         filename = filename.with_suffix(".obj")
