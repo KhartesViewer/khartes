@@ -2,6 +2,7 @@ import time
 import random
 import datetime
 import re
+import numpy as np
 from PyQt5.QtGui import QColorConstants as QCC
 from PyQt5.QtGui import QColor
 # import PyQt5.QtGuiQColor.SVG as QtSVG
@@ -91,6 +92,29 @@ class Utils:
             else:
                 d[k] = v
         return d
+
+    # https://stackoverflow.com/questions/64414944/hot-to-get-the-set-difference-of-two-2d-numpy-arrays-or-equivalent-of-np-setdif
+    # returns indices of rows in a that do not appear in b
+    def setDiff2DIndex(a, b):
+        nrows, ncols = a.shape
+        # print("rows, cols",nrows, ncols)
+        adt = a.dtype
+        # print("a type", adt)
+        # dtype is a tuple of the elements in a single row
+        dtype={'names':['f{}'.format(i) for i in range(ncols)], 'formats':ncols * [adt]}
+        # print("dtype", dtype)
+        sa = a.copy().view(dtype)
+        sb = b.copy().view(dtype)
+        # print("sb", sb)
+        sc = np.setdiff1d(sa, sb)
+        # print("sc", sc)
+        # c = sc.view(adt).reshape(-1, ncols)
+        # print("c", c)
+        fc = np.isin(sa, sc)
+        # print("fc", fc)
+        nzc = fc.nonzero()[0]
+        # print(nzc)
+        return nzc
 
     def getNextColorOld():
         Utils.colorCounter = (Utils.colorCounter+1)%len(Utils.colors)

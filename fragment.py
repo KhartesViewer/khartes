@@ -976,7 +976,9 @@ class FragmentView(BaseFragmentView):
     '''
 
     def calculateSqCm(self):
-        if self.tri is None:
+        # project_view is None if self.fragment is a working fragment
+        # of a TrglFragment
+        if self.tri is None or self.project_view is None:
             self.sqcm = 0.
             return 0.
         pts = self.fragment.gpoints
@@ -1072,7 +1074,9 @@ class FragmentView(BaseFragmentView):
         # print("created zsurf")
         # else:
         #     self.triangulate()
+        # print("before czs")
         self.createZsurf(always_update_zsurf or self.live_zsurf_update)
+        # print("after czs")
         self.calculateSqCm()
         self.working_vpoints = np.full((len(self.vpoints),),True)
         ntrgl = 0
@@ -1205,6 +1209,9 @@ class FragmentView(BaseFragmentView):
     def workingZsurf(self):
         return self.zsurf
 
+    def workingSsurf(self):
+        return self.ssurf
+
     def workingVpoints(self):
         return self.working_vpoints
 
@@ -1212,6 +1219,7 @@ class FragmentView(BaseFragmentView):
         timer_active = False
         timer = Utils.Timer(timer_active)
         oldtri = self.tri
+        # oldtri = None
         self.triangulate()
         timer.time("triangulate")
         if not do_update:
@@ -1230,8 +1238,11 @@ class FragmentView(BaseFragmentView):
             # if points were added or deleted, look for changed
             # trgls rather than the added/deleted point
             if len(oldpts) == len(newpts):
-                idx = (newpts[:,None]!=oldpts).any(-1).all(1)
-                changed_pts_idx = idx.nonzero()[0]
+                # print("a0")
+                # idx = (newpts[:,None]!=oldpts).any(-1).all(1)
+                # changed_pts_idx = idx.nonzero()[0]
+                changed_pts_idx = Utils.setDiff2DIndex(newpts, oldpts)
+                # print("a1", changed_pts_idx.shape)
                 # deleted_pts_idx = (oldpts[:,None]!=newpts).any(-1).all(1)
                 # if len(nz) > 0:
                 #     print("pts changed", nz)
@@ -1246,15 +1257,20 @@ class FragmentView(BaseFragmentView):
                     #     print("zs changed", nz)
                     #     print(newzs[idx])
 
+            # print("b")
             oldtris = oldtri.simplices
             newtris = self.tri.simplices
-            idx = (newtris[:,None]!=oldtris).any(-1).all(1)
+            # idx = (newtris[:,None]!=oldtris).any(-1).all(1)
             # NOTE that this is an index into newtris
-            added_trgls_idx = idx.nonzero()[0]
-            idx = (oldtris[:,None]!=newtris).any(-1).all(1)
+            # added_trgls_idx = idx.nonzero()[0]
+            added_trgls_idx = Utils.setDiff2DIndex(newtris, oldtris)
+            # print("d", added_trgls_idx.shape)
+            # idx = (oldtris[:,None]!=newtris).any(-1).all(1)
             # NOTE that this is an index into oldtris
             # and that oldtris uses old vertex numbering
-            deleted_trgls_idx = idx.nonzero()[0]
+            # deleted_trgls_idx = idx.nonzero()[0]
+            deleted_trgls_idx = Utils.setDiff2DIndex(oldtris, newtris)
+            # print("f", deleted_trgls_idx.shape)
             # if len(nz) > 0:
             # print("idx sum", np.sum(idx))
             #     print("tris changed", nz)
@@ -1321,6 +1337,10 @@ class FragmentView(BaseFragmentView):
                     maxy = max(maxy, vmaxy)
                 changed_rect = (minx, miny, maxx, maxy)
                 # print("t changed_rect", changed_rect)
+            elif len(changed_pts_idx) == 0 and len(added_trgls_idx) == 0 and len(deleted_trgls_idx) == 0:
+                # self.oldzs = None
+                # print("found 0 0 0")
+                return
 
             if changed_rect is not None:
                 minx, miny, maxx, maxy = changed_rect
@@ -1820,6 +1840,9 @@ class FragmentView(BaseFragmentView):
             return self.tri.simplices
         '''
         return self.working_trgls
+
+    def hasWorkingNonWorking(self):
+        return (True, False)
 
     def workingLine(self):
         return self.line

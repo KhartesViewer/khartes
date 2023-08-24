@@ -206,6 +206,15 @@ class DataWindow(QLabel):
         else:
             return None
 
+    def setWorkingRegion(self):
+        xyijks = self.cur_frag_pts_xyijk
+        nearbyNode = self.localNearbyNodeIndex
+        if nearbyNode >= 0 and xyijks is not None and xyijks.shape[0] != 0:
+            # tijk = xyijks[nearbyNode, 2:5]
+            index = int(xyijks[nearbyNode, 5])
+            fv = self.cur_frag_pts_fv[nearbyNode]
+            fv.setWorkingRegion(index, 60.)
+
     def setNearbyNodeIjk(self, ijk):
         xyijks = self.cur_frag_pts_xyijk
         nearbyNode = self.localNearbyNodeIndex
@@ -772,6 +781,12 @@ class DataWindow(QLabel):
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
             self.setNearbyTiffAndNode(mxy)
+        elif key == Qt.Key_R:
+            self.setWorkingRegion()
+            pt = self.mapFromGlobal(QCursor.pos())
+            mxy = (pt.x(), pt.y())
+            self.setNearbyTiffAndNode(mxy)
+            self.window.drawSlices()
         elif key == Qt.Key_Shift:
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
@@ -1235,17 +1250,25 @@ into and out of the viewing plane.
                 # print(len(lines),"lines",len(working_lines),"working lines")
                 llen = len(lines)
                 wlen = len(working_lines)
-                all_working = (wlen == llen)
-                no_working = (wlen == 0)
+                (has_working, has_non_working) = frag.hasWorkingNonWorking()
+                # print("hwhnw", has_working, has_non_working)
+                all_working = not has_non_working
+                no_working = not has_working
+                # all_working = (wlen == llen)
+                # no_working = (wlen == 0)
                 if all_working:
                     normal_lines = working_lines
                     thin_lines = None
+                    # print("all working", len(normal_lines))
                 elif no_working:
                     normal_lines = non_working_lines
                     thin_lines = None
+                    # print("no working", len(normal_lines))
                 else:
                     normal_lines = working_lines
                     thin_lines = non_working_lines
+                    # print("normal thin", len(normal_lines), len(thin_lines))
+
 
                 ijkpts = normal_lines.reshape(-1, 3)
                 ijpts = self.tijksToIjs(ijkpts)
@@ -1287,8 +1310,11 @@ into and out of the viewing plane.
             all_working = (wlen == llen)
             no_working = (wlen == 0)
             '''
-            all_working = working.all()
-            none_working = (~working).all()
+            (has_working, has_non_working) = frag.hasWorkingNonWorking()
+            all_working = not has_non_working
+            none_working = not has_working
+            # all_working = working.all()
+            # none_working = (~working).all()
             emphasize = working
             if none_working:
                 emphasize[:] = True
@@ -1469,8 +1495,8 @@ class SurfaceWindow(DataWindow):
             # if not frag.activeAndAligned():
             if not frag.active:
                 continue
-            if frag.aligned() and frag.workingZsurf() is not None and frag.ssurf is not None:
-                slc = frag.ssurf
+            if frag.aligned() and frag.workingZsurf() is not None and frag.workingSsurf() is not None:
+                slc = frag.workingSsurf()
                 sw = slc.shape[1]
                 sh = slc.shape[0]
                 # zoomed slice width, height
@@ -1713,6 +1739,7 @@ class SurfaceWindow(DataWindow):
 
             if frag.active:
                 wvflags = frag.workingVpoints()
+                allpts = frag.vpoints[:, 0:2]
                 wpts = allpts[wvflags]
                 i0 = len(xypts)
                 for i,pt in enumerate(frag.vpoints[wvflags]):

@@ -177,7 +177,13 @@ class BaseFragmentView:
     def setLiveZsurfUpdate(self, flag):
         return None
 
+    def setWorkingRegion(self, index, max_angle):
+        return None
+
     def workingZsurf(self):
+        return None
+
+    def workingSsurf(self):
         return None
 
     def workingVpoints(self):
@@ -185,6 +191,9 @@ class BaseFragmentView:
 
     def workingTrgls(self):
         return None
+
+    def hasWorkingNonWorking(self):
+        return (False, False)
 
     def workingLine(self):
         return None
@@ -204,7 +213,6 @@ class BaseFragmentView:
     # to recompute things
     def setVolumeViewDirection(self, direction):
         self.setLocalPoints(False)
-
     
     def pointNormals(self):
         self.triangulate()
