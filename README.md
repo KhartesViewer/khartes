@@ -709,7 +709,7 @@ a regular basis to save your latest work.
 
 ## Control Area: Fragments
 
-<img src="images/fragments_tab.jpg" width="800"/>
+<img src="images/fragments_tab.JPG" width="800"/>
 
 Go to the Control Area and open the `Fragments` tab.
 This tab allows you to control important aspects of your fragments.
@@ -781,7 +781,56 @@ it is not based simply on the projected area of the fragment onto the Fragment V
 
 ### Copying a fragment and bulk-shifting it
 
-blah blah
+After you have created a fragment to fit a particular
+sheet, you might wonder if you can copy the fragment,
+and fit that copy to a nearby sheet, so you don't need
+to create
+a new fragment from scratch.
+
+This is possible in khartes; it all is done in the
+Fragments tab in the Control Area.
+
+You may have already noticed the `Copy` button at the top
+of the Fragments tab.  If you press this button,
+khartes will create a copy of the current active fragment
+(the one in beige).
+
+Once the copy is created, you can change its color, and its name,
+as described above.
+
+One thing you might want to do with this copy is to shift it in bulk
+to a nearby location.  Khartes provides options to do this.
+
+To be clear, you can apply the bulk-shift operations to any active
+fragment, but the most usual case is to shift the copy, so that
+is what will be described here.
+
+At the top of the Fragments tab are four arrow buttons:
+`Z ↑`, `Z ↓`, `N ↑`,  and `N ↓`.
+If you press the `Z ↑` button, the currently active fragment
+will be shifted vertically upwards by one voxel.
+Likewise, if you press the
+`Z ↓`
+button, the currently active fragment
+will be shifted vertically downwards by one voxel.
+
+If you press one of the remaining two buttons, 
+`N ↑` and `N ↓`,
+the normal to the fragment will be calculated at each node, and each
+node will be shifted along its normal by the length of one voxel.
+This can be useful if the fragment has some curvature, and you want
+the fragment copy to be more or less parallel to the original
+fragment.
+
+Because the normals are recalculated each time the buttons are pressed,
+and because the normals change a bit each time the fragment is moved,
+a `N ↑` followed by a  `N ↓` will not return the nodes
+to their exact starting places.
+
+<img src="images/copy_and_shift.jpg" width="800"/>
+
+*After copying the cyan fragment, and shifting the green copy
+along its normals*
 
 ### Advanced topic: Multiple active fragments
 
