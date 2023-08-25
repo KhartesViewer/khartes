@@ -709,7 +709,7 @@ a regular basis to save your latest work.
 
 ## Control Area: Fragments
 
-<img src="images/fragments_tab.JPG" width="800"/>
+<img src="images/fragments_tab.jpg" width="800"/>
 
 Go to the Control Area and open the `Fragments` tab.
 This tab allows you to control important aspects of your fragments.
@@ -870,64 +870,71 @@ volume (which is a series of TIFF files) back into khartes, be sure to set the
 
 ## Advanced Topic: Importing Mesh (`.obj`) files
 
-Khartes allows you to import fragments that have been 
+Khartes allows you to import, and work with, fragments that have been 
 created in
 [`volume-cartographer`](https://github.com/educelab/volume-cartographer).
 
-Before learning how to import these fragments, you need to
-learn a little about the different files produced by  
+Before you begin importing these fragments, you need to
+learn a little about the different file types that are produced by
 `Volume-cartographer` (VC for short), so you know
-which one to import, and where to find it.
+which ones to import, and where to find them.
 
-VC makes each fragment ('segment' in VC terminology)
+VC makes the fragments ('segments' in VC terminology)
 available in files of various formats.
-All the files belonging to a particular
+The files belonging to a particular
 fragment are all placed in a single sub-directory.
 
-The fragment sub-directories are found in the `paths` directory,
-which in turn resides underneath the `*.volpkg` directory,
-which is associated with a particular scroll.
+These fragment sub-directories are found in the `paths` directory,
+which resides underneath the `*.volpkg` directory;
+the `*.volpkg` directory is associated with a particular scroll.
 
-The main fragment file format used by VC has the suffix `.vcps`.  This
-format is called the "ordered pointset" format.  This format
+The main fragment file format used by VC,
+the "ordered pointset" format, has the
+suffix `.vcps`.  
+This format
 is very dense; larger fragments can consist of millions of points
 in `.vcps` format.
 
 A second format is the `.obj` format.
-You will find a couple of `.obj` files in the fragment
+You will usually find a couple of `.obj` files in the fragment
 sub-directory.
 
 For instance, in the `Scroll1.volpkg/paths/20230509182749`
 directory, you will find a couple of `.obj` files:
-`20230509182749.obj`, and `20230509182749\_points.obj`.
-You do not want to import the `\_points.obj` file;
+`20230509182749.obj`, and `20230509182749_points.obj`.
+You do not want to import the `_points.obj` file;
 it is very dense, and lacks essential mesh information.
 
-Instead, you want to import the `.obj` file that does **not**
-have `\_points` in its name.  This `.obj` file, produced
-by `vc\_render`, is much less dense than the original `.vcps`
+Instead, you want to import `20230509182749.obj`,
+the file that does **not**
+have `_points` in its name.  This `.obj` file, produced
+by `vc_render`, is much less dense than the original `.vcps`
 file, and has complete mesh information.
 
-Once you find the correct mesh file, you can import it
+Once you locate the correct mesh file, you can import it
 into khartes using the `File / Import .obj files...` menu
 item.
 
 After you import your mesh file, you may see something
 like this:
 
+<img src="images/imported_obj_mesh.jpg" width="800"/>
 
-*Result of importing a .obj file*
+*After a .obj file has been imported*
 
 The fragment shown in this figure (and in subsequent figures)
-was created by Hari\_Seldon, a member of the Vesuvius
+was created by Hari_Seldon, a member of the Vesuvius
 Challenge Segmentation Team.
 
 In the Data Slices, you can see the trace of the fragment,
-which wraps more than two times around the core.
+which wraps two or three times around the scroll's core.
 
-In the Fragment View, you just see a bunch of red dots.
-These dots are the vertices of the fragment, projected onto
-the plane of the Fragment View.  
+In the Fragment View, you see just a bunch of red dots.
+These dots are the vertices of the fragment mesh, projected onto
+the plane of the Fragment View.  Essentially,
+the entire fragment has been squashed onto the plane,
+which is not very useful.  Fortunately, there is
+something you can do about this problem.
 
 Khartes generally works with single-valued surfaces, and
 in general, fragments imported from `.obj` files are multi-valued.
@@ -937,16 +944,14 @@ this multi-valued fragment.
 
 In the terminology of khartes, this single-valued region
 is called the *working region*.
-
-And of course, khartes provides a way for you to specify 
-this working region.  Just follow these steps:
+To specify a working region, just follow these steps:
 
 1. Decide on the area of the fragment that you want to use as your
 your working region.  You want a part of the fragment that is fairly flat,
-as seen in the upper Data Slice, preferably with a tilt of less
-than 45 degrees.
+as seen in the two upper Data Slices,
+preferably with a tilt of less than 45 degrees.
 
-2. Find a node in this area.  You may need to move around the data
+2. Find a node in this area.  You may need to pan through the data
 a little, perhaps using the page-up and page-down keys, to find
 a suitable node.
 
@@ -954,35 +959,50 @@ a suitable node.
 
 4. Hit the `r` key on your keyboard (think 'r' for 'region').
 
-If all worked correctly, the view in khartes should change in two
+If all works correctly, the view in khartes changes in two
 ways:
 
 1. In the Data Slices, the active region is drawn with a thicker
 line.
 
-2. In the Fragment View, you should see data extracted from along
+2. In the Fragment View, you will see data extracted from along
 the fragment in the active region.
 
 The result should look something like this:
 
-*After an active region has been selected*
+<img src="images/imported_obj_mesh_region.jpg" width="800"/>
 
-Now you can edit the fragment in the usual way, moving nodes and
-seeing how the extracted data in the Fragment View changes.  
+*After an active region has been selected (the Fragment View 
+mesh has been hidden for clarity)*
+
+Having done this, you can now edit the fragment
+in the usual way, moving nodes and
+seeing how the extracted data in the Fragment View changes.
 You can even use the `Copy` button to copy the fragment,
-and use the 
+and use the move-along-normal buttons if you wish.
 But
 please note: **You cannot add or delete nodes** in fragments created
 from `.obj` files.  
 
-IF you want to work on an area of the fragment that is too steep,
-or even vertical, simply change the orientation of your current
-volume, and select a new working region.
+If you want to work on a different area, simply repeat
+the above steps: move the cursor to a node in the desired
+area, and press the 'r' key.  Don't worry, khartes will
+remember the changes you made in the previous area
+(though as always, remember to hit ctrl-S periodically,
+to save your changes to disk).
 
-When you save your project, the new fragments (along with your changes)
-will be saved; you will not need to re-import the fragment.
-And you can use the
-`File /Export file as mesh...` menu item to export the fragment.
+IF you want to work on an area of the fragment that is too steep,
+or even vertical, go to the Volumes Tab
+to change the orientation of your current
+volume, and then select your working region.
+
+When you save your project, the new fragments
+(along with your changes)
+will be saved; you will not need to re-import the fragment the
+next time you load your project into khartes.
+And if you wish to use your mesh in another program, select the
+`File /Export file as mesh...` menu item to export the fragment
+as a `.obj` file.
 
 ## Advanced Topic: Control Area: Settings
 
