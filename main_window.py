@@ -1699,6 +1699,9 @@ class MainWindow(QMainWindow):
         idir = file_names[0]
         print("save as", idir)
         pdir = Path(idir)
+        if pdir.name == "":
+            print("Could not find a file name in", idir)
+            return
         if pdir.exists():
             answer = QMessageBox.warning(self, "Save project as...", "The project directory %s already exists.\nDo you want to overwrite it?"%idir, QMessageBox.Ok|QMessageBox.Cancel, QMessageBox.Ok)
             if answer != QMessageBox.Ok:
