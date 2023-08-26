@@ -982,7 +982,10 @@ Challenge Segmentation Team.
 In the Data Slices, you can see the trace of the fragment,
 which wraps two or three times around the scroll's core.
 
-In the Fragment View, you see just a bunch of red dots.
+In the Fragment View, you see just a bunch of red dots
+(if you don't see these, go to the Fragments tab in the
+Control Area and make sure your newly-loaded fragment
+is active).
 These dots are the vertices of the fragment mesh, projected onto
 the plane of the Fragment View.  Essentially,
 the entire fragment has been squashed onto the plane,
@@ -1019,7 +1022,9 @@ ways:
 line.
 
 2. In the Fragment View, you will see the volume data corresponding to
-the active region of the fragment.
+the active region of the fragment.  (If you don't see anything, go
+to the Fragments tab in the Control Area and make sure your
+fragment is active).
 
 The result should look something like this:
 
