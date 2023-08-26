@@ -647,6 +647,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(MainWindow.appname)
         self.setMinimumSize(QSize(750,600))
+        # print("has size:",self.settingsHasSize())
         self.settingsApplySizePos()
 
         self.draw_settings = copy.deepcopy(MainWindow.draw_settings_defaults)
@@ -1630,6 +1631,9 @@ class MainWindow(QMainWindow):
         # Project.open does this check as well, but need
         # to do it here prior to checking whether the file
         # name already exists
+        if name == "":
+            print("Could not find a file name in", idir)
+            return
         if not name.endswith(".khprj"):
             name += ".khprj"
         pdir = pdir.with_name(name)
@@ -1770,10 +1774,36 @@ class MainWindow(QMainWindow):
                 print("Failed to parse drawSettings json string:", str(e))
         self.settings.endGroup()
 
+    def settingsHasSize(self):
+        self.settings.beginGroup("MainWindow")
+        size = self.settings.value("size", None)
+        self.settings.endGroup()
+        return size != None
+
+    def getDefaultSize(self):
+        try:
+            screen = QApplication.primaryScreen()
+            geom = screen.geometry()
+            w = geom.width()
+            h = geom.height()
+            defw = int(7*w/8)
+            defh = int(7*h/8)
+            print("screen",w,h,"size",defw,defh)
+            return QSize(defw, defh)
+        except Exception as e:
+            print("Couldn't get screen size due to error:", e)
+            # HD is 1366x768
+            return QSize(1280,768)
+
     def settingsApplySizePos(self):
         self.settings.beginGroup("MainWindow")
         size = self.settings.value("size", None)
-        if size is not None:
+        # print("sasp")
+        if size is None:
+            # print("does not have size")
+            self.resize(self.getDefaultSize())
+        else:
+            # print("size",size)
             # self.resize(size.toSize())
             self.resize(size)
         pos = self.settings.value("pos", None)
