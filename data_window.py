@@ -932,10 +932,10 @@ you can use
 <code>File/Import NRRD files...</code> to import it.
 <p>
 <b>Please be aware of memory limitations</b>.  The import-TIFF
-function is currently not memory-efficient; to be safe,
-you probably should limit yourself to creating data volumes that
-are no more than half the size of your computer's physical memory.
-The import-TIFF dialog box will inform you of the data-volume size.
+dialog box shows you how large a volume you are about
+to create; this entire volume will need to fit into your
+computer's physical memory (RAM), so don't make your
+volume too large.
 <p>
 To create a new fragment, go to the control panel in the lower right,
 select the <code>Fragments</code> tab, and press the 
@@ -964,10 +964,10 @@ you can use
 <code>File/Import NRRD files...</code> to import it.
 <p>
 <b>Please be aware of memory limitations</b>.  The import-TIFF
-function is currently not memory-efficient; to be safe,
-you probably should limit yourself to creating data volumes that
-are no more than half the size of your computer's physical memory.
-The import-TIFF dialog box will inform you of the data-volume size.
+dialog box shows you how large a volume you are about
+to create; this entire volume will need to fit into your
+computer's physical memory (RAM), so don't make your
+volume too large.
 
 <p>
 <b>After you import a volume, 
