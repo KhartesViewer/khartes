@@ -12,7 +12,7 @@ algorithms are currently used.
 
 ## 2-minute video
 
-The video below give a quick, 2-minute overview of khartes.
+The video below gives a quick, 2-minute overview of khartes.
 
 (If you click on the image below, you will be taken to vimeo.com to watch the video)
 
@@ -56,7 +56,7 @@ This tutorial covers the following steps:
 * Creating and editing a fragment ("segmentation")
 * General workflow for creating coherent, consistent fragments
 * Working with multiple fragments
-* Exporting a fragment as a mesh
+* Importing meshes (`.obj` files), and exporting fragments as meshes
 * Setting display parameters
 
 ## Creating a project
@@ -718,7 +718,8 @@ You have already visited this tab, in order to create new fragments;
 now you will have a chance to study it in detail.
 
 The first thing to notice is that one of the rows is hightlighted with a
-beige background.  The highlighting shows which fragment is
+beige background (slate gray if your interface is set
+to dark mode).  The highlighting shows which fragment is
 accepting new nodes.  That is, if you create a new node
 in one of the data windows, this is where the node will be added.
 
@@ -779,11 +780,12 @@ The sixth column simply shows how many nodes (points) the fragment contains.  Th
 gives the fragment's area in square centimeters.  This is the true area, as measured in 3D space;
 it is not based simply on the projected area of the fragment onto the Fragment View.
 
-### Copying a fragment and bulk-shifting it
+### Advanced topic: Copying a fragment and bulk-shifting it
 
 After you have created a fragment to fit a particular
 sheet, you might wonder if you can copy the fragment,
-and fit that copy to a nearby sheet, so you don't need
+and shift that copy to overlay a nearby sheet,
+so you don't need
 to create
 a new fragment from scratch.
 
@@ -793,7 +795,7 @@ Fragments tab in the Control Area.
 You may have already noticed the `Copy` button at the top
 of the Fragments tab.  If you press this button,
 khartes will create a copy of the current active fragment
-(the one in beige).
+(the one highlighted in beige or slate gray).
 
 Once the copy is created, you can change its color, and its name,
 as described above.
@@ -802,7 +804,8 @@ One thing you might want to do with this copy is to shift it in bulk
 to a nearby location.  Khartes provides options to do this.
 
 To be clear, you can apply the bulk-shift operations to any active
-fragment, but the most usual case is to shift the copy, so that
+fragment, but the most usual case is to shift a newly created copy,
+so that
 is what will be described here.
 
 At the top of the Fragments tab are four arrow buttons:
@@ -814,8 +817,8 @@ Likewise, if you press the
 button, the currently active fragment
 will be shifted vertically downwards by one voxel.
 
-If you press one of the remaining two buttons, 
-`N ↑` and `N ↓`,
+If you press one of the remaining two buttons, either
+`N ↑` or `N ↓`,
 the normal to the fragment will be calculated at each node, and each
 node will be shifted along its normal by the length of one voxel.
 This can be useful if the fragment has some curvature, and you want
@@ -829,7 +832,8 @@ to their exact starting places.
 
 <img src="images/copy_and_shift.jpg" width="800"/>
 
-*After copying the cyan fragment, and shifting the green copy
+*The cyan fragment has been copied, and the copy, in green,
+has been shifted
 along its normals*
 
 ### Advanced topic: Multiple active fragments
@@ -917,18 +921,18 @@ flattened surface volume.  And as explained in the section on importing TIFF fil
 volume (which is a series of TIFF files) back into khartes, be sure to set the
 `TIFFS are from vc_layers` checkbox in the TIFF loader dialog.
 
-## Advanced Topic: Importing Mesh (`.obj`) files
+## Advanced topic: Importing mesh (`.obj`) files
 
 Khartes allows you to import, and work with, fragments that have been 
 created in
 [`volume-cartographer`](https://github.com/educelab/volume-cartographer).
 
-Before you begin importing these fragments, you need to
+Before you start importing these fragments, you need to
 learn a little about the different file types that are produced by
 `Volume-cartographer` (VC for short), so you know
 which ones to import, and where to find them.
 
-VC makes the fragments ('segments' in VC terminology)
+VC makes fragments ('segments' in VC terminology)
 available in files of various formats.
 The files belonging to a particular
 fragment are all placed in a single sub-directory.
@@ -945,11 +949,11 @@ is very dense; larger fragments can consist of millions of points
 in `.vcps` format.
 
 A second format is the `.obj` format.
-You will usually find a couple of `.obj` files in the fragment
+You will usually find two different `.obj` files in the fragment
 sub-directory.
 
 For instance, in the `Scroll1.volpkg/paths/20230509182749`
-directory, you will find a couple of `.obj` files:
+directory, you will find these `.obj` files:
 `20230509182749.obj`, and `20230509182749_points.obj`.
 You do not want to import the `_points.obj` file;
 it is very dense, and lacks essential mesh information.
@@ -971,7 +975,7 @@ like this:
 
 *After a .obj file has been imported*
 
-The fragment shown in this figure (and in subsequent figures)
+The fragment shown in this figure (and in the subsequent figure)
 was created by Hari_Seldon, a member of the Vesuvius
 Challenge Segmentation Team.
 
@@ -983,13 +987,13 @@ These dots are the vertices of the fragment mesh, projected onto
 the plane of the Fragment View.  Essentially,
 the entire fragment has been squashed onto the plane,
 which is not very useful.  Fortunately, there is
-something you can do about this problem.
+something you can do about this.
 
-Khartes generally works with single-valued surfaces, and
+Khartes was designed to work with single-valued surfaces, and
 in general, fragments imported from `.obj` files are multi-valued.
 In order to take advantage of the interactive capabilities
 of khartes, a single-valued region must be extracted from
-this multi-valued fragment.
+the multi-valued fragment.
 
 In the terminology of khartes, this single-valued region
 is called the *working region*.
@@ -1014,8 +1018,8 @@ ways:
 1. In the Data Slices, the active region is drawn with a thicker
 line.
 
-2. In the Fragment View, you will see data extracted from along
-the fragment in the active region.
+2. In the Fragment View, you will see the volume data corresponding to
+the active region of the fragment.
 
 The result should look something like this:
 
@@ -1037,19 +1041,21 @@ If you want to work on a different area, simply repeat
 the above steps: move the cursor to a node in the desired
 area, and press the 'r' key.  Don't worry, khartes will
 remember the changes you made in the previous area
-(though as always, remember to hit ctrl-S periodically,
+(though as always, remember to hit Ctrl-S periodically,
 to save your changes to disk).
 
-IF you want to work on an area of the fragment that is too steep,
+If you want to work on an area of the fragment that is very steep,
 or even vertical, go to the Volumes Tab
 to change the orientation of your current
 volume, and then select your working region.
 
 When you save your project, the new fragments
-(along with your changes)
-will be saved; you will not need to re-import the fragment the
+(and your changes)
+will be saved along with the rest of the project;
+you will not need to re-import the fragment the
 next time you load your project into khartes.
-And if you wish to use your mesh in another program, select the
+And if you wish to use your mesh in another program,
+you can select the
 `File /Export file as mesh...` menu item to export the fragment
 as a `.obj` file.
 
