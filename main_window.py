@@ -1906,15 +1906,37 @@ class MainWindow(QMainWindow):
         print("obj files", files)
         project = self.project_view.project
 
+        '''
         for robj in files:
             obj = Path(robj)
             print ("obj:", obj.name)
             self.loadObjFile(obj)
+        '''
+        self.loadObjFiles(files)
 
         path = Path(files[0])
         path = path.absolute()
         parent = path.parent
         self.settingsSaveDirectory(str(parent), "obj_")
+        self.drawSlices()
+
+    def loadObjFiles(self, fnames):
+        frags = []
+        for robj in fnames:
+            obj = Path(robj)
+            print ("obj:", obj.name)
+            trgl_frags = TrglFragment.load(obj)
+            if trgl_frags is None or len(trgl_frags) == 0:
+                continue
+            trgl_frag = trgl_frags[0]
+            frags.append(trgl_frag)
+        pv = self.project_view
+        proj = pv.project
+        self.fragments_table.model().beginResetModel()
+        for frag in frags:
+            proj.addFragment(frag)
+        pv.updateFragmentViews()
+        self.fragments_table.model().endResetModel()
 
     def loadObjFile(self, fname):
         trgl_frags = TrglFragment.load(fname)
