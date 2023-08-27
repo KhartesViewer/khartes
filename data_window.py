@@ -1694,7 +1694,11 @@ class SurfaceWindow(DataWindow):
                         if not apply_mesh_opacity:
                             cv2.line(original, xy0, xy1, lineColor, triLineSize)
 
-                vpts = frag.workingVpoints()
+                # vpts = frag.workingVpoints()
+                # pts = vpts[:, 0:2]
+                wvflags = frag.workingVpoints()
+                allpts = frag.vpoints
+                vpts = allpts[wvflags]
                 pts = vpts[:, 0:2]
                 if nodeSize > 0:
                     for i,pt in enumerate(pts):
