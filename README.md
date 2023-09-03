@@ -750,13 +750,22 @@ overlaid on the Data Slices.  This is useful if you want to compare different
 fragments.  Recall that a given `Visible` fragment's mesh will not be
 overlaid on the Fragment View unless that fragment is also `Active`.
 
-In general use, only one fragment at a time can be actve; if you set a fragment to be active
+In general use, only one fragment at a time can be active; if you set a fragment to be active
 by clicking its `Active` check box, the previously active fragment will be deactivated.
 An exception will be discussed as an advanced topic below.
 
 As for the remaining columns in the Fragments tab:
 
-The third column displays the name of the fragment, and the fourth displays
+The third column, `Mesh Visible`, controls the visibility of the mesh that is shown
+in the Fragment View.  Note that this setting has an effect only on fragments
+that are both `Visible` and `Active`.  The mesh visibility is turned on by
+default; the main reason to turn it off is when the fragment is used
+to provide annotation (see "Advanced topic: Annotation").
+In that case, you want to make sure that this fragment
+and the fragment that is being annotated are both `Active` (see
+"Advanced topic: Multiple active fragments").
+
+The fourth column displays the name of the fragment, and the fifth displays
 the color.  These both can be edited.  When you create a new fragment,
 khartes tries (not very cleverly) to guess what to name it, and chooses
 a color at random, so the ability to edit these may be helpful.
@@ -767,7 +776,7 @@ list, give them similar names.  A wide range of characters are acceptable
 in the name, so you can give your fragments names like "sheet 1 / fiber 3", "sheet 1 / fiber 4",
 etc.
 
-The fifth column in the fragments list indicates whether the fragment considers the X axis,
+The sixth column in the fragments list indicates whether the fragment considers the X axis,
 or the Y axis, to be the vertical direction.  The direction of the axis is important because
 khartes only works with single-valued surfaces; the fragment's vertical direction
 is the direction of the "single value".
@@ -776,7 +785,7 @@ is based on the vertical direction
 of the volume that is active at that time.  The fragment's axis direction
 cannot be changed once the fragment is created.
 
-The sixth column simply shows how many nodes (points) the fragment contains.  The seventh column
+The seventh column simply shows how many nodes (points) the fragment contains.  The eighth column
 gives the fragment's area in square centimeters.  This is the true area, as measured in 3D space;
 it is not based simply on the projected area of the fragment onto the Fragment View.
 
@@ -861,6 +870,47 @@ As before, the beige row denotes the fragment that is accepting
 new nodes.  When there are multiple fragments that are both active
 and visible, the
 "accepting" row is the one closest to the bottom of the list.
+
+### Advanced topic: Annotation
+
+<img src="images/annotation.jpg" width="400"/>
+
+*Annotation: crackle zones are marked by dots*
+
+Khartes does not have a well-developed annotation system.
+However, as shown in the picture above,
+it does allow you to add dots to the Fragment View to highlight features of interest.
+
+These dots are actually the vertices of a fragment whose only purpose
+is to provide annotation.  Here are the steps to add annotation to
+your fragment view:
+
+1. Go to the Fragments tab in the Control Area and create a new fragment.
+
+2. Set the color and name of the new fragment.  In this example I will
+name the fragment "crackle".  The annotation dots will be drawn in the
+color that you give the fragment.
+
+3. Unset `Mesh Visible` for the new fragment.
+
+4. Make sure that your new fragment ("crackle") and the fragment that you
+want to annotate (the fragment that shows areas of crackling) are both `Active`
+(see "Advanced topic: Multiple active fragments").
+
+5. Make sure that in the Fragments tab, your new fragment ("crackle") is
+highlighted in beige
+(slate gray if you are in dark mode).  One way to ensure this is to set
+the main fragment (the one you are annotating) to be `Active` but not `Visible`.
+
+6. Now you should be able to add dots (annotation) using the same Shift+mouse
+combination that you use to add nodes.  You can also move the dots, and delete
+them, the way you would any other nodes.
+
+7. If the dots are not the size you prefer, go to the Settings tab and change
+the `Free Node` size.
+
+8. If you want annotation in more than one color, just create more annotation
+fragments, one per color.  Make sure they are all `Active`.
 
 ## Exporting fragments
 
@@ -1079,6 +1129,9 @@ the entities (nodes, lines, axes, etc) that are overlain on top of the data wind
 
 Here is what the different entities listed represent:
 * You already know what nodes are
+* Free nodes are annotation nodes (nodes belonging to a fragment
+that has `Mesh Visible` turned
+off; see "Advanced topic: Annotation")
 * Lines are the fragment cross-sections that are drawn on the Data Slices
 * Meshes are the triangles drawn on the Fragment View
 * The Axes are the two crosshairs that meet in the center of each data window
