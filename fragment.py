@@ -1654,10 +1654,66 @@ class FragmentView(BaseFragmentView):
 
         timer.time("ssurf")
 
+
     # returns zsurf points, as array of [ipos, jpos] values
     # for the slice with the given axis and axis position
     # (axis and position relative to volume-view axes)
     def getZsurfPoints(self, vaxis, vaxisPosition):
+        if self.zsurf is None:
+            return
+        faxis = vaxis
+        vnk, vnj, vni = self.cur_volume_view.trdata.shape
+        fnk, fnj, fni = vnk, vnj, vni
+        if not self.aligned():
+            faxis = 2-vaxis
+            fni, fnj, fnj = vnk, vnj, vni
+        if faxis == 0 or faxis == 1:
+            if faxis == 0:
+                jvec = self.zsurf[:,vaxisPosition]
+            else:
+                jvec = self.zsurf[vaxisPosition,:]
+            ivec = np.arange(len(jvec))
+            pts = np.array((ivec,jvec)).transpose()
+            pts = pts[~np.isnan(pts[:,1])]
+            if not self.aligned():
+                pts = pts[:,(1,0)]
+            return pts
+        else: # faxis == 2
+            # The so-called z slice is a relatively expensive
+            # operation, and should not be performed unless "z"
+            # or the zsurf has changed.  So cache the results.
+            if self.prevZslicePts is not None and self.prevZslice == vaxisPosition:
+                return self.prevZslicePts
+            frag_rect = self.computeFragRect()
+            if frag_rect is not None:
+                minx, miny, maxx, maxy = frag_rect
+                # print(self.fragment.name,minx,miny,maxx,maxy)
+                nx = maxx-minx
+                ny = maxy-miny
+                # pts = np.indices((nx, ny))
+                pts = np.indices((ny, nx))
+                pts[0,:,:] += int(miny)
+                pts[1,:,:] += int(minx)
+                # print("shape pts",pts.shape)
+                # print(pts.shape, nx, ny)
+                pts = pts[:, np.rint(self.zsurf[miny:maxy,minx:maxx])==vaxisPosition].transpose()
+                if self.aligned():
+                    pts = pts[:,(1,0)]
+                # print("len pts",len(pts), pts.shape)
+            else:
+                pts = None
+            self.prevZslice = vaxisPosition
+            self.prevZslicePts = pts
+            return pts
+            
+            
+
+    # TODO: can be deleted
+
+    # returns zsurf points, as array of [ipos, jpos] values
+    # for the slice with the given axis and axis position
+    # (axis and position relative to volume-view axes)
+    def old_getZsurfPoints(self, vaxis, vaxisPosition):
         if self.zsurf is None:
             return
         # if self.fragment.direction == self.cur_volume_view.direction:
