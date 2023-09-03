@@ -1210,6 +1210,14 @@ into and out of the viewing plane.
         splineLineSize = self.getDrawWidth("line")
         nodeSize = self.getDrawWidth("node")
         freeNodeSize = self.getDrawWidth("free_node")
+        margin = 20
+        oi0,oj0 = self.xyToIj((-margin, -margin))
+        oi1,oj1 = self.xyToIj((ww+margin, wh+margin))
+        wi0 = min(oi0, oi1)
+        wi1 = max(oi0, oi1)
+        wj0 = min(oj0, oj1)
+        wj1 = max(oj0, oj1)
+
         for frag in self.fragmentViews():
             fragNodeSize = nodeSize
             apply_frag_node_opacity = apply_node_opacity
@@ -1220,13 +1228,14 @@ into and out of the viewing plane.
             if not frag.visible or opacity == 0.:
                 continue
             pts = frag.getZsurfPoints(self.axis, self.positionOnAxis())
+            # if pts is not None:
+            #     print(self.axis, len(pts))
             timera.time("get zsurf points")
             if pts is not None and splineLineSize > 0:
                 # self.fv2zpoints[frag] = np.round(pts).astype(np.int32)
+                pts = pts[(pts[:,0] >= wi0) & (pts[:,1] >= wj0) & (pts[:,0] < wi1) & (pts[:,1] < wj1)]
                 self.fv2zpoints[frag] = pts
                 # print(pts)
-                m = 65535
-                color = (0,m,0,65535)
                 color = frag.fragment.cvcolor
                 # if frag == self.currentFragmentView():
                 size = (3*splineLineSize)//2
@@ -1239,6 +1248,8 @@ into and out of the viewing plane.
                     # size = splineLineSize
                     pass
                 vrts = self.ijsToXys(pts)
+                # vrts = vrts[(vrts[:,0] >= 0) & (vrts[:,1] >= 0) & (vrts[:,0] < ww) & (vrts[:,1] < wh)]
+                # print(" ", len(vrts))
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
                 cv2.polylines(outrgbx, vrts, True, color, size)
                 if not apply_line_opacity:
