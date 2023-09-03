@@ -111,6 +111,7 @@ class ProjectView:
             fv = {}
             fv['visible'] = frag.visible
             fv['active'] = frag.active
+            fv['mesh_visible'] = frag.mesh_visible
             fvs[frag.fragment.created] = fv
         info['fragments'] = fvs
 
@@ -190,6 +191,8 @@ class ProjectView:
                     continue
                 if 'visible' in finfo:
                     fv.visible = finfo['visible']
+                if 'mesh_visible' in finfo:
+                    fv.mesh_visible = finfo['mesh_visible']
                 if 'active' in finfo:
                     fv.active = finfo['active']
 

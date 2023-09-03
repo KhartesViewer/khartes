@@ -33,6 +33,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
     columns = [
             "Active",
             "Visible",
+            "Mesh\nVisible",
             "Name",
             "Color",
             "Dir",
@@ -43,6 +44,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
     ctips = [
             "Select which fragment is active;\nclick box to select.\nNote that you can only select fragments\nwhich have the same direction (orientation)\nas the current volume view",
             "Select which fragments are visible;\nclick box to select",
+            "Select which fragments have their mesh visible;\nclick box to select",
             "Name of the fragment; click to edit",
             "Color of the fragment; click to edit",
             "Direction (orientation) of the fragment",
@@ -55,11 +57,11 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         oflags = super(FragmentsModel, self).flags(index)
         if col == 0:
             nflags = Qt.ItemNeverHasChildren
+            '''
             row = index.row()
             fragments = self.project_view.fragments
             fragment = list(fragments.keys())[row]
             fragment_view = fragments[fragment]
-            '''
             if self.project_view.cur_volume_view.direction == fragment.direction:
                 nflags |= Qt.ItemIsUserCheckable
                 nflags |= Qt.ItemIsEnabled
@@ -74,7 +76,14 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             nflags |= Qt.ItemIsEnabled
             # nflags |= Qt.ItemIsEditable
             return nflags
-        elif col== 2:
+        elif col == 2:
+            # print(col, int(oflags))
+            nflags = Qt.ItemNeverHasChildren
+            nflags |= Qt.ItemIsUserCheckable
+            nflags |= Qt.ItemIsEnabled
+            # nflags |= Qt.ItemIsEditable
+            return nflags
+        elif col== 3:
             nflags = Qt.ItemNeverHasChildren
             nflags |= Qt.ItemIsEnabled
             nflags |= Qt.ItemIsEditable
@@ -93,7 +102,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
                 # make sure the color button in column 3 is always open
                 # (so no double-clicking required)
                 for i in range(self.rowCount()):
-                    index = self.createIndex(i, 3)
+                    index = self.createIndex(i, 4)
                     table.openPersistentEditor(index)
 
             return FragmentsModel.columns[section]
@@ -141,6 +150,11 @@ class FragmentsModel(QtCore.QAbstractTableModel):
                 return Qt.Checked
             else:
                 return Qt.Unchecked
+        if column == 2:
+            if fragment_view.mesh_visible:
+                return Qt.Checked
+            else:
+                return Qt.Unchecked
 
     def dataAlignmentRole(self, index, role):
         return Qt.AlignVCenter + Qt.AlignRight
@@ -160,17 +174,17 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         fragments = self.project_view.fragments
         fragment = list(fragments.keys())[row]
         fragment_view = fragments[fragment]
-        if column == 2:
+        if column == 3:
             return fragment.name
-        elif column == 3:
+        elif column == 4:
             # print("ddr", row, volume_view.color.name())
             return fragment.color.name()
-        elif column == 4:
+        elif column == 5:
             # print("data display role", row, volume_view.direction)
             return ('X','Y')[fragment.direction]
-        elif column == 5:
-            return len(fragment.gpoints)
         elif column == 6:
+            return len(fragment.gpoints)
+        elif column == 7:
             return "%.4f"%fragment_view.sqcm
         else:
             return None
@@ -199,7 +213,14 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             fragment_view = fragments[fragment]
             self.main_window.setFragmentVisibility(fragment, value==Qt.Checked)
             return True
-        elif role == Qt.EditRole and column == 2:
+        elif role == Qt.CheckStateRole and column == 2:
+            # print(row, value)
+            fragments = self.project_view.fragments
+            fragment = list(fragments.keys())[row]
+            fragment_view = fragments[fragment]
+            self.main_window.setFragmentMeshVisibility(fragment, value==Qt.Checked)
+            return True
+        elif role == Qt.EditRole and column == 3:
             # print("setdata", row, value)
             name = value
             # print("sd name", value)
@@ -209,7 +230,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             if name != "":
                 self.main_window.renameFragment(fragment, name)
 
-        elif role == Qt.EditRole and column == 3:
+        elif role == Qt.EditRole and column == 4:
             # print("sd color", value)
             fragments = self.project_view.fragments
             fragment = list(fragments.keys())[row]
@@ -251,6 +272,7 @@ class Fragment(BaseFragment):
         # self.created = Utils.timestamp()
         # self.modified = Utils.timestamp()
         # self.project = None
+        # self.no_mesh = False
 
     def createView(self, project_view):
         return FragmentView(project_view, self)
@@ -260,6 +282,7 @@ class Fragment(BaseFragment):
         frag.setColor(self.color, no_notify=True)
         frag.gpoints = np.copy(self.gpoints)
         frag.valid = True
+        # frag.no_mesh = self.no_mesh
         return frag
 
     def toDict(self):
@@ -334,6 +357,8 @@ class Fragment(BaseFragment):
         frag = Fragment(name, direction)
         frag.setColor(color, no_notify=True)
         frag.valid = True
+        # if len(name) > 0 and name[-1] == "∴":
+        #     frag.no_mesh = True
         if len(gpoints) > 0:
             # frag.gpoints = np.array(gpoints, dtype=np.int32)
             frag.gpoints = np.array(gpoints, dtype=np.float32)
@@ -624,6 +649,9 @@ class Fragment(BaseFragment):
             self.frag = frag
             self.trgs = []
             self.has_ssurf = False
+            if not fv.mesh_visible:
+                self.vrts = gpoints
+                return
             print(fname,"gpoints before", len(gpoints))
             newgps = frag.createInfillPoints(infill)
             gpoints = np.append(gpoints, newgps, axis=0)
@@ -803,9 +831,18 @@ class Fragment(BaseFragment):
         print("mtllib %s"%mfilename.name, file=of)
         print("# vertices", file=of)
         for ef in efs:
+            fv = ef.fv
+            mesh_visible = fv.mesh_visible
+            rgb = ef.frag.color.getRgbF()
+            r = rgb[0]
+            g = rgb[1]
+            b = rgb[2]
             print("# fragment", ef.frag.name, file=of)
             for vrt in ef.vrts:
-                print("v %d %d %d"%(vrt[0],vrt[1],vrt[2]), file=of)
+                if mesh_visible:
+                    print("v %.2f %.2f %.2f "%(vrt[0],vrt[1],vrt[2]), file=of)
+                else:
+                    print("v %.2f %.2f %.2f %.4f %.4f %.4f"%(vrt[0],vrt[1],vrt[2], r, g, b), file=of)
 
         tex_rect = Fragment.ExportFrag.pack(efs)
         if tex_rect is None:
@@ -1064,12 +1101,19 @@ class FragmentView(BaseFragmentView):
             self.fpoints = np.concatenate((self.fpoints, indices), axis=1)
 
         self.vpoints = self.cur_volume_view.volume.globalPositionsToTransposedIjks(self.fragment.gpoints, self.cur_volume_view.direction)
+        self.working_vpoints = np.full((len(self.vpoints),),True)
+        self.working_trgls = np.full((0,),True)
         npts = self.vpoints.shape[0]
         if npts > 0:
             indices = np.reshape(np.arange(npts), (npts,1))
             # print(self.vpoints.shape, indices.shape)
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
             # print(self.vpoints[0])
+        if not self.mesh_visible:
+            self.zsurf = None
+            self.ssurf = None
+            self.tri = None
+            return
         # print("set fpoints and vpoints")
         # print ("creating zsurf for", self.fragment.name)
         # if always_update_zsurf or self.live_zsurf_update:
@@ -1081,7 +1125,6 @@ class FragmentView(BaseFragmentView):
         self.createZsurf(always_update_zsurf or self.live_zsurf_update)
         # print("after czs")
         self.calculateSqCm()
-        self.working_vpoints = np.full((len(self.vpoints),),True)
         ntrgl = 0
         if self.tri is not None:
             ntrgl = len(self.tri.simplices)

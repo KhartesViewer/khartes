@@ -161,6 +161,7 @@ class BaseFragmentView:
         self.cur_volume_view = None
         self.visible = True
         self.active = False
+        self.mesh_visible = True
 
     def setVolumeView(self, vol_view):
         if vol_view == self.cur_volume_view:
