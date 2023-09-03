@@ -756,10 +756,10 @@ An exception will be discussed as an advanced topic below.
 
 As for the remaining columns in the Fragments tab:
 
-The third column, `Mesh Visible`, controls the visibility of the mesh that is shown
-in the Fragment View.  Note that this setting has an effect only on fragments
-that are both `Visible` and `Active`.  The mesh visibility is turned on by
-default; the main reason to turn it off is when the fragment is used
+The third column, `Hide Mesh`, controls the visibility of the mesh that is shown
+in the Fragment View.  Note that this setting has a visible effect only on fragments
+that are both `Visible` and `Active`.  The mesh is visible (not hidden) by
+default; the main reason to hide the mesh is when the fragment is used
 to provide annotation (see "Advanced topic: Annotation").
 In that case, you want to make sure that this fragment
 and the fragment that is being annotated are both `Active` (see
@@ -881,17 +881,17 @@ Khartes does not have a well-developed annotation system.
 However, as shown in the picture above,
 it does allow you to add dots to the Fragment View to highlight features of interest.
 
-These dots are actually the vertices of a fragment whose only purpose
+These dots are actually the nodes of a fragment whose only purpose
 is to provide annotation.  Here are the steps to add annotation to
 your fragment view:
 
 1. Go to the Fragments tab in the Control Area and create a new fragment.
 
-2. Set the color and name of the new fragment.  In this example I will
+2. Set the name and color of the new fragment.  In this example I will
 name the fragment "crackle".  The annotation dots will be drawn in the
 color that you give the fragment.
 
-3. Unset `Mesh Visible` for the new fragment.
+3. Set `Hide Mesh` for the new fragment.
 
 4. Make sure that your new fragment ("crackle") and the fragment that you
 want to annotate (the fragment that shows areas of crackling) are both `Active`
@@ -903,8 +903,8 @@ highlighted in beige
 the main fragment (the one you are annotating) to be `Active` but not `Visible`.
 
 6. Now you should be able to add dots (annotation) using the same Shift+mouse
-combination that you use to add nodes.  You can also move the dots, and delete
-them, the way you would any other nodes.
+combination that you use to add nodes.  You can also move dots, or delete
+them, the way you would any other node.
 
 7. If the dots are not the size you prefer, go to the Settings tab and change
 the `Free Node` size.
@@ -1130,8 +1130,8 @@ the entities (nodes, lines, axes, etc) that are overlain on top of the data wind
 Here is what the different entities listed represent:
 * You already know what nodes are
 * Free nodes are annotation nodes (nodes belonging to a fragment
-that has `Mesh Visible` turned
-off; see "Advanced topic: Annotation")
+that has `Hide Mesh` set;
+see "Advanced topic: Annotation")
 * Lines are the fragment cross-sections that are drawn on the Data Slices
 * Meshes are the triangles drawn on the Fragment View
 * The Axes are the two crosshairs that meet in the center of each data window
