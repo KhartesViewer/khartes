@@ -593,6 +593,11 @@ class MainWindow(QMainWindow):
             "opacity": 1.0,
             "apply_opacity": True,
         },
+        "free_node": {
+            "width": 6,
+            "opacity": 1.0,
+            "apply_opacity": True,
+        },
         "line": {
             "width": 2,
             "opacity": 1.0,
@@ -953,7 +958,7 @@ class MainWindow(QMainWindow):
         # need to attach these to "self" so they don't
         # get deleted on going out of scope
         self.fragments_csd = fragments_csd
-        self.fragments_table.setItemDelegateForColumn(3, fragments_csd)
+        self.fragments_table.setItemDelegateForColumn(4, fragments_csd)
         # print("edit triggers", int(self.volumes_table.editTriggers()))
         # self.volumes_table.setEditTriggers(QAbstractItemView.AllEditTriggers)
         # print("mss", hh.minimumSectionSize())
@@ -1134,6 +1139,12 @@ class MainWindow(QMainWindow):
         # dsl.addWidget(OpacitySpinBox(self, "node"), tr, 2)
         # dsl.addWidget(OpacitySpinBox(self, "overlay"), tr, 2, 6, 1)
         dsl.addWidget(ApplyOpacityCheckBox(self, "node", True), tr, 2, cba)
+        tr += 1
+        dsl.addWidget(QLabel("Free Node"), tr, 0)
+        dsl.addWidget(WidthSpinBox(self, "free_node"), tr, 1)
+        # dsl.addWidget(OpacitySpinBox(self, "node"), tr, 2)
+        # dsl.addWidget(OpacitySpinBox(self, "overlay"), tr, 2, 6, 1)
+        dsl.addWidget(ApplyOpacityCheckBox(self, "free_node", True), tr, 2, cba)
         tr += 1
         dsl.addWidget(QLabel("Line"), tr, 0)
         dsl.addWidget(WidthSpinBox(self, "line"), tr, 1)
@@ -2281,6 +2292,18 @@ class MainWindow(QMainWindow):
             return
         self.fragments_table.model().beginResetModel()
         fragment_view.visible = visible
+        fragment_view.notifyModified()
+        self.fragments_table.model().endResetModel()
+        self.drawSlices()
+
+    def setFragmentMeshVisibility(self, fragment, mesh_visible):
+        fragment_view = self.project_view.fragments[fragment]
+        if fragment_view.mesh_visible == mesh_visible:
+            return
+        self.fragments_table.model().beginResetModel()
+        fragment_view.mesh_visible = mesh_visible
+        fragment_view.setLocalPoints(True)
+
         fragment_view.notifyModified()
         self.fragments_table.model().endResetModel()
         self.drawSlices()

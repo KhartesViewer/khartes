@@ -1100,6 +1100,7 @@ into and out of the viewing plane.
         apply_axes_opacity = self.getDrawApplyOpacity("axes")
         apply_borders_opacity = self.getDrawApplyOpacity("borders")
         apply_node_opacity = self.getDrawApplyOpacity("node")
+        apply_free_node_opacity = self.getDrawApplyOpacity("free_node")
         apply_mesh_opacity = self.getDrawApplyOpacity("mesh")
         apply_line_opacity = self.getDrawApplyOpacity("line")
         self.setMargin(0)
@@ -1170,6 +1171,7 @@ into and out of the viewing plane.
             apply_axes_opacity = True
             apply_borders_opacity = True
             apply_node_opacity = True
+            apply_free_node_opacity = True
             apply_line_opacity = True
             apply_mesh_opacity = True
         # outrgbx = np.stack(((out,)*4), axis=-1)
@@ -1207,7 +1209,13 @@ into and out of the viewing plane.
         nearbyNode = (pv.nearby_node_fv, pv.nearby_node_index)
         splineLineSize = self.getDrawWidth("line")
         nodeSize = self.getDrawWidth("node")
+        freeNodeSize = self.getDrawWidth("free_node")
         for frag in self.fragmentViews():
+            fragNodeSize = nodeSize
+            apply_frag_node_opacity = apply_node_opacity
+            if not frag.mesh_visible:
+                fragNodeSize = freeNodeSize
+                apply_frag_node_opacity = apply_free_node_opacity
             # if not frag.visible and frag != self.currentFragmentView():
             if not frag.visible or opacity == 0.:
                 continue
@@ -1330,19 +1338,21 @@ into and out of the viewing plane.
                 self.cur_frag_pts_fv.append(frag)
                 # print("circle at",ij, xy)
                 color = self.nodeColor
-                size = nodeSize
+                size = fragNodeSize
                 if not emphasize[int(pt[3])]:
                     # color = self.mutedNodeColor
-                    size = nodeSize-1
+                    size = fragNodeSize-1
                 if not frag.active:
                     color = self.inactiveNodeColor
+                if not frag.mesh_visible:
+                    color = frag.fragment.cvcolor
                 # print(pt, self.volume_view.nearbyNode)
                 if (frag, pt[3]) == nearbyNode:
                     color = self.highlightNodeColor
                     self.nearbyNode = i0+i
                 if size > 0:
                     self.drawNodeAtXy(outrgbx, xy, color, size)
-                    if not apply_node_opacity:
+                    if not apply_frag_node_opacity:
                         self.drawNodeAtXy(original, xy, color, size)
             timera.time("draw nodes on slice")
 
@@ -1479,6 +1489,7 @@ class SurfaceWindow(DataWindow):
         apply_labels_opacity = self.getDrawApplyOpacity("labels")
         apply_axes_opacity = self.getDrawApplyOpacity("axes")
         apply_node_opacity = self.getDrawApplyOpacity("node")
+        apply_free_node_opacity = self.getDrawApplyOpacity("free_node")
         apply_mesh_opacity = self.getDrawApplyOpacity("mesh")
 
         out = np.zeros((wh,ww), dtype=np.uint16)
@@ -1560,6 +1571,7 @@ class SurfaceWindow(DataWindow):
             apply_labels_opacity = True
             apply_axes_opacity = True
             apply_node_opacity = True
+            apply_free_node_opacity = True
             apply_mesh_opacity = True
         '''
         # Needs to be rewritten; outdated
@@ -1607,12 +1619,18 @@ class SurfaceWindow(DataWindow):
 
         triLineSize = self.getDrawWidth("mesh")
         nodeSize = self.getDrawWidth("node")
+        freeNodeSize = self.getDrawWidth("free_node")
         for frag in self.fragmentViews():
             # if not frag.activeAndAligned():
             if not frag.active:
                 continue
             if not frag.visible or opacity == 0.:
                 continue
+            fragNodeSize = nodeSize
+            apply_frag_node_opacity = apply_node_opacity
+            if not frag.mesh_visible:
+                fragNodeSize = freeNodeSize
+                apply_frag_node_opacity = apply_free_node_opacity
             '''
             nni = -1
             if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0 and nodeSize > 0:
@@ -1661,21 +1679,21 @@ class SurfaceWindow(DataWindow):
                 timer.time("compute points")
                 vrts = self.ijsToXys(wpts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
-                if nodeSize > 0:
-                    cv2.polylines(outrgbx, vrts, True, color, 2*nodeSize)
-                    if not apply_node_opacity:
-                        cv2.polylines(original, vrts, True, color, 2*nodeSize)
+                if fragNodeSize > 0:
+                    cv2.polylines(outrgbx, vrts, True, color, 2*fragNodeSize)
+                    if not apply_frag_node_opacity:
+                        cv2.polylines(original, vrts, True, color, 2*fragNodeSize)
                 timer.time("draw points")
 
-                if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0 and nodeSize > 0:
+                if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0 and fragNodeSize > 0:
                     nni = pv.nearby_node_index
                     if wvflags[nni]:
                         pt = allpts[nni]
                         xy = self.ijToXy(pt)
                         color = self.highlightNodeColor
-                        self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
-                        if not apply_node_opacity:
-                            self.drawNodeAtXy(original, xy, color, nodeSize)
+                        self.drawNodeAtXy(outrgbx, xy, color, fragNodeSize)
+                        if not apply_frag_node_opacity:
+                            self.drawNodeAtXy(original, xy, color, fragNodeSize)
 
             elif frag.workingLine() is not None and frag.workingLineAxis() > -1:
                 line = frag.workingLine()
@@ -1700,7 +1718,7 @@ class SurfaceWindow(DataWindow):
                 allpts = frag.vpoints
                 vpts = allpts[wvflags]
                 pts = vpts[:, 0:2]
-                if nodeSize > 0:
+                if fragNodeSize > 0:
                     for i,pt in enumerate(pts):
                         xy = self.ijToXy(pt[0:2])
                         color = self.nodeColor
@@ -1710,11 +1728,11 @@ class SurfaceWindow(DataWindow):
                         ijk = frag.vpoints[i]
                         if frag == pv.nearby_node_fv and vpts[i,3] == pv.nearby_node_index:
                             color = self.highlightNodeColor
-                        self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
-                        if not apply_node_opacity:
-                            self.drawNodeAtXy(original, xy, color, nodeSize)
+                        self.drawNodeAtXy(outrgbx, xy, color, fragNodeSize)
+                        if not apply_frag_node_opacity:
+                            self.drawNodeAtXy(original, xy, color, fragNodeSize)
 
-            elif nodeSize > 0:
+            elif fragNodeSize > 0:
                 # pts = frag.fpoints[:, 0:2]
                 # vpts = frag.workingVpoints()
                 # pts = vpts[:, 0:2]
@@ -1723,23 +1741,26 @@ class SurfaceWindow(DataWindow):
                 wpts = allpts[wvflags]
                 # print("pts shape", pts.shape)
                 color = self.nodeColor
+                size = fragNodeSize
+                if not frag.mesh_visible:
+                    color = frag.fragment.cvcolor
                 # all frags are active at this point
                 # if not frag.activeAndAligned():
                 #     color = self.inactiveNodeColor
                 vrts = self.ijsToXys(wpts)
                 vrts = vrts.reshape(-1,1,1,2).astype(np.int32)
-                cv2.polylines(outrgbx, vrts, True, color, 2*nodeSize)
-                if not apply_node_opacity:
-                    cv2.polylines(original, vrts, True, color, 2*nodeSize)
+                cv2.polylines(outrgbx, vrts, True, color, 2*size)
+                if not apply_frag_node_opacity:
+                    cv2.polylines(original, vrts, True, color, 2*size)
                 if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0:
                     nni = pv.nearby_node_index
                     if wvflags[nni]:
                         pt = allpts[nni]
                         xy = self.ijToXy(pt)
                         color = self.highlightNodeColor
-                        self.drawNodeAtXy(outrgbx, xy, color, nodeSize)
-                        if not apply_node_opacity:
-                            self.drawNodeAtXy(original, xy, color, nodeSize)
+                        self.drawNodeAtXy(outrgbx, xy, color, size)
+                        if not apply_frag_node_opacity:
+                            self.drawNodeAtXy(original, xy, color, size)
 
             if frag.active:
                 wvflags = frag.workingVpoints()
