@@ -33,7 +33,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
     columns = [
             "Active",
             "Visible",
-            "Mesh\nVisible",
+            "Hide\nMesh",
             "Name",
             "Color",
             "Dir",
@@ -44,7 +44,7 @@ class FragmentsModel(QtCore.QAbstractTableModel):
     ctips = [
             "Select which fragment is active;\nclick box to select.\nNote that you can only select fragments\nwhich have the same direction (orientation)\nas the current volume view",
             "Select which fragments are visible;\nclick box to select",
-            "Select which fragments have their mesh visible;\nclick box to select",
+            "Select which fragments have their mesh hidden;\nclick box to select",
             "Name of the fragment; click to edit",
             "Color of the fragment; click to edit",
             "Direction (orientation) of the fragment",
@@ -151,10 +151,12 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             else:
                 return Qt.Unchecked
         if column == 2:
+            # Note that column is "Hide Mesh", but
+            # internal variable is mesh_visible
             if fragment_view.mesh_visible:
-                return Qt.Checked
-            else:
                 return Qt.Unchecked
+            else:
+                return Qt.Checked
 
     def dataAlignmentRole(self, index, role):
         return Qt.AlignVCenter + Qt.AlignRight
@@ -218,7 +220,9 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             fragments = self.project_view.fragments
             fragment = list(fragments.keys())[row]
             fragment_view = fragments[fragment]
-            self.main_window.setFragmentMeshVisibility(fragment, value==Qt.Checked)
+            # Note that column reads "Hide Mesh", but internal variable
+            # is mesh_visible
+            self.main_window.setFragmentMeshVisibility(fragment, value==Qt.Unchecked)
             return True
         elif role == Qt.EditRole and column == 3:
             # print("setdata", row, value)
