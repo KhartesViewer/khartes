@@ -42,6 +42,7 @@ from volume import (
         Volume, VolumesModel, 
         DirectionSelectorDelegate,
         ColorSelectorDelegate)
+from ppm import Ppm
 from utils import Utils
 
 class ColorBlock(QLabel):
@@ -741,6 +742,10 @@ class MainWindow(QMainWindow):
         self.import_nrrd_action.triggered.connect(self.onImportNRRDButtonClick)
         self.import_nrrd_action.setEnabled(False)
 
+        self.import_ppm_action = QAction("Import PPM files...", self)
+        self.import_ppm_action.triggered.connect(self.onImportPPMButtonClick)
+        self.import_ppm_action.setEnabled(False)
+
         self.import_tiffs_action = QAction("Create volume from TIFF files...", self)
         self.import_tiffs_action.triggered.connect(self.onImportTiffsButtonClick)
         self.import_tiffs_action.setEnabled(False)
@@ -767,6 +772,7 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(self.save_project_as_action)
         self.file_menu.addAction(self.import_obj_action)
         self.file_menu.addAction(self.import_nrrd_action)
+        self.file_menu.addAction(self.import_ppm_action)
         self.file_menu.addAction(self.import_tiffs_action)
         self.file_menu.addAction(self.export_mesh_action)
         # self.file_menu.addAction(self.load_hardwired_project_action)
@@ -1738,6 +1744,9 @@ class MainWindow(QMainWindow):
         for nrrd in old_vpath.glob("*.nrrd"):
             print ("nrrd:", nrrd.name)
             shutil.copy2(nrrd, new_vpath / nrrd.name)
+        for ppm in old_vpath.glob("*.ppm"):
+            print ("ppm:", ppm.name)
+            shutil.copy2(ppm, new_vpath / ppm.name)
 
         old_prj.path = new_prj.path
         old_prj.volumes_path = new_prj.volumes_path
@@ -1894,6 +1903,42 @@ class MainWindow(QMainWindow):
         path = path.absolute()
         parent = path.parent
         self.settingsSaveDirectory(str(parent), "nrrd_")
+
+    def onImportPPMButtonClick(self, s):
+        print("import ppm clicked")
+        if self.project_view is None or self.project_view.project is None:
+            print("No project currently loaded")
+            return
+        sdir = self.settingsGetDirectory("ppm_")
+        if sdir is None:
+            sdir = self.settingsGetDirectory()
+        if sdir is None:
+            sdir = ""
+
+        files = QFileDialog.getOpenFileNames(self, "Select one or more files to import", sdir, "PPMs (*.ppm)")
+        if len(files) == 0:
+            print("No files selected")
+            return
+        files = files[0]
+        if len(files) == 0:
+            print("No files selected")
+            return
+        print("ppm files", files)
+        project = self.project_view.project
+        vpath = project.volumes_path
+        loading = self.showLoading("Copying files...")
+        for rppm in files:
+            pppm = Path(rppm)
+            print ("ppm:", pppm.name)
+            shutil.copy2(pppm, vpath / pppm.name)
+            ppm = Ppm.loadPpm(pppm)
+            if ppm is not None and ppm.valid:
+                project.addPpm(ppm)
+            
+        path = Path(files[0])
+        path = path.absolute()
+        parent = path.parent
+        self.settingsSaveDirectory(str(parent), "ppm_")
 
     def onImportObjButtonClick(self, s):
         print("import obj clicked")
@@ -2343,6 +2388,7 @@ class MainWindow(QMainWindow):
         self.save_project_action.setEnabled(False)
         self.save_project_as_action.setEnabled(False)
         self.import_nrrd_action.setEnabled(False)
+        self.import_ppm_action.setEnabled(False)
         self.import_tiffs_action.setEnabled(False)
         self.enableWidgetsIfActiveFragment()
         self.drawSlices()
@@ -2364,6 +2410,7 @@ class MainWindow(QMainWindow):
         self.save_project_action.setEnabled(False)
         self.save_project_as_action.setEnabled(True)
         self.import_nrrd_action.setEnabled(True)
+        self.import_ppm_action.setEnabled(True)
         self.import_obj_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
         # self.export_mesh_action.setEnabled(project_view.mainActiveFragmentView() is not None)

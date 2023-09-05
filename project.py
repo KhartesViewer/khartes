@@ -4,6 +4,7 @@ import time
 import json
 from utils import Utils
 from volume import Volume, VolumeView
+from ppm import Ppm
 from fragment import Fragment, FragmentView
 from trgl_fragment import TrglFragment, TrglFragmentView
 from base_fragment import BaseFragment, BaseFragmentView
@@ -319,6 +320,7 @@ class Project:
 
     def __init__(self):
         self.volumes = []
+        self.ppms = []
         self.fragments = []
         self.project_views = []
         self.voxel_size_um = Project.default_voxel_size_um
@@ -588,6 +590,7 @@ class Project:
 
         prj = Project()
         prj.volumes = []
+        prj.ppms = []
         prj.fragments = []
         prj.valid = True
         prj.path = fp
@@ -609,6 +612,11 @@ class Project:
             vol = Volume.loadNRRD(vfile)
             if vol is not None and vol.valid:
                 prj.addVolume(vol)
+
+        for pfile in vdir.glob("*.ppm"):
+            ppm = Ppm.loadPpm(pfile)
+            if ppm is not None and ppm.valid:
+                prj.addPpm(ppm)
 
         for ffile in fdir.glob("*.json"):
             frags = Fragment.load(ffile)
@@ -641,6 +649,9 @@ class Project:
         for pv in self.project_views:
             pv.addVolumeView(volume)
         self.alphabetizeVolumes()
+
+    def addPpm(self, ppm):
+        self.ppms.append(ppm)
 
     def alphabetizeFragments(self):
         Fragment.sortFragmentList(self.fragments)
