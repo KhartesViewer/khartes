@@ -14,6 +14,8 @@ from utils import Utils
 from fragment import Fragment
 from project import Project
 # from utils import Utils
+# import pathlib
+# from ppm import Ppm
 
 class Khartes():
 
@@ -157,6 +159,12 @@ if vc is None:
     exit()
 ts = Utils.vcToTimestamp(vc)
 print("ts", ts)
+exit()
+'''
+
+'''
+ppm = Ppm.loadPpm(pathlib.Path(r'C:\Vesuvius\Projects\large_frag_1846.khprj\orig obj\20230827161846.ppm'))
+ppm.loadData()
 exit()
 '''
 
