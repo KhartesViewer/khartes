@@ -51,8 +51,10 @@ class TrglFragment(BaseFragment):
                     if words[1] == "Name:":
                         frag_name = words[2]
             elif words[0] == 'v':
-                if len(words) == 4:
-                    vrtl.append([float(w) for w in words[1:]])
+                # len is 7 if the vrt has color attached
+                # (color is ignored)
+                if len(words) == 4 or len(words) == 7:
+                    vrtl.append([float(w) for w in words[1:4]])
             elif words[0] == 'vt':
                 if len(words) == 3:
                     tvrtl.append([float(w) for w in words[1:]])
@@ -60,6 +62,7 @@ class TrglFragment(BaseFragment):
                 if len(words) == 4:
                     # implicit assumption that v == vt
                     trgl.append([int(w.split('/')[0])-1 for w in words[1:]])
+        print("tf obj reader", len(vrtl), len(tvrtl), len(trgl))
         
         if frag_name == "":
         #     frag_name = name.replace("_",":").replace("p",".")
@@ -67,7 +70,10 @@ class TrglFragment(BaseFragment):
         trgl_frag = TrglFragment(frag_name)
         trgl_frag.gpoints = np.array(vrtl, dtype=np.float32)
         trgl_frag.tpoints = np.array(tvrtl, dtype=np.float32)
-        trgl_frag.trgls = np.array(trgl, dtype=np.int32)
+        if len(trgl) > 0:
+            trgl_frag.trgls = np.array(trgl, dtype=np.int32)
+        else:
+            trgl_frag.trgls = np.zeros((0,3), dtype=np.int32)
         if created == "":
             ts = Utils.vcToTimestamp(name)
             if ts is not None:
@@ -137,7 +143,7 @@ class TrglFragment(BaseFragment):
             frag.save(fpath)
 
     # class function
-    def saveListAsObjMesh(fvs, path, infill, class_count):
+    def saveListAsObjMesh(fvs, path, infill, ppm, class_count):
         print("TF slaom", len(fvs), class_count)
         name = path.name
         stem = path.stem
@@ -324,6 +330,8 @@ class TrglFragmentView(BaseFragmentView):
         self.line = None
         self.setWorkingRegion(-1, 0.)
         self.has_working_non_working = (False, False)
+        if len(trgl_fragment.trgls) == 0:
+            self.mesh_visible = False
 
     # TODO: if cur_volume_view changed, unset working region
     def setLocalPoints(self, recursion_ok=True, always_update_zsurfs=True):

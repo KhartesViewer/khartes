@@ -142,26 +142,49 @@ class RoundnessSetter(QGroupBox):
 
 
 class InfillDialog(QDialog):
-    def __init__(self, main_window, parent=None):
+    def __init__(self, main_window, needs_infill, parent=None):
         instructions = "In order to fit the curved fragment surface,\ninfill points are added to the exported mesh.\nThe distance between points is given in voxels.\n16 is a good default.\n0 means do not infill."
         super(InfillDialog, self).__init__(parent)
+        project = main_window.project_view.project
+        self.ppms = project.ppms
+        needs_ppm = main_window.canUsePpm()
+        self.needs_ppm = needs_ppm
+        self.needs_infill = needs_infill
         vlayout = QVBoxLayout()
         self.setLayout(vlayout)
-        hlayout = QHBoxLayout()
-        vlayout.addLayout(hlayout)
-        hlayout.addWidget(QLabel("Infill spacing"))
-        self.edit = QLineEdit("16")
-        fm = self.edit.fontMetrics()
-        w = 7*fm.width('0')
-        self.edit.setFixedWidth(w)
-        self.edit.editingFinished.connect(self.onEditingFinished)
-        self.edit.textEdited.connect(self.onTextEdited)
-        hlayout.addWidget(self.edit)
-        hlayout.addStretch()
-        self.wlabel = QLabel("")
-        vlayout.addWidget(self.wlabel)
-        self.ilabel = QLabel(instructions)
-        vlayout.addWidget(self.ilabel)
+        if self.needs_infill:
+            hlayout = QHBoxLayout()
+            vlayout.addLayout(hlayout)
+            hlayout.addWidget(QLabel("Infill spacing"))
+            self.edit = QLineEdit("16")
+            fm = self.edit.fontMetrics()
+            w = 7*fm.width('0')
+            self.edit.setFixedWidth(w)
+            self.edit.editingFinished.connect(self.onEditingFinished)
+            self.edit.textEdited.connect(self.onTextEdited)
+            hlayout.addWidget(self.edit)
+            hlayout.addStretch()
+            # self.wlabel = QLabel("")
+            # vlayout.addWidget(self.wlabel)
+            self.ilabel = QLabel(instructions)
+            vlayout.addWidget(self.ilabel)
+        if self.needs_ppm:
+            self.apply_ppm_cb = QCheckBox("Transform to scroll coordinates")
+            self.apply_ppm_cb.setChecked(False)
+            self.apply_ppm_cb.clicked.connect(self.onClicked)
+            vlayout.addWidget(self.apply_ppm_cb)
+            hlayout = QHBoxLayout()
+            vlayout.addLayout(hlayout)
+            self.ppm_label = QLabel("PPM:")
+            hlayout.addWidget(self.ppm_label)
+            self.ppm_label.setEnabled(False)
+            self.ppm_cb = QComboBox()
+            for ppm in self.ppms:
+                self.ppm_cb.addItem(ppm.name)
+            self.ppm_cb.setCurrentIndex(0)
+            self.ppm_cb.setEnabled(False)
+            hlayout.addWidget(self.ppm_cb)
+            hlayout.addStretch()
         bbox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bbox.accepted.connect(self.accepted)
         bbox.rejected.connect(self.rejected)
@@ -169,19 +192,32 @@ class InfillDialog(QDialog):
         self.is_accepted = False
         # print("InfillDialog created")
 
+    def onClicked(self, s):
+        self.ppm_label.setEnabled(s)
+        self.ppm_cb.setEnabled(s)
+
     def getValue(self):
+        if not self.needs_infill:
+            return -1
         txt = self.edit.text()
         valid, i = self.parseText(txt)
-        if not valid or not self.is_accepted:
+        if not valid:
             i = -1
         # print("getValue", i)
         return i
+
+    def getPpm(self):
+        if not self.needs_ppm:
+            return None
+        if not self.apply_ppm_cb.isChecked():
+            return None
+        return self.ppms[self.ppm_cb.currentIndex()]
 
     def accepted(self):
         self.is_accepted = True
         value = self.getValue()
         # print("accepted", value)
-        if value < 0:
+        if self.needs_infill and value < 0:
             self.edit.setText("")
             self.wlabel.setText('Please enter a valid value (an integer >= 0)\nor press "Cancel"')
             self.wlabel.setStyleSheet("QLabel { color: red; font-weight: bold }")
@@ -2007,6 +2043,22 @@ class MainWindow(QMainWindow):
         print("lof", len(pv.fragments), len(trgl_frag.gpoints))
         self.fragments_table.model().endResetModel()
 
+    # True if the project has at least one ppm, and the current
+    # volume was loaded with the from_vc_render flag set
+    def canUsePpm(self):
+        if self.project_view is None or self.project_view.project is None:
+            return False
+        pv = self.project_view
+        prj = pv.project
+        if len(prj.ppms) == 0:
+            return False
+        cv = pv.cur_volume
+        if cv is None:
+            return False
+        if not cv.from_vc_render:
+            return False
+        return True
+
     def onExportAsMeshButtonClick(self, s):
         print("export mesh clicked")
         if self.project_view is None or self.project_view.project is None:
@@ -2042,17 +2094,28 @@ class MainWindow(QMainWindow):
 
         name = pname.name
 
-        if needs_infill:
-            dialog = InfillDialog(self)
+        project = self.project_view.project
+        if needs_infill or self.canUsePpm():
+            dialog = InfillDialog(self, needs_infill)
             dialog.exec()
-            infill = dialog.getValue()
-            if infill < 0:
+        if not dialog.is_accepted:
                 print("Export mesh cancelled by user")
                 return
-        else:
-            infill = -1
+        infill = dialog.getValue()
+        ppm = dialog.getPpm()
+        ppm_name = "(None)"
+        if ppm is not None:
+            ppm_name = ppm.name
+        print("infill dialog", infill, ppm_name)
 
-        err = BaseFragment.saveListAsObjMesh(fvs, pname, infill)
+        # TODO: make sure ppm data is loaded (show Loading... overlay)
+        if ppm is not None and ppm.data is None:
+            ppm_loading = self.showLoading("Loading ppm file...")
+            ppm.loadData()
+            ppm_loading = None
+
+        loading = self.showLoading("Saving obj file...")
+        err = BaseFragment.saveListAsObjMesh(fvs, pname, infill, ppm)
 
         if err != "":
             msg = QMessageBox()

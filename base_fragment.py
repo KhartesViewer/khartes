@@ -50,7 +50,7 @@ class BaseFragment:
         return False
 
     # class function
-    def saveListAsObjMesh(fvs, path, infill):
+    def saveListAsObjMesh(fvs, path, infill, ppm):
         class_lists = {}
         for fv in fvs:
             frag = fv.fragment
@@ -61,7 +61,7 @@ class BaseFragment:
             l = class_lists.setdefault(t, [])
             l.append(fv)
         for cl, l in class_lists.items():
-            err = cl.saveListAsObjMesh(l, path, infill, len(class_lists.items()))
+            err = cl.saveListAsObjMesh(l, path, infill, ppm, len(class_lists.items()))
             if err != "":
                 return err
         return ""

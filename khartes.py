@@ -14,8 +14,11 @@ from utils import Utils
 from fragment import Fragment
 from project import Project
 # from utils import Utils
-# import pathlib
-# from ppm import Ppm
+'''
+import pathlib
+from ppm import Ppm
+import numpy as np
+'''
 
 class Khartes():
 
@@ -165,6 +168,12 @@ exit()
 '''
 ppm = Ppm.loadPpm(pathlib.Path(r'C:\Vesuvius\Projects\large_frag_1846.khprj\orig obj\20230827161846.ppm'))
 ppm.loadData()
+# pts = np.array(((3000.5, 3000.5),(-1.,-1.)))
+pts = np.array(((3000.5, 3000.5),(-3000.,-3000.)))
+# pts = np.array(((3000.5, 3000.5),))
+print (ppm.ijk_interpolator(pts))
+print (ppm.normal_interpolator(pts))
+
 exit()
 '''
 
