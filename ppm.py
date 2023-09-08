@@ -1,5 +1,6 @@
 import pathlib
 import numpy as np
+from scipy.interpolate import RegularGridInterpolator
 
 class Ppm():
 
@@ -7,6 +8,8 @@ class Ppm():
         self.data = None
         self.ijks = None
         self.normals = None
+        self.ijk_interpolator = None
+        self.normal_interpolator = None
         self.data_header = None
         self.valid = False
         self.error = "no error message set"
@@ -15,6 +18,34 @@ class Ppm():
         ppm = Ppm()
         ppm.error = err
         return ppm
+
+    no_data = (0.,0.,0.)
+
+    # lijk (layer ijk) is in layer's global coordinates
+    def layerIjksToScrollIjks(self, lijks):
+        print("litsi")
+        if self.data is None:
+            print("litsi no data")
+            return lijks
+        '''
+        li,lj,lk = lijk
+        if li < 0 or lj < 0:
+            return Ppm.no_data
+        if li >= self.width:
+            return Ppm.no_data
+        if lj >= self.height:
+            return Ppm.no_data
+        '''
+        # sijk = np.zeros((lijk.shape), dtype=lijk.dtype)
+        # sijks = self.ijk_interpolator(lijks[:,0:2])
+        ijs = lijks[:,(2,0)]
+        ks = lijks[:,1,np.newaxis]
+        sijks = self.ijk_interpolator(ijs)
+        norms = self.normal_interpolator(ijs)
+        print(lijks.shape, sijks.shape, norms.shape, ks.shape)
+        sijks += norms*(ks-32)
+        return sijks
+
 
     def loadData(self):
         if self.data is not None:
@@ -65,6 +96,11 @@ class Ppm():
         print(self.ijks.shape, self.normals.shape)
         # print(self.ijks[0,0,:],self.normals[0,0,:])
         # print(self.ijks[3000,3000,:],self.normals[3000,3000,:])
+        ii = np.arange(height)
+        jj = np.arange(width)
+        self.ijk_interpolator = RegularGridInterpolator((ii, jj), self.ijks, fill_value=0., bounds_error=False)
+        self.normal_interpolator = RegularGridInterpolator((ii, jj), self.normals, fill_value=0., bounds_error=False)
+
 
 
     # reads and loads the header of the ppm file

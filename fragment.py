@@ -746,11 +746,16 @@ class Fragment(BaseFragment):
             ibin = (20000, 20000)
             packer.add_bin(*ibin)
             packer.pack()
-            obin = packer[0]
+            if len(packer.rect_list()) == 0:
+                obin = []
+            else:
+                obin = packer[0]
+            '''
             if incount != len(obin):
                 err = "Have %d valid efs but only %d rects in obin"%(incount,len(obin))
                 print(err)
                 return
+            '''
 
             maxx = 0
             maxy = 0
@@ -788,7 +793,7 @@ class Fragment(BaseFragment):
     # takes a list of FragmentView's as input
     # texture is taken from current volume, which may not
     # be full resolution
-    def saveListAsObjMesh(fvs, filename, infill, class_count):
+    def saveListAsObjMesh(fvs, filename, infill, ppm, class_count):
         frags = [fv.fragment for fv in fvs]
         print("slaom", len(frags), filename, infill)
         filename = filename.with_suffix(".obj")
@@ -841,8 +846,11 @@ class Fragment(BaseFragment):
             r = rgb[0]
             g = rgb[1]
             b = rgb[2]
+            vrts = ef.vrts
+            if ppm is not None:
+                vrts = ppm.layerIjksToScrollIjks(vrts)
             print("# fragment", ef.frag.name, file=of)
-            for vrt in ef.vrts:
+            for vrt in vrts:
                 if mesh_visible:
                     print("v %.2f %.2f %.2f "%(vrt[0],vrt[1],vrt[2]), file=of)
                 else:
@@ -862,12 +870,14 @@ class Fragment(BaseFragment):
 
         print("texture size", tex_rect)
         tw,th = tex_rect
-        tex_out = np.zeros((th,tw), dtype=np.uint16)
-        for ef in efs:
-            ef.addTexture(tex_out)
+        tfilename = ""
+        if tw > 0 and th > 0:
+            tex_out = np.zeros((th,tw), dtype=np.uint16)
+            for ef in efs:
+                ef.addTexture(tex_out)
 
-        tfilename = filename.with_suffix(".tif")
-        cv2.imwrite(str(tfilename), tex_out)
+            tfilename = filename.with_suffix(".tif")
+            cv2.imwrite(str(tfilename), tex_out)
 
         print("# texture vertices", file=of)
         for ef in efs:
@@ -920,7 +930,8 @@ class Fragment(BaseFragment):
             print("Ks 0.0 0.0 0.0", file=ofm)
             print("illum 2", file=ofm)
             print("d 1.0", file=ofm)
-            print("map_Kd %s"%tfilename.name, file=ofm)
+            if tfilename != "":
+                print("map_Kd %s"%tfilename.name, file=ofm)
 
 
         return err
