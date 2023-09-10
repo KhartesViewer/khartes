@@ -169,7 +169,7 @@ class InfillDialog(QDialog):
             self.ilabel = QLabel(instructions)
             vlayout.addWidget(self.ilabel)
         if self.needs_ppm:
-            self.apply_ppm_cb = QCheckBox("Transform to scroll coordinates")
+            self.apply_ppm_cb = QCheckBox("Export in scroll coordinates")
             self.apply_ppm_cb.setChecked(False)
             self.apply_ppm_cb.clicked.connect(self.onClicked)
             vlayout.addWidget(self.apply_ppm_cb)
@@ -770,7 +770,7 @@ class MainWindow(QMainWindow):
         self.save_project_as_action.triggered.connect(self.onSaveProjectAsButtonClick)
         self.save_project_as_action.setEnabled(False)
 
-        self.import_obj_action = QAction("Import .obj files...", self)
+        self.import_obj_action = QAction("Import OBJ files...", self)
         self.import_obj_action.triggered.connect(self.onImportObjButtonClick)
         self.import_obj_action.setEnabled(False)
 

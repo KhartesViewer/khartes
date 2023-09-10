@@ -971,6 +971,75 @@ flattened surface volume.  And as explained in the section on importing TIFF fil
 volume (which is a series of TIFF files) back into khartes, be sure to set the
 `TIFFS are from vc_layers` checkbox in the TIFF loader dialog.
 
+### Advanced topic: Converting from layer coordinates to scroll coordinates when exporting
+
+<img src="images/3d_dots.jpg"/>
+
+*Mesh and annotation converted from layer to scroll coordinates*
+
+After you create a fragment in a layer volume (a layer
+volume is a flattened volume created
+by `vc_layers`), you may want to move this fragment back into
+the coordinate system of the original scroll volume.
+Perhaps you want to view this fragment 
+in 3D in `MeshLab`, for example, or perhaps you want
+to paint the original uninterpolated scroll data onto the mesh.
+
+Khartes provides an option that allows you do this.
+
+However, there are two requirements you must fulfill in order
+to take advantage of this option.
+
+First, your current data volume must be a layer volume.
+You must have previously signalled this to khartes by 
+setting the "TIFFs are
+from vc_layers" option in the TIFF loader dialog, at
+the time you loaded the TIFF files to create the volume.
+
+Second, you need to load one
+additional file, a `.ppm` file, into khartes.
+
+Recall that the `.ppm` file is created by `vc_render`
+or `vc_layers`.
+The data in this file specifies the transformation
+from
+layer volume coordinates to scroll volume coordinates.
+This transformation is used by `vc_layers` to create the
+layer volume.
+The `.ppm`
+file can also be used by khartes, to do this same
+coordinate transformation.
+
+To import the `.ppm` file, select the
+`File / Import PPM files...`
+menu option and find the correct `.ppm` file.
+Of course, this needs to be the file
+that is associated with your current layer volume.
+Once you have imported this file, it will remain part of 
+your .khprj project, so you will not need to
+import it again.
+The file is fairly large, typically 1 or 2 Gb in size,
+so khartes will not actually load it into memory until it
+is needed (you won't have to ask khartes to load the
+file at that time; khartes will do that automatically).
+
+After you
+have completed these steps,
+then whenever
+you export a fragment as a `.obj` file,
+you will be offered an option to change coordinates.
+
+<img src="images/select_ppm.jpg"/>
+
+This dialog box will be presented after you have specified
+the name of the `.obj` file that you want to create.
+
+Select the check box to indicate that you wish to 
+export the `.obj` file in scroll coordinates.
+Set the `Infill` as appropriate.
+Then press `OK`, and the `.ppm` file will be loaded (if it wasn't
+already) and your `.obj` file will be exported in scroll coordinates.
+
 ## Advanced topic: Importing mesh (`.obj`) files
 
 Khartes allows you to import, and work with, fragments that have been 
@@ -1015,7 +1084,7 @@ by `vc_render`, is much less dense than the original `.vcps`
 file, and has complete mesh information.
 
 Once you locate the correct mesh file, you can import it
-into khartes using the `File / Import .obj files...` menu
+into khartes using the `File / Import .OBJ files...` menu
 item.
 
 After you import your mesh file, you may see something
