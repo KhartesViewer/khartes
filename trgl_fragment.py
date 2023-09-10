@@ -155,11 +155,11 @@ class TrglFragment(BaseFragment):
             else:
                 opath = path
             print("TF slaom", opath)
-            frag.save(opath)
+            frag.save(opath, ppm)
 
         return ""
 
-    def save(self, fpath):
+    def save(self, fpath, ppm=None):
         obj_path = fpath.with_suffix(".obj")
         name = fpath.name
         print("TF save", obj_path)
@@ -170,7 +170,10 @@ class TrglFragment(BaseFragment):
         print("# Name: %s"%self.name, file=of)
         print("# Vertices: %d"%len(self.gpoints), file=of)
         ns = BaseFragment.pointNormals(self.gpoints, self.trgls)
-        for i, pt in enumerate(self.gpoints):
+        vrts = self.gpoints
+        if ppm is not None:
+            vrts = ppm.layerIjksToScrollIjks(vrts)
+        for i, pt in enumerate(vrts):
             print("v %f %f %f"%(pt[0], pt[1], pt[2]), file=of)
             if ns is not None:
                 n = ns[i]
