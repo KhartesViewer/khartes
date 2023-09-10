@@ -480,8 +480,12 @@ class DataWindow(QLabel):
 
 
         nearbyNode = self.localNearbyNodeIndex
-        if nearbyNode >= 0:
+        # check nearbyNode < len to try and prevent intermittent crash
+        # that sometimes occurs when creating active region and
+        # then moving mouse quickly to another data slice
+        if nearbyNode >= 0 and nearbyNode < len(self.cur_frag_pts_fv):
             fvs = self.cur_frag_pts_fv
+            # print("axis",self.axis,"nn", nearbyNode)
             fv = fvs[nearbyNode]
             ijks = self.cur_frag_pts_xyijk[:, 2:5]
             index = int(self.cur_frag_pts_xyijk[nearbyNode, 5])

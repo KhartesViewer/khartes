@@ -2,6 +2,7 @@
 # to try out new ideas
 
 import sys
+sys.path.append('..')
 from PyQt5.QtWidgets import QApplication
 
 from main_window import MainWindow
