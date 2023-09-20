@@ -14,6 +14,8 @@ https://scholar.google.com/scholar?cluster=15774580112029706695
 
 Other relevant papers:
 
+https://en.wikipedia.org/wiki/Structure_tensor
+
 Horizon volumes with interpreted constraints
 X Wu, D Hale - Geophysics, 2015
 https://scholar.google.com/scholar?cluster=8389346155142410449
