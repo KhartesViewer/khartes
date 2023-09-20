@@ -121,6 +121,7 @@ lv[lu0] = 1.
 
 isotropy = lv/lu
 linearity = (lu-lv)/lu
+coherence = ((lu-lv)/(lu+lv))**2
 print("linearity", linearity.shape, linearity.dtype)
 print(np.min(linearity), np.max(linearity))
 # plt.imshow(tif, cmap='gray')
@@ -166,7 +167,9 @@ print(drawpoints[0,0], drawpoints[-1,-1])
 # linear features (this line length will be multiplied by
 # "linearity")
 linelen = 25.
-lvecs = linelen*vv*linearity[:,:,np.newaxis]
+# lvecs = linelen*vv*linearity[:,:,np.newaxis]
+# try coherence instead
+lvecs = linelen*vv*coherence[:,:,np.newaxis]
 print("lvecs", lvecs.shape, lvecs.dtype)
 dplvecs = lvecs[drawpoints[:,:,0], drawpoints[:,:,1],:]
 # switch terms to change from y,x to x,y coordinates
