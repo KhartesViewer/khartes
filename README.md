@@ -522,6 +522,64 @@ data volume.  Thi shape indicates that the cursor is near a corner of the
 outline of the proposed data volume.  If you press the left mouse button, you can drag the
 corner to change the shape of the volume.
 
+### Auto-segmentation
+
+Auto-segmentation is the process
+where khartes automatically creates new points, under your guidance.
+
+<img src="images/autoseg.JPG" width="300" />
+
+*Example of auto-segmentation.  The user added the left-most point; the others
+were created by the algorithm.*
+
+Auto-segmentation is quite easy to use, but it often makes mistakes, so you
+need to check its output.
+
+The prerequisites are:
+
+* Have a fragment that is active (one that is accepting new nodes)
+
+* Make sure you are in add-node mode (the cursor is shaped like a cross)
+
+* You need to be working in one of the two top windows in the Data Slices area.
+
+At this point, you only need to choose where to begin, and in which
+direction to go.  If the cursor is near
+an existing node (the node has turned cyan), the auto-segmentation will start
+at that that node.  Otherwise, it will start at the location of the cursor.
+
+To automatically create new points to the right of the starting point, press
+the right bracket or brace key (`]` or `}`); either key will work.  To create new points to the
+left, press the left bracket or brace key (`[`] or `{`).
+
+The auto-segmentation algorithm will go as far as it can within the current view;
+this may not be all the way to the boundary, if the data is more complicated
+than the algorithm can handle.
+Note that it will not venture beyond the area that is visible in the Data Slice.
+It is a good idea, until you get a feeling for its capabilities,
+to work on a fairly zoomed-in
+area, in order to limit how far the algorithm goes.  This will you
+will not
+have to delete as many points if the algorithm goes
+astray (as it often does).
+
+Note that the algorithm is quite fast; it often adds the new points within
+a couple of seconds (longer if the surface is large, due to khartes updating
+the surface to account for the new points).  If nothing happens within that
+time, check to make sure that you met the prerequisites above.
+
+If you are unhappy with the results, or with a portion of the results, you can
+delete bad points using the `delete` or `backspace` key.  Handy hint: if deleting
+points is slow, this means that khartes is taking a long time to update
+the surface after each point is deleted.
+See the section below on "Advanced Topic: Live Updates"
+for details on how to temporarily turn this off, so deleting nodes goes faster.
+
+After each auto-segmentation, be sure to examine the results carefully.
+The algorithm works pretty well in easy areas, but it easily goes astray
+in more complicated areas (as you can see if you study the figure
+above carefully).
+
 ### Hot keys
 
 Khartes provides a number of hot keys (keys that you can press to take some action).  Here is the list:
@@ -549,6 +607,9 @@ behavioor.
 you can delete the node by pressing either of these two keys.  As mentioned above, khartes does
 not have an "undo" function, so think carefully before doing this.
 
+* **left/right brace/bracket** These keys bring khartes' new auto-segmentation
+capability into play.  See the section above on "Auto-segmentation" for details.
+
 * **v**: This hot key controls the visibility of the mesh that is overlaid on the
 data in the Fragment View.  More precisely, it toggles the "visibility" setting of
 the current fragment; the distinction between a fragment being "active" and "visible"
@@ -559,7 +620,8 @@ is an advanced topic discussed below, in the "Control Area: Fragments" section. 
 Tracking cursors are described in the "Tracking Cursors" section below.
 
 * **l**: This key (small L) turns on and off an advanced capability called "live updates".
-Live updates are turned on by default; the concept is described in the "Live Updates"
+Live updates are turned on by default; the concept is described in the
+"Advanced topic: Live Updates"
 section below.
 
 ## General segmentation workflow
