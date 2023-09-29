@@ -56,18 +56,44 @@ print(np.sum(tif==0.), np.sum(tif==1.))
 # https://stackoverflow.com/questions/35012080/how-to-apply-a-partial-derivative-gaussian-kernel-to-an-image-with-opencv
 sigma0 = 1.  # value used by Hale
 sigma0 = 2.
+print("diff gaussian")
+ksize = int(math.floor(.5+6*sigma0+1))
+hksize = ksize//2
+kernel = cv2.getGaussianKernel(ksize, sigma0)
+# print("kernel", kernel.shape, kernel.dtype)
+dkernel = kernel.copy()
+for i in range(ksize):
+    x = i - hksize
+    factor = x/(sigma0*sigma0)
+    dkernel[i] *= factor
+# print(kernel)
+# print(dkernel)
+# this gives a slightly wrong answer when tif is constant
+# (should give 0, but gives -1.5e-9)
+# gx = cv2.sepFilter2D(tif, -1, dkernel, kernel)
+# this is equivalent, and gives zero when it should
+gx = cv2.sepFilter2D(tif.transpose(), -1, kernel, dkernel).transpose()
+print(np.min(gx), np.max(gx))
+gy = cv2.sepFilter2D(tif, -1, kernel, dkernel)
+print(np.min(gy), np.max(gy))
+
+# print("tif gx gy", tif[100,-90], gx[100,-90], gy[100,-90])
+
+'''
 gx = gaussian_filter1d(tif, sigma0, axis=1, order=1)
 gx = gaussian_filter1d(gx, sigma0, axis=0, order=0)
 print(np.min(gx), np.max(gx))
 gy = gaussian_filter1d(tif, sigma0, axis=0, order=1)
 gy = gaussian_filter1d(gy, sigma0, axis=1, order=0)
 print(np.min(gy), np.max(gy))
+'''
 
 # gaussian blur
 # OpenCV function is several times faster than
 # numpy equivalent
 sigma1 = 8. # value used by Hale
 sigma1 = 16.
+print("gaussian blur")
 # gx2 = gaussian_filter(gx*gx, sigma1)
 gx2 = cv2.GaussianBlur(gx*gx, (0, 0), sigma1)
 print(np.min(gx2), np.max(gx2))
@@ -99,6 +125,7 @@ lu = eigvals[:,:,1]
 lv = eigvals[:,:,0]
 '''
 
+print("calculate eigenvalues")
 ad = gx2+gy2
 sq = np.sqrt((gx2-gy2)**2+4*gxy**2)
 lu = .5*(ad+sq)
@@ -106,6 +133,7 @@ lv = .5*(ad-sq)
 # lv should never be < 0, but numerical issues
 # apparently sometimes cause it to happen
 lv[lv<0]=0
+print("finished")
 
 # End of explicit calculation of eigenvalues
 
@@ -131,9 +159,11 @@ print(np.min(linearity), np.max(linearity))
 # plt.imshow(linearity, cmap='gray')
 # plt.show()
 
+print("calculate eigenvectors")
 # explicitly calculate normalized eigenvectors
 # eigenvector u
 vu = np.concatenate((gxy, lu-gx2)).reshape(2,gxy.shape[0],gxy.shape[1]).transpose(1,2,0)
+vu[lu0,:] = 0.
 vulen = np.sqrt((vu*vu).sum(axis=2))
 vulen[vulen==0] = 1
 vu /= vulen[:,:,np.newaxis]
@@ -141,10 +171,12 @@ print("vu", vu.shape, vu.dtype)
 
 # eigenvector v
 vv = np.concatenate((gxy, lv-gx2)).reshape(2,gxy.shape[0],gxy.shape[1]).transpose(1,2,0)
+vv[lu0,:] = 0.
 vvlen = np.sqrt((vv*vv).sum(axis=2))
 vvlen[vvlen==0] = 1
 vv /= vvlen[:,:,np.newaxis]
 print("vv", vv.shape, vv.dtype)
+print("done")
 
 # All done with the calculations; time to draw
 rgb = np.zeros((tif.shape[0], tif.shape[1], 3), dtype=np.uint8)
@@ -161,6 +193,7 @@ rgb += (tif*alpha*255).astype(np.uint8)[:,:,np.newaxis]
 
 # half-distance between grid points where dip lines will be drawn
 dh = 25
+dh = 10
 drawpoints = np.mgrid[dh:rgb.shape[0]:2*dh, dh:rgb.shape[1]:2*dh].transpose(1,2,0)
 print("drawpoints", drawpoints.shape, drawpoints.dtype)
 print(drawpoints[0,0], drawpoints[-1,-1])
@@ -192,18 +225,25 @@ points = xc.reshape(-1,1,1,2).astype(np.int32)
 # print(lines[1])
 # print(lines[-1])
 # draw lines
-cv2.polylines(rgb, lines, False, (255,255,0), 2)
+linesize = 2
+linesize = 1
+cv2.polylines(rgb, lines, False, (255,255,0), linesize)
 # draw center points
-cv2.polylines(rgb, points, True, (0,255,255), 8)
+pointsize = 8
+pointsize = 4
+cv2.polylines(rgb, points, True, (0,255,255), pointsize)
 
 # tif = tif[1500:3500, 3500:5500]
 # show the inner part of the full image
-plt.imshow(rgb[1500:3500, 3500:5500])
-plt.show()
+# plt.imshow(rgb[1500:3500, 3500:5500])
+# plt.show()
 
 # save the full image as a jpeg
 rgbout = str(outdir / 'test.jpg')
 # the [:...] stuff is to convert rgb to bgr
 cv2.imwrite(rgbout, rgb[:,:,::-1])
+
+# st_all = np.concatenate((lu[:,:,np.newaxis],lv[:,:,np.newaxis],vu,vv), axis=2)
+# print("st_all", st_all.shape, st_all.dtype)
 
 print("done")

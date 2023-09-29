@@ -9,6 +9,7 @@ import numpy.linalg as npla
 import cv2
 
 from utils import Utils
+from st import ST
 # import PIL
 # import PIL.Image
 
@@ -775,6 +776,19 @@ class DataWindow(QLabel):
             xy = self.ijToXy(ij)
             gxy = self.mapToGlobal(QPoint(*xy))
             QCursor.setPos(gxy)
+        elif self.inAddNodeMode() and not self.isMovingNode and self.axis in (0,1) and key in (Qt.Key_BracketLeft, Qt.Key_BracketRight, Qt.Key_BraceLeft, Qt.Key_BraceRight):
+            ijk = self.getNearbyNodeIjk()
+            if ijk is None:
+                pt = self.mapFromGlobal(QCursor.pos())
+                mxy = (pt.x(), pt.y())
+                ij = self.xyToIj(mxy)
+            else:
+                ij = ijk[:2]
+            sign = 1
+            if key in (Qt.Key_BracketLeft, Qt.Key_BraceLeft):
+                sign = -1
+            # self.window.drawSlices()
+            self.autoSegment(sign, ij)
         elif key == Qt.Key_T:
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
@@ -828,15 +842,15 @@ class DataWindow(QLabel):
     # The C++ version of OpenCV provides operations, including intersection,
     # on rectangles, but the Python version doesn't.
     def rectIntersection(self, ra, rb):
-        (ax1, ay1, ax2, ay2) = ra
-        (bx1, by1, bx2, by2) = rb
+        (ax1, ay1), (ax2, ay2) = ra
+        (bx1, by1), (bx2, by2) = rb
         # print(ra, rb)
         x1 = max(min(ax1, ax2), min(bx1, bx2))
         y1 = max(min(ay1, ay2), min(by1, by2))
         x2 = min(max(ax1, ax2), max(bx1, bx2))
         y2 = min(max(ay1, ay2), max(by1, by2))
         if (x1<x2) and (y1<y2):
-            r = (x1, y1, x2, y2)
+            r = ((x1, y1), (x2, y2))
             # print(r)
             return r
 
@@ -866,6 +880,83 @@ class DataWindow(QLabel):
         gxyz = self.volume_view.transposedIjkToGlobalPosition(self.volume_view.ijktf)
         gaxis = self.volume_view.globalAxisFromTransposedAxis(self.axis)
         return gxyz[gaxis]
+
+    def autoSegment(self, sign, ij):
+        volume = self.volume_view
+        if volume is None :
+            return
+        if self.currentFragmentView() is None:
+            return
+        ww = self.size().width()
+        wh = self.size().height()
+        ij0 = self.xyToIj((0,0))
+        ij1 = self.xyToIj((ww,wh))
+        ijo0 = ij0
+        ijo1 = ij1
+        z = self.getZoom()
+        slc = volume.getSlice(self.axis, volume.ijktf)
+        sw = slc.shape[1]
+        sh = slc.shape[0]
+        margin = 32
+        ij0m = (ij0[0]-margin,ij0[1]-margin)
+        ij1m = (ij1[0]+margin,ij1[1]+margin)
+        ri = self.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
+        if ri is None:
+            return
+        ij0 = ri[0]
+        ij1 = ri[1]
+        ri = self.rectIntersection((ij0,ij1), ((ij[0]-500,ij[1]-500),(ij[0]+500,ij[1]+500)))
+        if ri is None:
+            return
+        ij0 = ri[0]
+        ij1 = ri[1]
+        # print("autosegment", ij, sign, ij0, ij1)
+        if ij[0] < ij0[0] or ij[0] >= ij1[0]:
+            return
+        if ij[1] < ij0[1] or ij[1] >= ij1[1]:
+            return
+        st = ST((slc[int(ij0[1]):int(ij1[1]),int(ij0[0]):int(ij1[0])]).astype(np.float64)/65535.)
+        # print ("st created", st.image.shape)
+        st.computeEigens()
+        # print ("eigens computed")
+        dij = (ij[0]-ij0[0], ij[1]-ij0[1])
+        # min distance between computed auto-pick points
+        # note this is in units of data-volume voxel size,
+        # which differ from that of the original data,
+        # due to subsampling
+        min_delta = 5
+        ijk = self.ijToTijk(ij0)
+        gxyz = self.volume_view.transposedIjkToGlobalPosition(ijk)
+        gaxis = self.volume_view.globalAxisFromTransposedAxis(self.iIndex)
+        gstep = self.volume_view.volume.gijk_steps[gaxis]
+        # attempt to align the computed points so that they
+        # lie at global coordinates (along the appropriate axis)
+        # that are mutiples of min_delta.  Seems to work
+        # correctly in sub-sampled data volumes as well.
+        min_delta_shift = (gxyz[gaxis]/gstep) % min_delta
+        pts = st.sparse_result(dij, min_delta_shift, min_delta, sign, 5.)
+        if pts is None:
+            print("no points")
+            return
+        # print (len(pts),"points returned")
+        pts[:,0] += ij0[0]
+        pts[:,1] += ij0[1]
+        # print("xs",pts[:,0])
+        zsurf_update = self.window.live_zsurf_update
+        self.window.setLiveZsurfUpdate(False)
+        for pt in pts:
+            # pt = (dpt[0]+ij0[0], dpt[1]+ij0[1])
+            if pt[0] < ijo0[0] or pt[0] >= ijo1[0] or pt[1] < ijo0[1] or pt[1] >= ijo1[1]:
+                break
+            tijk = self.ijToTijk(pt)
+            # print("adding point at",tijk)
+            self.window.addPointToCurrentFragment(tijk)
+        self.window.setLiveZsurfUpdate(zsurf_update)
+        mpt = self.mapFromGlobal(QCursor.pos())
+        mxy = (mpt.x(), mpt.y())
+        nearbyNode = self.findNearbyNode(mxy)
+        self.setNearbyNode(nearbyNode)
+        self.window.drawSlices()
 
     def drawScaleBar(self, outrgbx):
         pixPerMm = 1000./self.volume_view.volume.apparentVoxelSize
@@ -1146,9 +1237,9 @@ into and out of the viewing plane.
         by1 = 0
         bx2 = ww
         by2 = wh
-        ri = self.rectIntersection((ax1,ay1,ax2,ay2), (bx1,by1,bx2,by2))
+        ri = self.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
         if ri is not None:
-            (x1,y1,x2,y2) = ri
+            (x1,y1),(x2,y2) = ri
             # zoomed data slice
             x1s = int((x1-ax1)/z)
             y1s = int((y1-ay1)/z)
@@ -1548,9 +1639,9 @@ class SurfaceWindow(DataWindow):
                 by1 = 0
                 bx2 = ww
                 by2 = wh
-                ri = self.rectIntersection((ax1,ay1,ax2,ay2), (bx1,by1,bx2,by2))
+                ri = self.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
                 if ri is not None:
-                    (x1,y1,x2,y2) = ri
+                    (x1,y1),(x2,y2) = ri
                     x1s = int((x1-ax1)/z)
                     y1s = int((y1-ay1)/z)
                     x2s = int((x2-ax1)/z)
