@@ -527,7 +527,7 @@ corner to change the shape of the volume.
 Auto-segmentation is the process
 where khartes automatically creates new points, under your guidance.
 
-<img src="images/autoseg.JPG" width="300" />
+<img src="images/autoseg.jpg" width="300" />
 
 *Example of auto-segmentation.  The user added the left-most point; the others
 were created by the algorithm.*
