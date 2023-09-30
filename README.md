@@ -558,7 +558,7 @@ than the algorithm can handle.
 Note that it will not venture beyond the area that is visible in the Data Slice.
 It is a good idea, until you get a feeling for its capabilities,
 to work on a fairly zoomed-in
-area, in order to limit how far the algorithm goes.  This will you
+area, in order to limit how far the algorithm goes.  This means you
 will not
 have to delete as many points if the algorithm goes
 astray (as it often does).
