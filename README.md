@@ -565,8 +565,8 @@ astray (as it often does).
 
 Note that the algorithm is quite fast; it often adds the new points within
 a couple of seconds (longer if the surface is large, due to khartes updating
-the surface to account for the new points).  If nothing happens within that
-time, check to make sure that you met the prerequisites above.
+the surface to account for the new points).  If nothing happens within 10 to 15 seconds,
+check to make sure that you met the prerequisites above.
 
 If you are unhappy with the results, or with a portion of the results, you can
 delete bad points using the `delete` or `backspace` key.  Handy hint: if deleting
@@ -576,7 +576,7 @@ See the section below on "Advanced Topic: Live Updates"
 for details on how to temporarily turn this off, so deleting nodes goes faster.
 
 After each auto-segmentation, be sure to examine the results carefully.
-The algorithm works pretty well in easy areas, but it easily goes astray
+The algorithm works pretty well in easy areas, but it often goes astray
 in more complicated areas (as you can see if you study the figure
 above carefully).
 
