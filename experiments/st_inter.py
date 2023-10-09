@@ -1,6 +1,10 @@
 import sys
+import os
+sys.path.append(os.path.join(sys.path[0], '..'))
 import pathlib
 import math
+
+from st import ST
 
 from PyQt5.QtWidgets import (
         QApplication,
@@ -67,6 +71,15 @@ class MainWindow(QMainWindow):
             self.st.loadEigens(nrrdname)
         '''
         self.st.loadOrCreateEigens(nrrdname)
+        self.testInterp2d()
+
+    def testInterp2d(self):
+            pt1 = (4235, 4495)
+            # pt2 = (4621, 4378)
+            pt2 = (4245, 4490)
+            y = self.st.interp2d(pt1, pt2)
+            print("ti2d", y.shape)
+
 
     def setStatusText(self, txt):
         self.status_bar.showMessage(txt)
@@ -86,354 +99,6 @@ class MainWindow(QMainWindow):
     def keyPressEvent(self, e):
         self.viewer.keyPressEvent(e)
 
-class ST(object):
-
-    # assumes image is a floating-point numpy array
-    def __init__(self, image):
-        self.image = image
-        self.lambda_u = None
-        self.lambda_v = None
-        self.vector_u = None
-        self.vector_v = None
-        self.isotropy = None
-        self.linearity = None
-        self.coherence = None
-        # self.computeEigens(image)
-
-    '''
-    Based on:
-    
-    Structure-oriented smoothing and semblance
-    D. Hale - Center for Wave Phenomena, 2009
-    https://scholar.google.com/scholar?cluster=15774580112029706695
-    
-    Other relevant papers:
-    
-    https://en.wikipedia.org/wiki/Structure_tensor
-    
-    Horizon volumes with interpreted constraints
-    X Wu, D Hale - Geophysics, 2015
-    https://scholar.google.com/scholar?cluster=8389346155142410449
-    
-    Estimators for orientation and anisotropy in digitized images
-    LJ Van Vliet, PW Verbeek - ASCI, 1995
-    https://scholar.google.com/scholar?cluster=8104629214698074825
-    
-    Fast structural interpretation with structure-oriented filtering
-    Gijs C. Fehmers and Christian F. W. H Hocker - Geophysics, 2003
-    https://sci-hub.se/10.1190/1.1598121
-    '''
-    def computeEigens(self):
-        tif = self.image
-        sigma0 = 1.  # value used by Hale
-        sigma0 = 2.
-        ksize = int(math.floor(.5+6*sigma0+1))
-        hksize = ksize//2
-        kernel = cv2.getGaussianKernel(ksize, sigma0)
-        dkernel = kernel.copy()
-        for i in range(ksize):
-            x = i - hksize
-            factor = x/(sigma0*sigma0)
-            dkernel[i] *= factor
-        # this gives a slightly wrong answer when tif is constant
-        # (should give 0, but gives -1.5e-9)
-        # gx = cv2.sepFilter2D(tif, -1, dkernel, kernel)
-        # this is equivalent, and gives zero when it should
-        gx = cv2.sepFilter2D(tif.transpose(), -1, kernel, dkernel).transpose()
-        gy = cv2.sepFilter2D(tif, -1, kernel, dkernel)
-        grad = np.concatenate((gx, gy)).reshape(2,gx.shape[0],gx.shape[1]).transpose(1,2,0)
-
-        # gaussian blur
-        # OpenCV function is several times faster than
-        # numpy equivalent
-        sigma1 = 8. # value used by Hale
-        # sigma1 = 16.
-        # gx2 = gaussian_filter(gx*gx, sigma1)
-        gx2 = cv2.GaussianBlur(gx*gx, (0, 0), sigma1)
-        # gy2 = gaussian_filter(gy*gy, sigma1)
-        gy2 = cv2.GaussianBlur(gy*gy, (0, 0), sigma1)
-        # gxy = gaussian_filter(gx*gy, sigma1)
-        gxy = cv2.GaussianBlur(gx*gy, (0, 0), sigma1)
-
-        gar = np.array(((gx2,gxy),(gxy,gy2)))
-        gar = gar.transpose(2,3,0,1)
-
-        # Explicitly calculate eigenvalue of 2x2 matrix instead of
-        # using the numpy linalg eigh function; 
-        # the explicit method is about 10 times faster.
-        # See https://www.soest.hawaii.edu/martel/Courses/GG303/Eigenvectors.pdf
-        # for a derivation
-        ad = gx2+gy2
-        sq = np.sqrt((gx2-gy2)**2+4*gxy**2)
-        lu = .5*(ad+sq)
-        lv = .5*(ad-sq)
-        # lv should never be < 0, but numerical issues
-        # apparently sometimes cause it to happen
-        lv[lv<0]=0
-        
-        # End of explicit calculation of eigenvalues
-        
-        # both eigenvalues are non-negative, and lu >= lv.
-        # lu is zero if gx2, gy2, and gxy are all zero
-
-        # if lu is 0., set lu and lv to 1.; this will give
-        # the correct values for isotropy (1.0) and linearity (0.0)
-        # for this case
-
-        lu0 = (lu==0)
-        # print("lu==0", lu0.sum())
-        lu[lu0] = 1.
-        lv[lu0] = 1.
-
-        isotropy = lv/lu
-        linearity = (lu-lv)/lu
-        coherence = ((lu-lv)/(lu+lv))**2
-
-        # explicitly calculate normalized eigenvectors
-        # eigenvector u
-        vu = np.concatenate((gxy, lu-gx2)).reshape(2,gxy.shape[0],gxy.shape[1]).transpose(1,2,0)
-        vu[lu0,:] = 0.
-        vulen = np.sqrt((vu*vu).sum(axis=2))
-        vulen[vulen==0] = 1
-        vu /= vulen[:,:,np.newaxis]
-        # print("vu", vu.shape, vu.dtype)
-        
-        # eigenvector v
-        vv = np.concatenate((gxy, lv-gx2)).reshape(2,gxy.shape[0],gxy.shape[1]).transpose(1,2,0)
-        vv[lu0,:] = 0.
-        vvlen = np.sqrt((vv*vv).sum(axis=2))
-        vvlen[vvlen==0] = 1
-        vv /= vvlen[:,:,np.newaxis]
-        
-        self.lambda_u = lu
-        self.lambda_v = lv
-        self.vector_u = vu
-        self.vector_v = vv
-        self.grad = grad
-        self.isotropy = isotropy
-        self.linearity = linearity
-        self.coherence = coherence
-
-        self.lambda_u_interpolator = ST.createInterpolator(self.lambda_u)
-        self.lambda_v_interpolator = ST.createInterpolator(self.lambda_v)
-        self.vector_u_interpolator = ST.createInterpolator(self.vector_u)
-        self.vector_v_interpolator = ST.createInterpolator(self.vector_v)
-        self.grad_interpolator = ST.createInterpolator(self.grad)
-        self.isotropy_interpolator = ST.createInterpolator(self.isotropy)
-        self.linearity_interpolator = ST.createInterpolator(self.linearity)
-        self.coherence_interpolator = ST.createInterpolator(self.coherence)
-
-    def create_vel_func(self, xy, sign, nudge=0):
-        x0 = np.array((xy))
-        # vv0 = self.vector_v_interpolator((x0[::-1]))[0]
-        # print(x0, vv0)
-        def vf(t, y):
-            # print("y", y.shape, y.dtype)
-            # print(t,y)
-            # vv stores vector at x,y in vv[y,x], but the
-            # vector itself is returned in x,y order
-            yr = y[::-1]
-            vv = self.vector_v_interpolator((yr))[0]
-            grad = self.grad_interpolator((yr))[0]
-            # print(t,y,vv,grad)
-            # print("vv", vv.shape, vv.dtype)
-            # print(vv)
-            # vvx = vv[0]
-            # yx = y[1]
-            # if vvx * (yx-x0) < 0:
-            if t==0:
-                if vv[0]*sign < 0:
-                    vv *= -1
-            elif (vv*(y-x0)).sum() < 0:
-                vv *= -1
-            # print(vv)
-            # vv += 5*grad
-            vv += nudge*grad
-            return vv
-        return vf
-
-    # the idea of using Runge-Kutta (which solve_ivp uses)
-    # was suggested by @TizzyTom
-    def call_ivp(self, xy, sign, nudge=0):
-        vel_func = self.create_vel_func(xy, sign, nudge)
-        tmax = 400
-        tmax = 500
-        tsteps = np.linspace(0,tmax,tmax//10)
-        # sol = solve_ivp(fun=vel_func, t_span=[0,tmax], t_eval=tsteps, atol=1.e-8, rtol=1.e-5, y0=xy)
-        # sol = solve_ivp(fun=vel_func, t_span=[0,tmax], t_eval=tsteps, atol=1.e-8, y0=xy)
-        # for testing
-        # sol = solve_ivp(fun=vel_func, t_span=[0,tmax], rtol=1.e-5, atol=1.e-8, y0=xy)
-        sol = solve_ivp(fun=vel_func, t_span=[0,tmax], max_step=2., y0=xy)
-        # print("solution")
-        # print(sol)
-        return (sol.status, sol.y, sol.t, sol.nfev)
-
-    # ix is rounding pixel position
-    # output is transposed relative to y from call_ivp
-    def evenly_spaced_result(self, xy, ix, sign, nudge=0):
-        status, y, t, nfev = self.call_ivp(xy, sign, nudge)
-        if status != 0:
-            return None
-        # print("y 1", y.shape)
-        y = y.transpose()
-        dx = np.diff(y[:,0])
-        bad = (sign*dx <= 0)
-        ibad = np.argmax(bad)
-        if bad[0]:
-            # print("bad0")
-            return None
-        if ibad > 0:
-            y = y[:ibad+1,:]
-        # print("y 2", y.shape)
-
-        xs = sign*y[:,0]
-        ys = y[:,1]
-        cs = CubicSpline(xs, ys)
-
-        xmin = math.ceil(xs[0]/ix)*ix
-        xmax = math.floor(xs[-1]/ix)*ix
-        xrange = np.arange(xmin,xmax,ix)
-        csys = cs(xrange)
-        esy = np.stack((sign*xrange,csys), axis=1)
-        return esy
-
-
-    def sparse_result(self, xy, ix, sign, nudge=0):
-        esy = self.evenly_spaced_result(xy, ix, sign, nudge)
-        xs = sign*esy[:,0]
-        ys = esy[:,1]
-        # xmin = xs[0]
-        # xmax = xs[-1]
-
-        b = np.full(xs.shape, False)
-        b[0] = True
-        b[-1] = True
-        tol = 1.
-        # print("b",b.shape,b.dtype)
-        # print("xrange",xrange.shape,xrange.dtype)
-        while b.sum() < len(xs):
-            idxs = b.nonzero()
-            itx = xs[idxs]
-            ity = ys[idxs]
-            tcs = CubicSpline(itx,ity)
-            oty = tcs(xs)
-            diff = np.abs(oty-ys)
-            # print("diff",diff.shape)
-            midx = diff.argmax()
-            # print("midx",midx)
-            if b[midx]:
-                break
-            d = diff[midx]
-            if d <= tol:
-                break
-            b[midx] = True
-
-        idxs = b.nonzero()
-        oy = esy[idxs]
-
-        return oy
-
-
-    # class function
-    def createInterpolator(ar):
-        interp = RegularGridInterpolator((np.arange(ar.shape[0]), np.arange(ar.shape[1])), ar, method='linear', bounds_error=False, fill_value=0.)
-        return interp
-
-    '''
-    # Tried to write hand-rolled interpolator; still doesn't
-    # work, despite complexity upon complexity
-    def createInterpolator(ar):
-        def interp(pts):
-            i0 = np.floor(pts[...,0]).astype(np.int32)
-            i1 = np.floor(pts[...,1]).astype(np.int32)
-            f0 = pts[...,0]-i0
-            f1 = pts[...,1]-i1
-
-            inbounds = (pts[...,0]>=0) & (pts[...,0]<ar.shape[0]) & (pts[...,1]>=0) & (pts[...,1]<ar.shape[1])
-            print("i0", i0.shape, i0.dtype)
-            i0[~inbounds] = 0
-            i1[~inbounds] = 0
-            print("i0", i0.shape, i0.dtype)
-            
-            # i0n = i0[...,np.newaxis]
-            # i1n = i1[...,np.newaxis]
-            if len(ar.shape) > len(f0.shape):
-                f0n = f0[...,np.newaxis]
-                f1n = f1[...,np.newaxis]
-            else:
-                f0n = f0
-                f1n = f1
-            print("ar", ar.shape, ar.dtype)
-            print("ar[i0,i1]", ar[i0,i1].shape)
-            print("pts", pts.shape, pts.dtype)
-            print("f0", f0.shape, f0.dtype)
-            print("f0n", f0n.shape, f0n.dtype)
-            res = ((1.-f0n)*((1.-f1n)*ar[i0,i1] + f1n*ar[i0,i1+1])+
-            f0n*((1.-f1n)*ar[i0+1,i1] + f1n*ar[i0+1,i1+1]))
-            vals = np.zeros((res.shape), dtype=pts.dtype)
-            vals[inbounds] = res[inbounds]
-
-            return vals
-
-        return interp
-    '''
-
-    def saveEigens(self, fname):
-        if self.lambda_u is None:
-            print("saveEigens: eigenvalues not computed yet")
-            return
-        lu = self.lambda_u
-        lv = self.lambda_v
-        vu = self.vector_u
-        vv = self.vector_v
-        grad = self.grad
-        # print(lu.shape, lu[np.newaxis,:,:].shape)
-        # print(vu.shape)
-        st_all = np.concatenate((lu[:,:,np.newaxis], lv[:,:,np.newaxis], vu, vv, grad), axis=2)
-        # turn off the default gzip compression
-        header = {"encoding": "raw",}
-        nrrd.write(str(fname), st_all, header, index_order='C')
-
-    def loadOrCreateEigens(self, fname):
-        self.lambda_u = None
-        print("loading eigens")
-        self.loadEigens(fname)
-        if self.lambda_u is None:
-            print("calculating eigens")
-            self.computeEigens()
-            print("saving eigens")
-            self.saveEigens(fname)
-
-    def loadEigens(self, fname):
-        try:
-            data, data_header = nrrd.read(str(fname), index_order='C')
-        except Exception as e:
-            print("Error while loading",fname,e)
-            return
-
-        self.lambda_u = data[:,:,0]
-        self.lambda_v = data[:,:,1]
-        self.vector_u = data[:,:,2:4]
-        self.vector_v = data[:,:,4:6]
-        self.grad = data[:,:,6:8]
-        lu = self.lambda_u
-        lv = self.lambda_v
-        self.isotropy = lv/lu
-        self.linearity = (lu-lv)/lu
-        self.coherence = ((lu-lv)/(lu+lv))**2
-
-        # print("lambda_u", self.lambda_u.shape, self.lambda_u.dtype)
-        # print("vector_u", self.vector_u.shape, self.vector_u.dtype)
-
-        self.lambda_u_interpolator = ST.createInterpolator(self.lambda_u)
-        self.lambda_v_interpolator = ST.createInterpolator(self.lambda_v)
-        self.vector_u_interpolator = ST.createInterpolator(self.vector_u)
-        self.vector_v_interpolator = ST.createInterpolator(self.vector_v)
-        self.grad_interpolator = ST.createInterpolator(self.grad)
-        self.isotropy_interpolator = ST.createInterpolator(self.isotropy)
-        self.linearity_interpolator = ST.createInterpolator(self.linearity)
-        self.coherence_interpolator = ST.createInterpolator(self.coherence)
-
 class ImageViewer(QLabel):
 
     def __init__(self, main_window):
@@ -449,6 +114,8 @@ class ImageViewer(QLabel):
         self.is_panning = False
         self.dip_bars_visible = True
         self.rays = []
+        self.pt1 = None
+        self.pt2 = None
 
     def mousePressEvent(self, e):
         if self.image is None:
@@ -503,7 +170,40 @@ class ImageViewer(QLabel):
         self.drawImage()
 
     def keyPressEvent(self, e):
-        if e.key() == Qt.Key_T:
+        if e.key() == Qt.Key_1:
+            wxy = self.mouseXy()
+            ixy = self.wxyToIxy(wxy)
+            print("pt 1 at",ixy)
+            self.pt1 = ixy
+            self.drawImage()
+        elif e.key() == Qt.Key_2:
+            # pt1 = (4235, 4495)
+            # pt2 = (4621, 4378)
+            # pt2 = (4245, 4500)
+            wxy = self.mouseXy()
+            ixy = self.wxyToIxy(wxy)
+            print("p2 1 at",ixy)
+            self.pt2 = ixy
+            st = self.getST()
+            if st is None:
+                return
+            # for nudge in (-1., -.5, 0, .5, 1.):
+            # for nudge in (0., .05, .1):
+            # for nudge in (0., -10, 10):
+            for nudge in (0.,):
+                y = None
+                if self.pt1 is not None and self.pt2 is not None:
+                    y = st.interp2d(self.pt1, self.pt2, nudge)
+                if y is not None:
+                    print("ti2d", y.shape)
+                    # pts = st.sparse_result(y, 0, 5)
+                    pts = y
+                    if pts is not None:
+                        print("pts", pts.shape)
+                        self.rays.append(pts)
+
+            self.drawImage()
+        elif e.key() == Qt.Key_T:
             wxy = self.mouseXy()
             ixy = self.wxyToIxy(wxy)
             print("t at",ixy)
@@ -521,9 +221,13 @@ class ImageViewer(QLabel):
                     if status == 0:
                         self.rays.append(y)
                     '''
-                    y = st.sparse_result(ixy, 5, sign, nudge)
+                    # y = st.sparse_result(ixy, 0, 5, sign, nudge)
+                    # y = st.sparse_result(ixy, 0, 5, sign, nudge)
+                    y = st.call_ivp(ixy, sign, nudge)
                     if y is not None:
-                        self.rays.append(y)
+                        pts = st.sparse_result(y, 0, 5)
+                        if pts is not None:
+                            self.rays.append(pts)
 
             if len(self.rays) > 0:
                 self.drawImage()
@@ -750,7 +454,8 @@ class ImageViewer(QLabel):
             # print ("dpi", dpi.shape, dpi.dtype, dpi[0,5])
             vvs = st.vector_v_interpolator(dpir)
             # print("vvs", vvs.shape, vvs.dtype, vvs[0,5])
-            coherence = st.coherence_interpolator(dpir)
+            # coherence = st.coherence_interpolator(dpir)
+            coherence = st.linearity_interpolator(dpir)
             # print("coherence", coherence.shape, coherence.dtype, coherence[0,5])
             linelen = 25.
             lvecs = linelen*vvs*coherence[:,:,np.newaxis]
@@ -771,11 +476,19 @@ class ImageViewer(QLabel):
             # print("points", points)
             points = points.reshape(-1,1,1,2)
             # colors = ((255,255,255), (255,0,255), (0,255,0))
+            # colors = ((255,0,255), (0,255,0), (255,255,255), (0,255,0), (255,0,255), )
             colors = ((0,255,0),)
-            color = colors[(i//2)%len(colors)]
+            # color = colors[(i//2)%len(colors)]
+            color = colors[i%len(colors)]
 
             cv2.polylines(outrgb, points, True, color, 2)
             cv2.circle(outrgb, points[0,0,0], 3, (255,0,255), -1)
+        if self.pt1 is not None:
+            wpt1 = self.ixyToWxy(self.pt1)
+            cv2.circle(outrgb, wpt1, 3, (255,0,255), -1)
+        if self.pt2 is not None:
+            wpt2 = self.ixyToWxy(self.pt2)
+            cv2.circle(outrgb, wpt2, 3, (255,0,255), -1)
 
         bytesperline = 3*outrgb.shape[1]
         # print(outrgb.shape, outrgb.dtype)
