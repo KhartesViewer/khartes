@@ -535,10 +535,10 @@ class VolumeView():
         return self.volume.globalAxisFromTransposedAxis(axis, self.direction)
 
     def getSlice(self, axis, ijkt):
-        return self.volume.getSlice(axis, ijkt, self.trdata)
+        return self.volume.getSlice(axis, ijkt, self.direction)
 
     def getSlices(self, ijkt):
-        return self.volume.getSlices(ijkt, self.trdata)
+        return self.volume.getSlices(ijkt, self.direction)
 
 
 class Volume():
@@ -547,7 +547,7 @@ class Volume():
         self.data = None
         self.trdatas = None
         self.data_header = None
-
+        self.is_zarr = False
         self.valid = False
         self.error = "no error message set"
         self.active_project_views = set()
@@ -966,14 +966,14 @@ class Volume():
     # kt (slow, axis 2) is depth coord
     # trdata is laid out in C style, so 
     # value at it,ij,ik is indexed trdata[kt,jt,it]
-    def getSlice(self, axis, ijkt, trdata):
+    def getSlice(self, axis, ijkt, direction):
         (it,jt,kt) = ijkt
         if axis == 2: # depth
-            return trdata[kt,:,:]
+            return self.trdata[direction][kt,:,:]
         elif axis == 1: # xline
-            return trdata[:,jt,:]
+            return self.trdata[direction][:,jt,:]
         else: # inline
-            return trdata[:,:,it]
+            return self.trdata[direction][:,:,it]
 
     def ijIndexesInPlaneOfSlice(self, axis):
         return ((1,2), (0,2), (0,1))[axis]
@@ -993,11 +993,11 @@ class Volume():
     # kt (slow, axis 2) is depth coord
     # trdata is laid out in C style, so 
     # value at it,ij,ik is indexed trdata[kt,jt,it]
-    def getSlices(self, ijkt, trdata):
+    def getSlices(self, ijkt, direction):
         # print(self.trdata.shape, ijkt)
-        depth = self.getSlice(2, ijkt, trdata)
-        xline = self.getSlice(1, ijkt, trdata)
-        inline = self.getSlice(0, ijkt, trdata)
+        depth = self.getSlice(2, ijkt, direction)
+        xline = self.getSlice(1, ijkt, direction)
+        inline = self.getSlice(0, ijkt, direction)
 
         return (depth, xline, inline)
 
