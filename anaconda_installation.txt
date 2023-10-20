@@ -32,3 +32,9 @@ conda install opencv
 conda install scipy
 conda install -c conda-forge pynrrd
 conda install -c conda-forge rectpack
+
+# TODO: add a proper conda requirements file 
+# Additional requirements for Brett's speed improvement code.
+conda install zarr
+conda install tifffile
+conda install PIL

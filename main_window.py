@@ -216,7 +216,6 @@ class InfillDialog(QDialog):
     def accepted(self):
         self.is_accepted = True
         value = self.getValue()
-        # print("accepted", value)
         if self.needs_infill and value < 0:
             self.edit.setText("")
             self.wlabel.setText('Please enter a valid value (an integer >= 0)\nor press "Cancel"')
@@ -226,15 +225,11 @@ class InfillDialog(QDialog):
 
     def rejected(self):
         self.is_accepted = False
-        # print("rejected")
         self.close()
 
     def onEditingFinished(self):
         txt = self.edit.text()
         valid, size = self.parseText(txt)
-        # print("oef", valid, size)
-        # if valid:
-        #     self.main_window.setVoxelSizeUm(size)
 
     def parseText(self, txt):
         valid = True
@@ -249,7 +244,6 @@ class InfillDialog(QDialog):
 
     def onTextEdited(self, txt):
         valid, i = self.parseText(txt)
-        # print("ote", valid)
         if valid:
             self.edit.setStyleSheet("")
         else:
