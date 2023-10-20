@@ -969,11 +969,11 @@ class Volume():
     def getSlice(self, axis, ijkt, direction):
         (it,jt,kt) = ijkt
         if axis == 2: # depth
-            return self.trdata[direction][kt,:,:]
+            return self.trdatas[direction][kt,:,:]
         elif axis == 1: # xline
-            return self.trdata[direction][:,jt,:]
+            return self.trdatas[direction][:,jt,:]
         else: # inline
-            return self.trdata[direction][:,:,it]
+            return self.trdatas[direction][:,:,it]
 
     def ijIndexesInPlaneOfSlice(self, axis):
         return ((1,2), (0,2), (0,1))[axis]
