@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import cv2
 from volume import Volume
+from volume_zarr import CachedZarrVolume
 
 from PyQt5.QtWidgets import (
         QAction, QApplication, QAbstractItemView,
@@ -165,6 +166,7 @@ class TiffLoader(QMainWindow):
         self.main_window = main_window
         # a bit confusing: vc_render is the flag, vcrender is the widget
         self.vc_render = False
+        self.load_as_zarr =  False
         # self.font().setPointSize(20)
         self.setStyleSheet("font-size: 12pt;")
         self.setWindowTitle("TIFF file loader")
@@ -219,12 +221,22 @@ class TiffLoader(QMainWindow):
         # self.nameedit.textEdited.connect(self.onNameEdited)
         self.nameedit.textChanged.connect(self.onNameEdited)
         hbox.addWidget(self.nameedit)
+        
         self.vcrender = QCheckBox("TIFFs are from vc_layers")
         self.vcrender.setChecked(self.vc_render)
         self.vcrender.clicked.connect(self.onVcrenderClicked)
         hbox.addStretch()
         hbox.addWidget(self.vcrender)
         vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        self.load_as_zarr_widget = QCheckBox("Load TIFFs as Zarr")
+        self.load_as_zarr_widget.setChecked(self.load_as_zarr)
+        self.load_as_zarr_widget.clicked.connect(self.onLoadaszarrClicked)
+        hbox.addStretch()
+        hbox.addWidget(self.load_as_zarr_widget)
+        vbox.addLayout(hbox)
+
         hbox = QHBoxLayout()
         hbox.addWidget(QLabel("Volume color:"))
         self.color_editor = ColorEdit(self)
@@ -545,6 +557,10 @@ class TiffLoader(QMainWindow):
         self.vc_render = self.vcrender.isChecked()
         self.main_window.drawSlices()
 
+    def onLoadaszarrClicked(self, s):
+        self.load_as_zarr = self.load_as_zarr_widget.isChecked()
+        self.main_window.drawSlices()
+
     def corners(self):
         if not self.areAllRangesValid():
             return None
@@ -639,7 +655,10 @@ class TiffLoader(QMainWindow):
         old_volume = self.main_window.project_view.cur_volume
         # unloads old volume
         self.main_window.setVolume(None)
-        new_volume = Volume.createFromTiffs(project, tiff_directory, volume_name, ranges, "", filenames, callback, vcrender)
+        if self.load_as_zarr:
+            new_volume = CachedZarrVolume.createFromTiffs(project, tiff_directory, volume_name)
+        else:
+            new_volume = Volume.createFromTiffs(project, tiff_directory, volume_name, ranges, "", filenames, callback, vcrender)
 
         self.reading = False
         self.cancel = False
