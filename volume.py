@@ -451,14 +451,20 @@ class VolumeView():
             self.ijktf = (ijk[2], ijk[1], ijk[0])
         self.direction = direction
         if self.volume.data is not None:
-            self.trdata = self.volume.trdatas[direction]
+            if not self.volume.is_zarr:
+                self.trdata = self.volume.trdatas[direction]
+            else:
+                self.trshape = self.volume.trshape(direction)
             self.notifyModified()
         else:
             print("warning, VolumeView.setDirection: volume data is not loaded")
             self.trdata = None
 
     def dataLoaded(self):
-        self.trdata = self.volume.trdatas[self.direction]
+        if not self.volume.is_zarr:
+            self.trdata = self.volume.trdatas[self.direction]
+        else:
+            self.trshape = self.volume.trshape(self.direction)
 
     # call after direction is set
     def getDefaultZoom(self, window):
@@ -491,7 +497,10 @@ class VolumeView():
         self.zoom = self.getDefaultZoom(window)
         # self.minZoom = .5*self.zoom
         # self.maxZoom = 5*self.volume.averageStepSize()
-        sh = self.trdata.shape
+        if self.volume.is_zarr:
+            sh = self.trshape
+        else:
+            sh = self.trdata.shape
         # itf, jtf, ktf are ijk of focus point in tranposed grid
         # value at focus point is trdata[ktf,jtf,itf]
         itf = int(sh[2]/2)
@@ -508,9 +517,14 @@ class VolumeView():
     def setIjkTf(self, tf):
         o = [0,0,0]
 
+        if self.volume.is_zarr:
+            sh = self.trshape
+        else:
+            sh = self.trdata.shape
+
         for i in range(0,3):
             t = round(tf[i])
-            m = self.trdata.shape[2-i] - 1
+            m = sh[2-i] - 1
             t = min(m, max(t,0))
             o[i] = t
         self.ijktf = tuple(o)
@@ -994,7 +1008,7 @@ class Volume():
     # trdata is laid out in C style, so 
     # value at it,ij,ik is indexed trdata[kt,jt,it]
     def getSlices(self, ijkt, direction):
-        # print(self.trdata.shape, ijkt)
+        #print(f"Slicing at {ijkt}")
         depth = self.getSlice(2, ijkt, direction)
         xline = self.getSlice(1, ijkt, direction)
         inline = self.getSlice(0, ijkt, direction)

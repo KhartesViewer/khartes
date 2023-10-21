@@ -1424,10 +1424,8 @@ into and out of the viewing plane.
         apply_line_opacity = self.getDrawApplyOpacity("line")
         self.setMargin(0)
         self.window.setFocus()
-        # if self.axis == 1:
         z = self.getZoom()
         slc = volume.getSlice(self.axis, volume.ijktf)
-        # timera.time("getslice")
         # slice width, height
         sw = slc.shape[1]
         sh = slc.shape[0]
@@ -1443,8 +1441,8 @@ into and out of the viewing plane.
         # viewing window half width
         whw = ww//2
         whh = wh//2
-        # fi, fj = volume.ijInPlaneOfSlice(self.axis, volume.ijktf)
-        fi, fj = self.tijkToIj(volume.ijktf)
+        fi, fj = volume.volume.ijInPlaneOfSlice(self.axis, volume.ijktf)
+        #fi, fj = self.tijkToIj(volume.ijktf)
 
         out = np.zeros((wh,ww), dtype=np.uint16)
 
