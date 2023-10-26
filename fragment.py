@@ -1233,7 +1233,7 @@ class FragmentView(BaseFragmentView):
         # print("fr", frag_rect)
         if frag_rect is not None:
            (minx, miny), (maxx, maxy) = frag_rect
-           nk,nj,ni = self.cur_volume_view.trdata.shape
+           nk,nj,ni = self.cur_volume_view.trshape
            # if self.fragment.direction != self.cur_volume_view.direction:
            if not self.aligned():
                ni,nj,nk = nk,nj,ni
@@ -1567,8 +1567,8 @@ class FragmentView(BaseFragmentView):
                     # print("nulling changed_rect")
                     changed_rect = None
                 else:
-                    # nk,nj,ni = self.cur_volume_view.trdata.shape
-                    nk,nj,ni = self.cur_volume_view.trdata.shape
+                    # nk,nj,ni = self.cur_volume_view.trshape
+                    nk,nj,ni = self.cur_volume_view.trshape
                     # if self.fragment.direction != self.cur_volume_view.direction:
                     if not self.aligned():
                         ni,nj,nk = nk,nj,ni
@@ -1581,7 +1581,7 @@ class FragmentView(BaseFragmentView):
         '''
         if self.tri is not None:
             minx, miny, maxx, maxy = self.nodesBoundingBox(self.tri, None)
-            nk,nj,ni = self.cur_volume_view.trdata.shape
+            nk,nj,ni = self.cur_volume_view.trshape
             # if self.fragment.direction != self.cur_volume_view.direction:
             if not self.aligned():
                 ni,nj,nk = nk,nj,ni
@@ -1602,7 +1602,7 @@ class FragmentView(BaseFragmentView):
         self.oldzs = np.copy(self.fpoints[:,2])
         self.oldtri = self.tri
         timer.time("diff")
-        nk,nj,ni = self.cur_volume_view.trdata.shape
+        nk,nj,ni = self.cur_volume_view.trshape
         # if self.fragment.direction != self.cur_volume_view.direction:
         if not self.aligned():
             ni,nj,nk = nk,nj,ni
@@ -1841,7 +1841,7 @@ class FragmentView(BaseFragmentView):
         if self.zsurf is None:
             return
         faxis = vaxis
-        vnk, vnj, vni = self.cur_volume_view.trdata.shape
+        vnk, vnj, vni = self.cur_volume_view.trshape
         fnk, fnj, fni = vnk, vnj, vni
         if not self.aligned():
             faxis = 2-vaxis
@@ -1897,7 +1897,7 @@ class FragmentView(BaseFragmentView):
             return
         # if self.fragment.direction == self.cur_volume_view.direction:
         if self.aligned():
-            nk,nj,ni = self.cur_volume_view.trdata.shape
+            nk,nj,ni = self.cur_volume_view.trshape
             if vaxis == 0:
                 ivec = np.arange(nj)
                 jvec = self.zsurf[:,vaxisPosition]
@@ -1963,7 +1963,7 @@ class FragmentView(BaseFragmentView):
                 self.prevZslicePts = pts
                 return pts
         else:
-            vnk,vnj,vni = self.cur_volume_view.trdata.shape
+            vnk,vnj,vni = self.cur_volume_view.trshape
             fni,fnj,fnk = vnk,vnj,vni
             if vaxis == 0: # faxis = 2
                 # The so-called z slice is a relatively expensive
@@ -2001,7 +2001,7 @@ class FragmentView(BaseFragmentView):
                 '''
                 pts = np.indices((fnj, fni))
                 print(fni,fnj,fnk)
-                # print(self.cur_volume_view.trdata.shape, pts.shape, self.zsurf.shape)
+                # print(self.cur_volume_view.trshape, pts.shape, self.zsurf.shape)
                 pts = pts[:, np.rint(self.zsurf)==vaxisPosition].transpose()
                 # print(pts.shape)
                 # print(pts)
