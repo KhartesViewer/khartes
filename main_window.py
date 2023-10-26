@@ -4,6 +4,7 @@ import copy
 import os
 import json
 import time
+import numpy as np
 
 from PyQt5.QtWidgets import (
         QAction, QApplication, QAbstractItemView,
@@ -248,6 +249,47 @@ class InfillDialog(QDialog):
             self.edit.setStyleSheet("")
         else:
             self.edit.setStyleSheet("QLineEdit { color: red }")
+
+class PositionSetter(QWidget):
+    def __init__(self, main_window, parent=None):
+        super(PositionSetter, self).__init__(parent)
+        self.main_window = main_window
+        hlayout = QHBoxLayout()
+        self.setLayout(hlayout)
+        label = QLabel("Set Position:")
+        hlayout.addWidget(label)
+        zsetter = QSpinBox()
+        zsetter.setRange(0, 1000000)
+        zsetter.setMinimumWidth(80)
+        ysetter = QSpinBox()
+        ysetter.setRange(0, 1000000)
+        ysetter.setMinimumWidth(80)
+        xsetter = QSpinBox()
+        xsetter.setRange(0, 1000000)
+        xsetter.setMinimumWidth(80)
+        hlayout.addWidget(QLabel("Z:"))
+        hlayout.addWidget(zsetter)
+        hlayout.addWidget(QLabel("Y:"))
+        hlayout.addWidget(ysetter)
+        hlayout.addWidget(QLabel("X:"))
+        hlayout.addWidget(xsetter)
+        button = QPushButton()
+        button.setText("Move to position")
+        button.clicked.connect(self.onClicked)
+        hlayout.addWidget(button)
+        hlayout.addStretch()
+
+        self.zsetter = zsetter
+        self.ysetter = ysetter
+        self.xsetter = xsetter
+
+
+    def onClicked(self):
+        z = self.zsetter.value()
+        y = self.ysetter.value()
+        x = self.xsetter.value()
+        self.main_window.recenterCurrentVolume(np.array([x, y, z]))
+
 
 class ZInterpolationSetter(QWidget):
     def __init__(self, main_window, parent=None):
@@ -743,6 +785,7 @@ class MainWindow(QMainWindow):
         self.addFragmentsPanel()
         self.addSettingsPanel()
         self.addDevToolsPanel()
+        self.addVolumeAnnotationPanel()
 
         widget = QWidget()
         widget.setLayout(grid)
@@ -1027,6 +1070,37 @@ class MainWindow(QMainWindow):
         vlayout.addWidget(roundness)
         vlayout.addStretch()
         self.tab_panel.addTab(panel, "Dev Tools")
+
+    def addVolumeAnnotationPanel(self):
+        panel = QWidget()
+        vlayout = QVBoxLayout()
+        panel.setLayout(vlayout)
+
+        ivlayout = QVBoxLayout()
+        label = QLabel("Tools for controlling volume annotations")
+        label.setAlignment(Qt.AlignLeft)
+        ivlayout.addWidget(label)
+        
+        vlayout.addLayout(ivlayout)
+        possetter = PositionSetter(self)
+        vlayout.addWidget(possetter)
+        vlayout.addStretch()
+
+        # TODO: 
+        # - Button w/ Window to load in volume label data from zarr
+        # - Box w/ x, y, z radii and a "set radii" button
+        # - Button to open up window w/ lots of neighboring slices (with label overlays)
+        # - Table of volume labels from the annotation file in the current region
+        #   - label, pixel count, mean position, etc.
+        # - Button to generate putative new labels in current region
+        # - Table of possible new volume labels that can be annotated
+        #   - label, pixel count, mean position, mean signal, links to other annotations
+        #     (with pixel count of adjacency), selection for writing, entry for annotating
+        #     (prefilled), selection for splitting, entries for splitting
+        # - Button for splitting selected labels and rebuilding the table
+        # - Button for annotating selected labels
+
+        self.tab_panel.addTab(panel, "Volume Segmentation")
 
     def setLiveZsurfUpdate(self, lzu):
         if lzu == self.live_zsurf_update:
