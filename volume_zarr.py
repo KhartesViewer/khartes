@@ -187,7 +187,7 @@ class CachedZarrVolume():
         output_filename = name
         if not output_filename.endswith(".volzarr"):
             output_filename += ".volzarr"
-        filepath = project.volumes_path / output_filename
+        filepath = os.path.join(project.volumes_path, output_filename)
         if filepath.exists():
             err = f"{filepath} already exists"
             print(err)
