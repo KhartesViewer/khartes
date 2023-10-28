@@ -49,6 +49,9 @@ class ST(object):
         self.linearity = None
         self.coherence = None
 
+    def saveImage(self, fname):
+        timage = (self.image*65535).astype(np.uint16)
+        cv2.imwrite(str(fname), timage)
 
     def computeEigens(self):
         tif = self.image
@@ -117,7 +120,19 @@ class ST(object):
         coherence = ((lu-lv)/(lu+lv))**2
 
         # explicitly calculate normalized eigenvectors
+
         # eigenvector u
+        # eigenvector u is perpendicular to the layering.
+        # The y component of eigenvector u is always >= 0.
+        # This can lead to trouble when the layering is
+        # nearly parallel to the y axis, because then eigenvector u
+        # is nearly parallel to the x axis.  Small changes in the
+        # slope can lead to a change in sign of u's x component,
+        # in order to keep the y component sign >= 0.  The sign
+        # change in x will cause trouble if the u eigenvector is
+        # linearly interpolated, because when the x component changes
+        # sign, linear interpolation will send the x component to zero.
+        # Yikes!
         vu = np.concatenate((gxy, lu-gx2)).reshape(2,gxy.shape[0],gxy.shape[1]).transpose(1,2,0)
         vu[lu0,:] = 0.
         vulen = np.sqrt((vu*vu).sum(axis=2))
@@ -126,12 +141,20 @@ class ST(object):
         # print("vu", vu.shape, vu.dtype)
         
         # eigenvector v
+        # eigenvector v is parallel to the layering,
+        # and perpendicular to eigenvector u
         vv = np.concatenate((gxy, lv-gx2)).reshape(2,gxy.shape[0],gxy.shape[1]).transpose(1,2,0)
         vv[lu0,:] = 0.
         vvlen = np.sqrt((vv*vv).sum(axis=2))
         vvlen[vvlen==0] = 1
         vv /= vvlen[:,:,np.newaxis]
-        
+        # At this point, the y component of eigenvector v is always <= 0.
+        # But it would be better (more consistent) for the cross
+        # product of eigenvectors u and v to always have a consistent
+        # sign.  This can be ensured by making sure the x component
+        # of eigenvector v is always >= 0.
+        vv[vv[:,:,0]<0] *= -1
+
         self.lambda_u = lu
         self.lambda_v = lv
         self.vector_u = vu
@@ -355,12 +378,18 @@ class ST(object):
         # fs = np.zeros((2*ndx+cidxs.shape[0],))
         # print("fs", fs.shape)
         vslope = np.zeros((ndx), dtype=np.float64)
-        rweight = .1
         # rweight = nudge
         # rweight = .001
         # nudge = 1.
         self.global_cohs = None
         # self.global_dcohs_dy = None
+        self.global_ddangle_dy = None
+        # use_angle = True
+        # coh_mult = abs(nudge)
+        coh_thresh = .99
+        use_angle = nudge < 0
+        rweight = .1
+
         def fun(iys):
             # print("iys", iys)
             oys = iys[cidxs]
@@ -384,25 +413,64 @@ class ST(object):
             # self.global_dcohs_dy = (cohsd-cohs)/dyc
             # print("cohs", cohs)
             # make sure vvecs[:,0] is always > 0
-            vvecs[vvecs[:,0] < 0] *= 1
-            # nudge:
-            # vvecs[:,1] += 5.*grads[:,1]
-            vvzero = vvecs[:,0] == 0
-            vslope[:] = 0.
-            # vslope = np.zeros((vvecs.shape[0]), dtype=np.float64)
-            vslope[~vvzero] = vvecs[~vvzero,1]/vvecs[~vvzero,0]
-            # aslope = np.abs(vslope)**2
-            # aslopegt1 = aslope > 1.
-            # cohs[aslopegt1] /= aslope[aslopegt1]
+            vvecs[vvecs[:,0] < 0] *= -1
+            fs = np.zeros((2*ndx+ncidxs,))
+            vys = vvecs[:,1]
+            # if coh_mult < 19.:
+            #     cohs = cohs*(1.-(abs(vys)+.0001)**coh_mult)
+            cohs[np.abs(vys)>coh_thresh] = 0.
             self.global_cohs = cohs
 
-            yslope = (ys[1:]-ys[:-1])/lxs
-            # fs = np.array((2*ndx+cidxs.shape[0],))
-            # print("fs fun", fs.shape)
-            fs = np.zeros((2*ndx+ncidxs,))
-            fs[:ndx] = (vslope-yslope)*cohs
-            fs[ndx:2*ndx] = rweight*yslope
+            if use_angle:
+                vangle = np.arctan2(vvecs[:,1],vvecs[:,0])
+                yangle = np.arctan2(ys[1:]-ys[:-1], lxs)
+                dya = .01
+                yanglep = np.arctan2(dya+ys[1:]-ys[:-1], lxs)
+                ddangle = (yanglep-yangle)/dya
+                # ddangle[ddangle<-np.pi/2] += np.pi
+                # ddangle[ddangle>np.pi/2] -= np.pi
+                self.global_ddangle_dy = ddangle
+
+                dangle = vangle-yangle
+                dangle[dangle<-np.pi/2] += np.pi
+                dangle[dangle>np.pi/2] -= np.pi
+                fs[:ndx] = dangle*cohs
+
+                yslope = (ys[1:]-ys[:-1])/lxs
+                fs[ndx:2*ndx] = rweight*yslope
+                # fs[ndx:2*ndx] = rweight*yangle
+            else:
+                # nudge:
+                # vvecs[:,1] += 5.*grads[:,1]
+                vvzero = vvecs[:,0] == 0
+                vslope[:] = 0.
+                # vslope = np.zeros((vvecs.shape[0]), dtype=np.float64)
+                vslope[~vvzero] = vvecs[~vvzero,1]/vvecs[~vvzero,0]
+                # aslope = np.abs(vslope)**2
+                # aslopegt1 = aslope > 1.
+                # cohs[aslopegt1] /= aslope[aslopegt1]
+                self.global_cohs = cohs
+
+                yslope = (ys[1:]-ys[:-1])/lxs
+                # fs = np.array((2*ndx+cidxs.shape[0],))
+                # print("fs fun", fs.shape)
+                fs = np.zeros((2*ndx+ncidxs,))
+                fs[:ndx] = (vslope-yslope)*cohs
+                fs[ndx:2*ndx] = rweight*yslope
             fs[2*ndx:] = cys-oys
+
+            '''
+            print("vangle", vangle.shape)
+            print(vangle)
+            print("vvecs", vvecs.shape)
+            print(vvecs)
+            print("yangle", yangle.shape)
+            print(yangle)
+            print("dy")
+            print(ys[1:]-ys[:-1])
+            print("lxs", lxs.shape)
+            print(lxs)
+            '''
             # print("fs", fs.shape)
             # print(fs)
             # print("fs", fs)
@@ -420,15 +488,27 @@ class ST(object):
             # print(cidxs, odys)
             dfs = np.zeros((2*ndx+ncidxs,))
             # print("dfs", dfs.shape)
-            dfs[:ndx] = dys[:-1]
-            dfs[:ndx] += -dys[1:]
-            dfs[:ndx] *= self.global_cohs
-            # dfs[:ndx] += .5*dys[:-1]*self.global_dcohs_dy
-            # dfs[:ndx] += .5*dys[1:]*self.global_dcohs_dy
-            dfs[:ndx] /= lxs
-            dfs[ndx:2*ndx] = -rweight*dys[:-1]
-            dfs[ndx:2*ndx] += rweight*dys[1:]
-            dfs[ndx:2*ndx] /= lxs
+
+            if use_angle:
+                dfs[:ndx] = self.global_ddangle_dy*dys[:-1]
+                dfs[:ndx] += -self.global_ddangle_dy*dys[1:]
+                dfs[:ndx] *= self.global_cohs
+                # dfs[ndx:2*ndx] = -rweight*self.global_ddangle_dy*dys[:-1]
+                # dfs[ndx:2*ndx] += rweight*self.global_ddangle_dy*dys[1:]
+                dfs[ndx:2*ndx] = -rweight*dys[:-1]
+                dfs[ndx:2*ndx] += rweight*dys[1:]
+                dfs[ndx:2*ndx] /= lxs
+            else:
+                dfs[:ndx] = dys[:-1]
+                dfs[:ndx] += -dys[1:]
+                dfs[:ndx] *= self.global_cohs
+                # dfs[:ndx] += .5*dys[:-1]*self.global_dcohs_dy
+                # dfs[:ndx] += .5*dys[1:]*self.global_dcohs_dy
+                dfs[:ndx] /= lxs
+                dfs[ndx:2*ndx] = -rweight*dys[:-1]
+                dfs[ndx:2*ndx] += rweight*dys[1:]
+                dfs[ndx:2*ndx] /= lxs
+
             dfs[2*ndx:] = -odys
             # print("dfs", dfs)
             # print()
@@ -439,13 +519,24 @@ class ST(object):
             dfs = idfs
             dys = np.zeros((nx,))
             cohs = self.global_cohs
-            # dcohs_dy = self.global_dcohs_dy
-            dys[:ndx] = dfs[:ndx]*cohs/lxs
-            # dys[:ndx] += dcohs_dy
-            dys[1:nx] += -dfs[:ndx]*cohs/lxs
-            # dys[1:nx] += dcohs_dy
-            dys[:ndx] += -rweight*dfs[ndx:2*ndx]/lxs
-            dys[1:nx] += rweight*dfs[ndx:2*ndx]/lxs
+            if use_angle:
+                dys[:ndx] = self.global_ddangle_dy*dfs[:ndx]*cohs
+                dys[1:nx] += -self.global_ddangle_dy*dfs[:ndx]*cohs
+                # dys[1:nx] += rweight*self.global_ddangle_dy*dfs[ndx:2*ndx]
+                # dys[:ndx] += -rweight*self.global_ddangle_dy*dfs[ndx:2*ndx]
+                dys[:ndx] += -rweight*dfs[ndx:2*ndx]/lxs
+                dys[1:nx] += rweight*dfs[ndx:2*ndx]/lxs
+            else:
+                dys[:ndx] = dfs[:ndx]*cohs/lxs
+                dys[1:nx] += -dfs[:ndx]*cohs/lxs
+
+                # dcohs_dy = self.global_dcohs_dy
+                # dys[:ndx] += dcohs_dy
+                # dys[1:nx] += dcohs_dy
+                dys[:ndx] += -rweight*dfs[ndx:2*ndx]/lxs
+                dys[1:nx] += rweight*dfs[ndx:2*ndx]/lxs
+
+
             # Notice: not +=
             dys[cidxs] = -dfs[2*ndx:]
             # print("dys", dys)
@@ -478,8 +569,8 @@ class ST(object):
         print(self.global_cohs)
         # print(self.global_dcohs_dy)
         # lo = jac(y0s)
-        for i in range(nx):
-            # for i in range(2):
+        # for i in range(nx):
+        for i in range(2):
             y1 = y0s.copy()
             y1[i] += .001
             f1 = fun(y1)
@@ -490,20 +581,33 @@ class ST(object):
         '''
 
         '''
+        maxx = 3
+        # maxx = 100
+
         f0 = fun(y0s)
-        for i in range(nx):
+
+        for i in range(min(maxx,nx)):
+            y1 = y0s.copy()
+            y1[i] += .001
+            f1 = fun(y1)
+            print(f1-f0)
+        print()
+
+        for i in range(min(maxx,nx)):
             y1 = np.zeros((y0s.shape))
             y1[i] += .001
             print(matvec(y1))
         print()
 
-        for i in range(2*ndx+ncidxs):
+        for i in range(min(maxx,2*ndx+ncidxs)):
             f1 = np.zeros((2*ndx+ncidxs))
             f1[i] += .001
             print(rmatvec(f1))
+        print()
         '''
 
         r = least_squares(fun, y0s, jac=jac)
+        # r = least_squares(fun, y0s)
 
         # if self.global_cohs is not None:
         #     print("global_cohs")
@@ -711,6 +815,13 @@ class ST(object):
 
         self.lambda_u_interpolator = ST.createInterpolator(self.lambda_u)
         self.lambda_v_interpolator = ST.createInterpolator(self.lambda_v)
+        # TODO: vector_u can abruptly change sign in areas of
+        # near-vertical layers, in whichy case linear interpolation
+        # of vector_u is invalid.  To avoid this, vector_u (and vector_v) 
+        # should be computed, instead of interpolated, at each interpolation
+        # point, from interpolated lambda_u and lambda_v.  Or do
+        # the lambdas need to be computed instead of interpolated
+        # as well?
         self.vector_u_interpolator = ST.createInterpolator(self.vector_u)
         self.vector_v_interpolator = ST.createInterpolator(self.vector_v)
         self.grad_interpolator = ST.createInterpolator(self.grad)

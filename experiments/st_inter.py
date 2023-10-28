@@ -55,6 +55,11 @@ class MainWindow(QMainWindow):
         tifname = r"C:\Vesuvius\scroll 1 2000-2030\02015.tif"
         outdir = pathlib.Path(r"C:\Vesuvius\Projects\tnorm")
         nrrdname = outdir / '02015.nrrd'
+        '''
+        pdir = pathlib.Path(r"C:\Vesuvius\Projects\fourth_easy.khprj")
+        tifname = pdir / "st_debug.tif"
+        nrrdname = pdir / "st_debug.nrrd"
+        '''
 
         print("loading tif")
         self.viewer.loadTIFF(tifname)
@@ -71,7 +76,9 @@ class MainWindow(QMainWindow):
             self.st.loadEigens(nrrdname)
         '''
         self.st.loadOrCreateEigens(nrrdname)
-        self.testInterp2d()
+        # for testing
+        # self.st.computeEigens()
+        # self.testInterp2d()
 
     def testInterp2d(self):
             pt1 = (4235, 4495)
@@ -175,6 +182,11 @@ class ImageViewer(QLabel):
             ixy = self.wxyToIxy(wxy)
             print("pt 1 at",ixy)
             self.pt1 = ixy
+            # for testing
+            # self.pt1 = (416.0, 217.785766015625)
+            # self.pt1 = (416.+1/100, 217.78)
+            # self.pt1 = (415.0, 217.78)
+            # self.pt1 = (416.00001, 217.78)
             self.drawImage()
         elif e.key() == Qt.Key_2:
             # pt1 = (4235, 4495)
@@ -184,13 +196,22 @@ class ImageViewer(QLabel):
             ixy = self.wxyToIxy(wxy)
             print("p2 1 at",ixy)
             self.pt2 = ixy
+            # for testing
+            # self.pt2 = (751.0, 279.28)
+            # self.pt2 = (751.+1/1000, 279.2841796875)
+            # self.pt2 = (751.0001, 279.28)
+            # self.pt2 = (752.0, 279.28)
+            self.drawImage()
             st = self.getST()
             if st is None:
                 return
             # for nudge in (-1., -.5, 0, .5, 1.):
             # for nudge in (0., .05, .1):
             # for nudge in (0., -10, 10):
-            for nudge in (0.,):
+            # for nudge in (0.,):
+            for nudge in (1, -1):
+            # for nudge in (-10, -1, 1, 10):
+            # for nudge in (.95, .98, .99, 1.):
                 y = None
                 if self.pt1 is not None and self.pt2 is not None:
                     y = st.interp2d(self.pt1, self.pt2, nudge)
@@ -452,20 +473,53 @@ class ImageViewer(QLabel):
             # interpolators expect y,x ordering
             dpir = dpi[:,:,::-1]
             # print ("dpi", dpi.shape, dpi.dtype, dpi[0,5])
+            uvs = st.vector_u_interpolator(dpir)
             vvs = st.vector_v_interpolator(dpir)
             # print("vvs", vvs.shape, vvs.dtype, vvs[0,5])
             # coherence = st.coherence_interpolator(dpir)
             coherence = st.linearity_interpolator(dpir)
+            # testing
+            # coherence[:] = .5
             # print("coherence", coherence.shape, coherence.dtype, coherence[0,5])
             linelen = 25.
-            lvecs = linelen*vvs*coherence[:,:,np.newaxis]
+
+
+            ''' TESTING
+
             # print("lvecs", lvecs.shape, lvecs.dtype, lvecs[5,5])
-            x0 = dpw-lvecs
+            # x0 = dpw-lvecs
+            x0 = dpw
+            x1 = dpw.astype(np.float64)
+            uls = st.lambda_u_interpolator(dpir)
+            print("uls", uls.shape, uls.dtype, uls[5,5])
+            print("x1", x1.shape, x1.dtype, x1[5,5])
+            linelen = 10000.
+            lvecs = linelen*uls
+            x1[:,:,0] += lvecs
+            vls = st.lambda_v_interpolator(dpir)
+            lvecs = linelen*vls
+            x1[:,:,1] += lvecs
+
+            lines = np.concatenate((x0,x1), axis=2)
+            lines = lines.reshape(-1,1,2,2).astype(np.int32)
+            cv2.polylines(outrgb, lines, False, (0,255,0), 1)
+
+            '''
+
+            lvecs = linelen*vvs*coherence[:,:,np.newaxis]
+            x0 = dpw
             x1 = dpw+lvecs
 
             lines = np.concatenate((x0,x1), axis=2)
             lines = lines.reshape(-1,1,2,2).astype(np.int32)
             cv2.polylines(outrgb, lines, False, (255,255,0), 1)
+
+            lvecs = linelen*uvs*coherence[:,:,np.newaxis]
+
+            x1 = dpw+lvecs
+            lines = np.concatenate((x0,x1), axis=2)
+            lines = lines.reshape(-1,1,2,2).astype(np.int32)
+            cv2.polylines(outrgb, lines, False, (0,255,0), 1)
 
             points = dpw.reshape(-1,1,1,2).astype(np.int32)
             cv2.polylines(outrgb, points, True, (0,255,255), 3)
@@ -477,7 +531,10 @@ class ImageViewer(QLabel):
             points = points.reshape(-1,1,1,2)
             # colors = ((255,255,255), (255,0,255), (0,255,0))
             # colors = ((255,0,255), (0,255,0), (255,255,255), (0,255,0), (255,0,255), )
-            colors = ((0,255,0),)
+            # colors = ((255,0,255), (255,0,255), (255,255,255), (0,255,0), (0,255,0), )
+            # colors = ((255,0,255), (255,0,0), (0,255,0), (0,255,255), )
+            # colors = ((0,255,0),)
+            colors = ((255,255,255), (255,0,255), )
             # color = colors[(i//2)%len(colors)]
             color = colors[i%len(colors)]
 

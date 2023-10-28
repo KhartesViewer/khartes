@@ -73,6 +73,7 @@ class DataWindow(QLabel):
         self.panningCursor = Qt.ClosedHandCursor
         self.upperLeftCursor = Qt.SizeFDiagCursor
         self.upperRightCursor = Qt.SizeBDiagCursor
+        self.waitCursor = Qt.WaitCursor
         # c = QCursor(Qt.CrossCursor)
         # px = c.pixmap()
         # print("pixmap", px)
@@ -399,6 +400,7 @@ class DataWindow(QLabel):
                 tijk = self.ijToTijk(ij)
                 # print("adding point at",tijk)
                 if self.currentFragmentView() is not None:
+                    self.setWaitCursor()
                     self.window.addPointToCurrentFragment(tijk)
                     nearbyNode = self.findNearbyNode(wxy)
                     if not self.setNearbyNode(nearbyNode):
@@ -609,6 +611,7 @@ class DataWindow(QLabel):
             nij[0] += di
             nij[1] += dj
             self.setNearbyNodeIjk(nij)
+            self.setWaitCursor()
             self.window.drawSlices()
         elif self.isMovingTiff:
             if self.ntStartPoint is None:
@@ -766,6 +769,10 @@ class DataWindow(QLabel):
     def nodeMovementAllowedInK(self):
         return False
 
+    def setWaitCursor(self):
+        self.setCursor(self.waitCursor)
+        # self.window.app.processEvents()
+
     # Note that this is called from MainWindow whenever MainWindow
     # catches a keyPressEvent; since the DataWindow widgets never
     # have focus, they never receive keyPressEvents directly
@@ -822,6 +829,7 @@ class DataWindow(QLabel):
                 nij[0] -= d[0]
                 nij[1] -= d[1]
                 nij[2] -= d[2]
+                self.setWaitCursor()
                 self.setNearbyNodeIjk(nij)
         elif not self.isMovingNode and (key == Qt.Key_Backspace or key == Qt.Key_Delete):
             # print("backspace/delete")
@@ -831,6 +839,7 @@ class DataWindow(QLabel):
             # print("ijk", ijk)
             # tijk = self.ijToTijk(ijk[0:2])
             # print("tijk", tijk)
+            self.setWaitCursor()
             self.window.deleteNearbyNode()
             # this repopulates local node list
             self.drawSlice()
@@ -863,6 +872,7 @@ class DataWindow(QLabel):
             gxy = self.mapToGlobal(QPoint(*xy))
             QCursor.setPos(gxy)
         elif self.inAddNodeMode() and not self.isMovingNode and self.axis in (0,1) and key in (Qt.Key_BracketLeft, Qt.Key_BracketRight, Qt.Key_BraceLeft, Qt.Key_BraceRight):
+            self.setWaitCursor()
             ijk = self.getNearbyNodeIjk()
             if ijk is None:
                 pt = self.mapFromGlobal(QCursor.pos())
@@ -876,6 +886,7 @@ class DataWindow(QLabel):
             # self.window.drawSlices()
             self.autoExtrapolate(sign, ij)
         elif not self.isMovingNode and self.axis in (0,1) and key == Qt.Key_I:
+            self.setWaitCursor()
             self.autoInterpolate()
         elif key == Qt.Key_T:
             pt = self.mapFromGlobal(QCursor.pos())
@@ -888,6 +899,7 @@ class DataWindow(QLabel):
             mxy = (pt.x(), pt.y())
             self.setNearbyTiffAndNode(mxy)
         elif key == Qt.Key_R:
+            self.setWaitCursor()
             self.setWorkingRegion()
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
@@ -1028,6 +1040,11 @@ class DataWindow(QLabel):
         st = ST((slc[int(ij0[1]):int(ij1[1]),int(ij0[0]):int(ij1[0])]).astype(np.float64)/65535.)
         print ("st created", st.image.shape)
         st.computeEigens()
+        '''
+        path = self.window.project_view.project.path
+        st.saveImage(path / "st_debug.tif")
+        st.saveEigens(path / "st_debug.nrrd")
+        '''
         # print ("eigens computed")
         # dij = (ij[0]-ij0[0], ij[1]-ij0[1])
         dija = (ija[0]-ij0[0], ija[1]-ij0[1])
