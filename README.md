@@ -24,9 +24,8 @@ This next video provides a more extensive introduction to khartes.
 Note that it begins with a 60-second
 intro sequence which contains no narration, but which quickly highlights some of khartes' features.
 After the intro, the video follows a more traditional format, with a voice-over and a demo.
-The entire video
-is about 30 minutes long.  There is no closed captioning, but the script for the video can
-be found in the file demo1_script.txt.
+The entire video is about 30 minutes long.  There is no closed captioning, but the script for the video
+can be found in the file demo1_script.txt.
 
 (If you click on the image below, you will be taken to vimeo.com to watch the video)
 
@@ -36,7 +35,7 @@ be found in the file demo1_script.txt.
 
 You should be able to run khartes simply by
 cloning the repository, making sure you have the proper dependencies
-(see "anaconda_installation.txt" for a list), and then typing `python khartes.py`.
+(see [anaconda_installation.txt](anaconda_installation.txt) for a list), and then typing `python khartes.py`.
 
 When khartes starts, it displays some explanatory text on the right-hand side of the interface
 to help you get started.  This text is fairly limited; you might want to watch the videos above to get a better
@@ -46,8 +45,7 @@ idea how to proceed, and read the Manual/Tutorial below.
 
 Ideally, khartes should come with both a user manual and a tutorial (and perhaps even a "cookbook"),
 but at this point there exists only a single document, the one you are now reading:
-a tutorial that also tries
-to act as a user manual of sorts.
+a tutorial that also tries to act as a user manual of sorts.
 
 This tutorial covers the following steps:
 * Creating a project
@@ -81,18 +79,16 @@ khartes does not download TIFF files over the internet.
 The `File / Create volume from TIFF files...` menu item brings up a dialog box where
 you can specify the TIFF files you want to include in your
 data volume, as well as the x and y ranges of the pixels within the TIFF images.
-A status bar at the bottom of
-the dialog box shows how large the
-resulting data volume will be in gigabytes.  **Be aware that
-every time you run khartes, the entire
+A status bar at the bottom of the dialog box shows how large the
+resulting data volume will be in gigabytes.
+**Be aware that every time you run khartes, the entire
 data volume will be read into the physical memory (RAM) of your
 computer, so be careful how large you make the volume.**
 
 The first step, of course, is to find your TIFF files.
-If your tiff files are in a `.volpkg` directory, you can
+If your TIFF files are in a `.volpkg` directory, you can
 find them under the `volumes` sub-directory.
-Use
-the file selector in the TIFF loader dialog box to locate
+Use the file selector in the TIFF loader dialog box to locate
 the *directory* that contains all the TIFF files.  Once
 you double-click on the *directory* name (not on the
 individual TIFF files inside that directory), the TIFF loader
@@ -116,7 +112,7 @@ You can also specify a `Step`, which is the step
 size (distance) between the pixels that will be imported from the original
 image.  One way to
 think of `Step` is as a decimation factor.  A step
-of 1 means use every pixel, 2 means use every 2nd pixel,
+of 1 means use every pixel, 2 means use every second pixel,
 and so on.  Choosing a higher step size reduces the
 size of the data volume over a given range,
 but the loss of resolution, even going from a step size
@@ -126,7 +122,7 @@ segment the data.
 The main use of `Step` is to allow an
 overview of the data, in order to determine which areas will
 merit a closer examination later at a higher resolution.  For instance,
-if you set a step size of 10 in all 3 directions (x, y, and z),
+if you set a step size of 10 in all three directions (x, y, and z),
 you can reduce an entire scroll, typically 1.5 Tb or so,
 to a very manageable 1.5 Gb.  The resolution of such a volume
 is much too low for segmentation, but it is good enough to give you
@@ -134,14 +130,14 @@ an idea of where the interesting areas of the scroll are.
 
 **As the first step of this tutorial**, create a data volume that
 encompasses your entire set of TIFF files.  Use a `Step` of 10
-in all 3 directions, in order to keep the data volume small.
+in all three directions, in order to keep the data volume small.
 
 Name this new volume `all10`, to remind yourself that the volume
 encompasses all the data, but with a decimation factor of 10.
 Set the color to something you like.
 
 When you press the `Create` button, if you get a warning that your
-data volume will be large, check to make sure that all 3 `Step`
+data volume will be large, check to make sure that all three `Step`
 values are set to 10.
 
 This process will take a significant fraction of an hour, depending on
@@ -164,7 +160,7 @@ is quite a bit faster than reading all those TIFFs.
 Now that you have loaded a data set, you can more easily explore the
 user interface of khartes.
 
-Referring to the figure above, the main areas where you will work are the 3 *Data Slices*
+Referring to the figure above, the main areas where you will work are the three *Data Slices*
 on the left side, and the *Fragment View* in the upper right.
 The *Control Area* in the lower right has tabs that let you
 make adjustments to volumes, fragments, and display parameters.
@@ -174,8 +170,8 @@ of the cursor.  And at the top is the *Menu*, which handles file import and expo
 At the moment, your *Fragment View* is blank, because you have not yet created
 any fragments.
 
-Instead, focus on the 3 Data Slices.  These 3 windows represent 3 mutually
-perpendicular slices through the 3D data volume.  The 3 slices meet in the
+Instead, focus on the three Data Slices.  These three windows represent three mutually
+perpendicular slices through the 3D data volume.  The three slices meet in the
 middle of each window, where the crosshairs intersect.
 
 #### Staying oriented
@@ -187,13 +183,13 @@ window is a label (text) that gives the current position of the given slice.
 For instance, the upper slice, which corresponds to one of the original TIFF files,
 has a text label in the upper left indicating which image (TIFF file) it is from.
 
-2) Below the 3 Data Slices is the Status Bar.  This displays the current
+2) Below the three Data Slices is the Status Bar.  This displays the current
 3D location of the cursor.  For instance, if you move the cursor around inside of the
 top Data Slice, and watch the Status Bar, you will see that the IMG (image) coordinate
 remains constant (and is the same as in the label in the data slice), while
 the X and Y coordinates change.
 
-3) Each of the 3 Data Slices has a colored border.  And inside each Data Slice, the
+3) Each of the three Data Slices has a colored border.  And inside each Data Slice, the
 two intersecting crosshairs are of different colors.  These colors act as an additional orientation
 cue.  Think, for a moment, about the red data slice (the one with a red border).  Somewhere in 3D
 space its plane intersects the plane of the green data slice.  These two planes are mutually
@@ -208,7 +204,7 @@ you know where the red slice crosses it.
 To navigate within the data volume, simply hold down the left mouse button while inside one
 of the Data Slice windows, and drag the slice.  The two other slices will also change, to ensure that
 the mutual intersection point of the three slices remains in the middle of the crosshairs
-of all 3 slices.
+of all three slices.
 
 You can use the mouse scroll wheel while in any of the Data Slice windows to zoom in or out.
 The crosshairs are always the center of the zoom; the mutual intersection point of the three
@@ -218,7 +214,7 @@ slice planes does not change during zooming.
 
 You can use the four arrow keys to move the current slice (the one where the mouse cursor is
 currently located).  As when navigating with the mouse, the other slices will change to ensure
-that their mutual intersection point remains in the centers of all 3 pairs of crosshairs.
+that their mutual intersection point remains in the centers of all three pairs of crosshairs.
 
 You can also use the page-up and page-down keys to increment or decrement the slice in the current
 window.  To see this, watch the text label in the upper left corner of the current Data Slice, and see
@@ -227,12 +223,12 @@ how this changes as you press page-up and page-down.
 If your keyboard offers auto-repeat, you can hold down an arrow key, or a page-up/down key, and
 watch as the current slice slowly moves in the indicated direction.
 
-The `a`, `s`, `w`, and `m` keys behave the same as the arrow keys, and `e` and `c` behave the
+The `a`, `s`, `w`, and `d` keys behave the same as the arrow keys, and `e` and `c` behave the
 same as the page-up/down keys.
 
 #### Getting a feel for 3D navigation
 
-To fully explain the relative orientations of the 3 slices, and how to navigate
+To fully explain the relative orientations of the three slices, and how to navigate
 through them, would require many diagrams
 that I haven't had time to draw yet.  So for now, try to get a feeling for how the navigation works by
 dragging slices, observing the labels in the upper left of each slice, and observing how the 3D
@@ -266,9 +262,8 @@ must set them all back to 1 now.
 
 Move the TIFF loader box to the side, so you can see the data slices.
 Now zoom out, so that you can see your entire data volume (as mentioned
-before, this assumes
-that you are following the tutorial exactly, so that this data volume is
-a low-resolution version of the entire scroll).
+before, this assumes that you are following the tutorial exactly, so that
+this data volume is a low-resolution version of the entire scroll).
 
 There should be a box hugging the outside of the data volume, drawn in
 the "Volume color" shown in the TIFF loader.
@@ -305,8 +300,8 @@ The program `vc_layers` outputs TIFF files that contain the flattened
 layers adjacent to a given segment.  These files have a different
 orientation than the TIFF files usually read by khartes.  To alert
 khartes to this difference, so that the data volume created from these
-`vc_layer` TIFFs
-is properly oriented, put a check mark in the box labeled `TIFFs are from vc_layers`.
+`vc_layer` TIFFs is properly oriented, put a check mark in the box
+labeled `TIFFs are from vc_layers`.
 
 ### Control Area: Volumes
 
@@ -356,7 +351,7 @@ appear in the list of fragments.
 At this point you can begin adding points (called nodes) to define
 the fragment.  To add a node, position the cursor in one of the
 Data Slices, hold down the shift key (so the cursor turns into
-crosshairs), and click with the left mouse button.
+crosshairs), and press the left mouse button.
 
 It would take a lot of words and pictures to describe the process of adding
 nodes to create a fragment; better to watch this 2-minute video (this
@@ -372,22 +367,22 @@ was more awkward than it is now.
 Also, the video does not describe the user's key presses and button
 presses.
 
-But here are some general user-interface aspects that you should
-have gathered from the video.
+Here are some general user-interface aspects that you should
+have gathered from the video:
 
-Each node that the user creates is added to a surface (the fragment);
-this surface is displayed in map view in the Fragment View.  Of course, if
-the new nodes all form a line, only a line, rather than a surface,
-is shown in the Fragment view.  Once the user creates nodes
+* Each node that the user creates is added to a surface (the fragment);
+this surface is displayed in the map view under the Fragment View.  Of course, if
+the new nodes form a line, rather than a surface,
+it is shown in the Fragment View.  Once the user creates nodes
 in more than one Data Slice, a surface can be created, and
 this surface is shown in the Fragment View.
 
-In each Data Slice, the fragment is drawn as a line; this represents
+* In each Data Slice, the fragment is drawn as a line; this represents
 the intersection between the fragment and the Data Slice.  If any nodes
 lie on the plane of the slice, they are shown as red circles.  When
 the cursor passes near a node, the node turns from red to cyan.
 
-The color of the fragment line in the Data Slices, and the color of
+* The color of the fragment line in the Data Slices, and the color of
 the triangular mesh in the Fragment View, match the color of the
 fragment, as shown in the Fragments tab in the Control Area.
 
@@ -401,8 +396,7 @@ run into it by accident.
 
 ### Normal Mode and Add-Node Mode
 
-Khartes has
-two modes of user interaction in the data views:
+Khartes has two modes of user interaction in the data views:
 "normal" mode, and "add-node" mode.  In normal mode, the
 cursor usually looks like a hand (unless it is near a node), and
 to add a node, you need to hold down the shift key, so the cursor
@@ -410,12 +404,12 @@ turns into crosshairs, before pressing the left mouse button.
 
 In "add-node" mode, things are reversed.  The cursor always
 takes the form of crosshairs, and to add a node, you simply need to
-click with the left mouse button.
+press the left mouse button.
 
 There are two ways to toggle between the two modes.  One way is to
 click on the button, to the right of the `Files` menu, that contains
-a picture of crosshairs.  When this button is light, khartes is in
-normal mode, and when it is dark, khartes is in add-node mode.
+a crosshairs icon.  When this button is enabled, khartes is in
+normal mode, and when it is disabled, khartes is in add-node mode.
 
 The other, more convenient, way to toggle between normal and add-node mode
 is to quickly press and release the shift button.  You can see which
@@ -433,10 +427,9 @@ is a region in your high-resolution data volume that is possible to segment.
 
 What you are looking for is a region where the papyrus sheets, as
 seen in the top Data Slice, are not too tilted (you want an angle
-flatter than 45 degrees or so).  This region doesn't have
-to be very large, but if you can't
-find even a small area, then you may
-need to create another high-resolution data volume.
+flatter than 45 degrees or so).  This region doesn't have to be very large,
+but if you can't find even a small area, then you may need to create
+another high-resolution data volume.
 
 ### Building and modifying the segment
 
@@ -453,23 +446,20 @@ place? You have a couple of options.
 It is very easy to delete a node.  Simply move the cursor over
 the node, so that the node turns cyan.
 At this point, simply hit the "Delete" or "Backspace" key (either will work).
-But bear this in mind: **There is currently no "undo" in khartes!**
+But bear in mind **deleting a node will remove it permanently**.
 
 #### Moving a node
 
 More often, you want to move a node instead of deleting it.  This is likewise
 easy to do, assuming you are in "normal mode".  Again, move the cursor to the
 node you are interested in moving; the node will turn cyan.  (Notice that
-the node
-will be drawn in cyan
-in all the data windows where it is visible;
-this is often a handy way of keeping track of
-which node is which, in the different views).
+the node will be drawn in cyan in all the data windows where it is visible;
+this is often a handy way of keeping track of which node is which in
+the different views).
 
 Once the node has turned cyan, there are a couple of ways to move it.
 
-If you are
-working in a Data Slice, you can now press the left mouse button,
+If you are working in a Data Slice, you can now press the left mouse button,
 hold it down, and drag the node to where you want it.  Be aware, however, that
 you cannot use the mouse to drag nodes in the Fragment View (this is to
 prevent accidents).
@@ -485,15 +475,14 @@ top left Data Slice, and see how the node moves in the data slice while you pres
 page-up or page-down in the Fragment View).
 
 **The key capability of khartes is that as you move nodes, the data image in the
-Fragment View updates
-interactively, so you can instantly judge the quality of your segmentation.**
+Fragment View updates interactively, so you can instantly judge the quality of
+your segmentation.**
 
 #### What the cursor is telling you
 
-As you worked, you probably noticed that the cursor often changed its appearance,
-depending on where it was in the slice.  The rule is that the shape
-of the cursor tells you
-what will happen when you push the left mouse button.
+As you may have noticed, the cursor often changes its appearance,
+depending on where it is in the slice.  The rule is that the shape
+of the cursor tells you what will happen when you press the left mouse button.
 
 Here are the various shapes, and what they mean.  Someday I will attach
 pictures of the different cursors, and not just describe them in words.
@@ -524,12 +513,12 @@ corner to change the shape of the volume.
 
 #### Auto-segmentation
 
-Auto-segmentation is the process
-where khartes automatically creates new points, under your guidance.
+Auto-segmentation is the process where khartes automatically creates new
+nodes under your guidance.
 
 <img src="images/autoseg.jpg" width="300" />
 
-*Example of auto-segmentation.  The user added the left-most point; the others
+*Example of auto-segmentation.  The user added the left-most node; the others
 were created by the algorithm.*
 
 Auto-segmentation is quite easy to use, but it often makes mistakes, so you
@@ -539,7 +528,7 @@ The prerequisites are:
 
 * Have a fragment that is active (one that is accepting new nodes)
 
-* Make sure you are in add-node mode (the cursor is shaped like a cross)
+* Make sure you are in add-node mode (the cursor is shaped like a crosshair)
 
 * You need to be working in one of the two top windows in the Data Slices area.
 
@@ -548,8 +537,8 @@ direction to go.  If the cursor is near
 an existing node (the node has turned cyan), the auto-segmentation will start
 at that node.  Otherwise, it will start at the location of the cursor.
 
-To automatically create new points to the right of the starting point, press
-the right bracket or brace key (`]` or `}`); either key will work.  To create new points to the
+To automatically create new nodes to the right of the first one, press
+the right bracket or brace key (`]` or `}`); either key will work.  To create new nodes to the
 left, press the left bracket or brace key (`[`] or `{`).
 
 The auto-segmentation algorithm will go as far as it can within the current view;
@@ -559,19 +548,18 @@ Note that it will not venture beyond the area that is visible in the Data Slice.
 It is a good idea, until you get a feeling for its capabilities,
 to work on a fairly zoomed-in
 area, in order to limit how far the algorithm goes.  This means you
-will not
-have to delete as many points if the algorithm goes
+will not have to delete as many nodes if the algorithm goes
 astray (as it often does).
 
-Note that the algorithm is quite fast; it often adds the new points within
-a couple of seconds (longer if the surface is large, due to khartes updating
-the surface to account for the new points).  If nothing happens within 10 to 15 seconds,
+Note that the algorithm is quite fast; it often adds new nodes within
+a couple of seconds (longer for a larger surface, due to khartes updating
+the surface to account for the new nodes).  If nothing happens within 10 to 15 seconds,
 check to make sure that you meet the prerequisites above.
 
 If you are unhappy with the results, or with a portion of the results, you can
-delete bad points using the `delete` or `backspace` key.  Handy hint: if deleting
-points is slow, this means that khartes is taking a long time to update
-the surface after each point is deleted.
+delete bad nodes using the `delete` or `backspace` key.  Handy hint: if deleting
+nodes is slow, this means that khartes is taking a long time to update
+the surface after each node is deleted.
 See the section below on "Advanced Topic: Live Updates"
 for details on how to temporarily turn this off, so deleting nodes goes faster.
 
@@ -586,9 +574,9 @@ Khartes provides a number of hot keys (keys that you can press to take some acti
 
 * **x**: This extremely useful hot key was suggested by the Vesuvius Challenge Segmentation Team.
 If you place the cursor over a node, so that the node changes to cyan, and then press `x`, the view
-will shift so as to place the designated node in the center of all 3 data slices.  If you press
+will shift so as to place the designated node in the center of all three data slices.  If you press
 `x` when you are not close to a node, the view will shift to place the pixel under the cursor
-into the center of the 3 slices.  This is very
+into the center of the three slices.  This is very
 helpful if you want to examine the data volume near the node (or pixel), or add other nodes nearby.  Think
 of `x` as meaning "X marks the spot", or representing crosshairs (slightly tilted).
 
@@ -604,10 +592,10 @@ entitled "Advanced Topic: Control Area: Settings" for information on how to chan
 behavior.
 
 * **delete** and **backspace**: If you place the cursor over a node, so that the node turns cyan,
-you can delete the node by pressing either of these two keys.  As mentioned above, khartes does
-not have an "undo" function, so think carefully before doing this.
+you can delete the node by pressing either of these two keys.  As mentioned above, deleting a node
+will delete it permanently, so think carefully before doing this.
 
-* **left/right brace/bracket** These keys bring khartes' new auto-segmentation
+* **left/right brace/bracket** These keys bring khartes' auto-segmentation
 capability into play.  See the section above on "Auto-segmentation" for details.
 
 * **v**: This hot key controls the visibility of the mesh that is overlaid on the
@@ -621,8 +609,7 @@ Tracking cursors are described in the "Tracking Cursors" section below.
 
 * **l**: This key (small L) turns on and off an advanced capability called "live updates".
 Live updates are turned on by default; the concept is described in the
-"Advanced topic: Live Updates"
-section below.
+"Advanced topic: Live Updates" section below.
 
 ### General segmentation workflow
 
@@ -653,8 +640,7 @@ have created a fragment for one sheet, you can view that fragment
 even while working on the next sheet,
 using it as a kind of guide.
 So one strategy is to create fragments on a series of sheets that are
-parallel to
-each other, starting with the easiest.
+parallel to each other, starting with the easiest.
 
 There are some areas in the scroll data volume that I find
 too difficult to fragment.  In these areas, sheets appear, disappear, and
@@ -690,7 +676,7 @@ look in the Fragment Viewer to see if there are any existing nodes near
 the line you are working on.
 If there are, and it is feasible, move these existing nodes
 onto the line.  This is to avoid the situation where a node on the line
-and a node just off of the line end up close to each other, which can
+and a node next to the line end up too close to each other, which can
 cause undesirable waviness in the fragment.
 
 <img src="images/good start.JPG" width="800" />
@@ -706,7 +692,7 @@ The dark spot in the upper right quadrant is
 due to a lack of nodes to constrain the interpolation.
 
 **Step 3**: Pause, verify, repair.  The most important criterion for
-a good fragment is that the horizontal fibers (as seen in the fragment view)
+a good fragment is that the horizontal fibers (as seen in the Fragment View)
 are continuous, since the horizontal fibers (also called the circumferential fibers)
 are the ones that are most likely to contain text.
 Where horizontal and vertical fibers cross, try
@@ -733,8 +719,7 @@ more repair work you will have to do later.
 
 *The surface has been repaired;* horizontal fibers are now continuous.  The inline and crossline slices show
 the location of the original (magenta) and repaired (cyan) surfaces.  Note that these overlap in one half
-of the slice,
-but diverge in the other half.
+of the slice, but diverge in the other half.
 
 ### Workflow notes
 
@@ -762,7 +747,7 @@ by keeping your triangles regular and local.
 
 So, when segmenting, start in the center of a fragment
 and work your way out, keeping a fairly regular mesh, instead
-of trying to create a huge surface first thing.  This practice
+of trying to create a huge surface.  This practice
 will also make it less likely that you stray onto the wrong
 sheet of the scroll in difficult areas.
 
@@ -838,7 +823,7 @@ list, give them similar names.  A wide range of characters are acceptable
 in the name, so you can give your fragments names like "sheet 1 / fiber 3", "sheet 1 / fiber 4",
 etc.
 
-The sixth column in the fragments list indicates whether the fragment considers the X axis,
+The sixth column in the fragment list indicates whether the fragment considers the X axis,
 or the Y axis, to be the vertical direction.  The direction of the axis is important because
 khartes only works with single-valued surfaces; the fragment's vertical direction
 is the direction of the "single value".
@@ -856,16 +841,14 @@ it is not based simply on the projected area of the fragment onto the Fragment V
 After you have created a fragment to fit a particular
 sheet, you might wonder if you can copy the fragment,
 and shift that copy to overlay a nearby sheet,
-so you don't need
-to create
-a new fragment from scratch.
+so you don't need to create a new fragment from scratch.
 
 This is possible in khartes; it is all done in the
 Fragments tab in the Control Area.
 
 You may have already noticed the `Copy` button at the top
 of the Fragments tab.  If you press this button,
-khartes will create a copy of the current active fragment
+khartes will create a copy of the currently active fragment
 (the one highlighted in beige or slate gray).
 
 Once the copy is created, you can change its color, and its name,
@@ -876,25 +859,20 @@ to a nearby location.  Khartes provides options to do this.
 
 To be clear, you can apply the bulk-shift operations to any active
 fragment, but the most usual case is to shift a newly created copy,
-so that
-is what will be described here.
+so that is what will be described here.
 
 At the top of the Fragments tab are four arrow buttons:
 `Z ↑`, `Z ↓`, `N ↑`, and `N ↓`.
 If you press the `Z ↑` button, the currently active fragment
 will be shifted vertically upwards by one voxel.
-Likewise, if you press the
-`Z ↓`
-button, the currently active fragment
+Likewise, if you press the `Z ↓` button, it
 will be shifted vertically downwards by one voxel.
 
-If you press one of the remaining two buttons, either
-`N ↑` or `N ↓`,
+If you press one of the remaining two buttons, either `N ↑` or `N ↓`,
 the normal to the fragment will be calculated at each node, and each
 node will be shifted along its normal by the length of one voxel.
 This can be useful if the fragment has some curvature, and you want
-the fragment copy to be more or less parallel to the original
-fragment.
+the fragment copy to be more or less parallel to the original fragment.
 
 Because the normals are recalculated each time the buttons are pressed,
 and because the normals change a bit each time the fragment is moved,
@@ -904,8 +882,7 @@ to their exact starting places.
 <img src="images/copy_and_shift.jpg" width="800"/>
 
 *The cyan fragment has been copied, and the copy, in green,
-has been shifted
-along its normals*
+has been shifted along its normals*
 
 #### Advanced topic: Multiple active fragments
 
@@ -913,7 +890,7 @@ There are times when you may want to
 view more than one active fragment simultaneously.  One scenario is
 where each fragment represents a papyrus fiber rather than an
 entire sheet of a scroll; in this case it is convenient to
-be able to display simultaneously all the fibers in the fragment view window.
+be able to display simultaneously all the fibers in the Fragment View window.
 Another scenario is where a single sheet is divided into more
 than one fragment in order to work around khartes' requirement
 that each fragment be single-valued in either X or Y.
@@ -945,7 +922,7 @@ it does allow you to add dots to the Fragment View to highlight features of inte
 
 These dots are actually the nodes of a fragment whose only purpose
 is to provide annotation.  Here are the steps to add an annotation to
-your fragment view:
+your Fragment View:
 
 1. Go to the Fragments tab in the Control Area and create a new fragment.
 
@@ -976,13 +953,12 @@ fragments, one per color.  Make sure they are all `Active`.
 
 ### Exporting fragments
 
-Khartes allows you to export your fragments to [`MeshLab`](https://www.meshlab.net/),
+Khartes allows you to export your fragments to [MeshLab](https://www.meshlab.net/),
 created and maintained by the [Visual Computing Lab](https://vcg.isti.cnr.it/) of [CNR-ISTI](https://www.isti.cnr.it/en/) (Italy),
 as well as to
-`vc_render` and `vc_layers_from_ppm`, which are two components of [`volume-cartographer`](https://github.com/educelab/volume-cartographer),
-created and maintained by the [Digital Restoration Initiative](https://www.cs.uky.edu/dri/), part
-of [EduceLab](https://educelab.engr.uky.edu/)
-at the [University of Kentucky](https://uky.edu/) (USA).
+`vc_render` and `vc_layers_from_ppm`, which are two components of [volume-cartographer](https://github.com/educelab/volume-cartographer),
+created and maintained by the [Digital Restoration Initiative](https://www2.cs.uky.edu/dri/), part of
+[EduceLab](https://educelab.engr.uky.edu/) at the [University of Kentucky](https://uky.edu/) (USA).
 
 To export your fragment:
 
@@ -990,25 +966,22 @@ To export your fragment:
 in the right-hand window.
 2. In the File menu, select `Export file as mesh...`.
 3. After you press the `Save` button, you will be asked to specify
-an "infill spacing".  Just accept the default value.
+an "infill spacing".  The default value should be fine.
 
 This will create a `.obj` file, which contains a mesh representing your
 fragment, as well as a `.tif` file and a `.mtl` file.
-These three files can be loaded directly into the `MeshLab` 3D viewer,
-to render
-a 3D view of your surface, with the volume data textured onto
+These three files can be loaded directly into the MeshLab 3D viewer,
+to render a 3D view of your surface, with the volume data textured onto
 the surface.
 
-In addition,
-you can import the .obj file directly into `vc_render`.
+In addition, you can import the .obj file directly into `vc_render`.
 
 (**Note for advanced users**: If multiple fragments are active,
 all the active fragments will be saved into a single `.obj` file.
-This is convenient for viewing in `MeshLab`, but beware! Multi-fragment
+This is convenient for viewing in MeshLab, but beware! Multi-fragment
 `.obj` files cannot be imported into `vc_render`.)
 
-To import the `.obj` file
-into `vc_render`, you first
+To import the `.obj` file into `vc_render`, you first
 need to make sure you know where the following files and
 directories are located:
 
@@ -1026,10 +999,10 @@ So, the command you want to type will look something like:
 ```
 vc_render -v [your volpkg directory] --input-mesh [your .obj file] --output-ppm [the name of the ppm file you want to create]
 ```
-You might need to use `--volume` to specify your volume as well, if your volpkg has more than one.
+You might need to use `--volume` to specify your volume as well, if your `.volpkg` has more than one.
 
 As already mentioned, the `.ppm` file that `vc_render` creates can be read into `vc_layers_from_ppm` to create a
-flattened surface volume.  And as explained in the section on importing TIFF files, if you decide to import this
+flattened surface volume.  And, as explained in the section on importing TIFF files, if you decide to import this
 volume (which is a series of TIFF files) back into khartes, be sure to set the
 `TIFFS are from vc_layers` checkbox in the TIFF loader dialog.
 
@@ -1044,7 +1017,7 @@ volume is a flattened volume created
 by `vc_layers`), you may want to move this fragment back into
 the coordinate system of the original scroll volume.
 Perhaps you want to view this fragment
-in 3D in `MeshLab`, for example, or perhaps you want
+in 3D in MeshLab, for example, or perhaps you want
 to paint the original uninterpolated scroll data onto the mesh.
 
 Khartes provides an option that allows you to do this.
@@ -1052,24 +1025,22 @@ Khartes provides an option that allows you to do this.
 However, there are two requirements you must fulfill in order
 to take advantage of this option.
 
-First, your current data volume must be a layer volume.
+* Your current data volume must be a layer volume.
 You must have previously signalled this to khartes by
 setting the "TIFFs are
 from vc_layers" option in the TIFF loader dialog, at
 the time you loaded the TIFF files to create the volume.
 
-Second, you need to load one
-additional file, a `.ppm` file, into khartes.
+* You need to load one additional file, a `.ppm` file,
+into khartes.
 
 Recall that the `.ppm` file is created by `vc_render`
 or `vc_layers`.
-The data in this file specifies the transformation
-from
+The data in this file specifies the transformation from
 layer volume coordinates to scroll volume coordinates.
 This transformation is used by `vc_layers` to create the
 layer volume.
-The `.ppm`
-file can also be used by khartes, to do this same
+The `.ppm` file can also be used by khartes, to do this same
 coordinate transformation.
 
 To import the `.ppm` file, select the
@@ -1078,18 +1049,15 @@ menu option and find the correct `.ppm` file.
 Of course, this needs to be the file
 that is associated with your current layer volume.
 Once you have imported this file, it will remain part of
-your .khprj project, so you will not need to
-import it again.
+your `.khprj` project, so you will not need to import it again.
 The file is fairly large, typically 1 or 2 Gb in size,
 so khartes will not actually load it into memory until it
 is needed (you won't have to ask khartes to load the
 file at that time; khartes will do that automatically).
 
-After you
-have completed these steps,
-then whenever
-you export a fragment as a `.obj` file,
-you will be offered an option to change coordinates.
+After you have completed these steps, then whenever
+you export a fragment as a `.obj` file, you will be offered
+an option to change coordinates.
 
 <img src="images/select_ppm.jpg"/>
 
@@ -1106,11 +1074,11 @@ already) and your `.obj` file will be exported in scroll coordinates.
 
 Khartes allows you to import, and work with, fragments that have been
 created in
-[`volume-cartographer`](https://github.com/educelab/volume-cartographer).
+[volume-cartographer](https://github.com/educelab/volume-cartographer).
 
 Before you start importing these fragments, you need to
 learn a little about the different file types that are produced by
-`Volume-cartographer` (VC for short), so you know
+volume-cartographer (VC for short), so you know
 which ones to import, and where to find them.
 
 VC makes fragments ('segments' in VC terminology)
@@ -1122,12 +1090,9 @@ These fragment sub-directories are found in the `paths` directory,
 which resides underneath the `*.volpkg` directory;
 the `*.volpkg` directory is associated with a particular scroll.
 
-The main fragment file format used by VC,
-the "ordered pointset" format, has the
-suffix `.vcps`.
-This format
-is very dense; larger fragments can consist of millions of points
-in `.vcps` format.
+The main fragment file format used by VC, the "ordered pointset" format,
+has the suffix `.vcps`. This format is very dense; larger fragments can
+consist of millions of points in `.vcps` format.
 
 A second format is the `.obj` format.
 You will usually find two different `.obj` files in the fragment
@@ -1219,9 +1184,8 @@ in the usual way, moving nodes and
 seeing how the extracted data in the Fragment View changes.
 You can even use the `Copy` button to copy the fragment,
 and use the move-along-normal buttons if you wish.
-But
-please note: **You cannot add or delete nodes** in fragments created
-from `.obj` files.
+But please note: **You cannot add or delete nodes** in fragments
+created from `.obj` files.
 
 If you want to work on a different area, simply repeat
 the above steps: move the cursor to a node in the desired
@@ -1230,27 +1194,26 @@ remember the changes you made in the previous area
 (though as always, remember to hit Ctrl-S periodically,
 to save your changes to disk).
 
-If you want to work on an area of the fragment that is very steep,
-or even vertical, go to the Volumes Tab
-to change the orientation of your current
-volume, and then select your working region.
+If you want to work on an area of the fragment that is
+very steep, or even vertical, go to the Volumes Tab
+to change the orientation of your current volume,
+and then select your working region.
 
 When you save your project, the new fragments
 (and your changes)
 will be saved along with the rest of the project;
-you will not need to re-import the fragment the
+you will not need to re-import the fragment
 next time you load your project into khartes.
 And if you wish to use your mesh in another program,
-you can select the
-`File /Export file as mesh...` menu item to export the fragment
-as a `.obj` file.
+you can select the `File /Export file as mesh...` menu
+item to export the fragment as a `.obj` file.
 
 ### Advanced Topic: Control Area: Settings
 
 <img src="images/settings_tab.JPG" width="800"/>
 
 The Settings tab gives you control of some of the internal parameters of khartes.
-When you are first starting out, you probably will not need to
+When you are first starting out, you probably won't need to
 modify these, but as you continue, you may discover that you would like to customize
 certain aspects of khartes.
 
@@ -1259,15 +1222,14 @@ In the left column of this tab are the
 the entities (nodes, lines, axes, etc.) that are overlain on top of the data windows.
 
 Here is what the different entities listed represent:
-* You already know what nodes are
-* Free nodes are annotation nodes (nodes belonging to a fragment
-that has `Hide Mesh` set;
-see "Advanced topic: Annotation")
-* Lines are the fragment cross-sections that are drawn on the Data Slices
-* Meshes are the triangles drawn on the Fragment View
-* The Axes are the two crosshairs that meet in the center of each data window
-* The Borders are the borders of the Data Slices
-* The Labels are the text labels in the upper left of each Data Slice,
+* You already know what **nodes** are
+* **Free nodes** are annotation nodes (nodes belonging to a fragment
+that has `Hide Mesh` set; see "Advanced topic: Annotation")
+* **Lines** are the fragment cross-sections that are drawn on the Data Slices
+* **Meshes** are the triangles drawn on the Fragment View
+* **Axes** are the two crosshairs that meet in the center of each data window
+* **Borders** are the borders of the Data Slices; and
+* **Labels** are the text labels in the upper left of each Data Slice,
 and the scale bars in the lower left of each data window.
 
 For each entity, you can control the size (width in the case of lines, radius in
@@ -1309,7 +1271,7 @@ set the value to 0.
 
 The `Voxel size in μm` value is, as the name suggests, the physical spacing,
 in μm (micrometers), between adjacent voxels in the image.
-(There is an implicit assumption that the spacing is the same along all 3 axes).
+(There is an implicit assumption that the spacing is the same along all three axes).
 The default value used by khartes, 7.910 μm, corresponds to the spacing
 for the scrolls used in the Vesuvius Challenge.
 If you change this value, the new value will be stored in your current
@@ -1317,11 +1279,10 @@ khartes project the next time you save the project.  This value is
 used to compute the size of the scale bars that are drawn in the data
 windows, and to compute the surface area of the fragments.
 
-### Advanced Topic: Tracking cursors
+### Advanced Topic: Tracking cursors (Experimental)
 
-The "Tracking cursors" feature is experimental; there
-are some circumstances where it might be useful.  It is currently turned off by
-default.
+There are some circumstances where "tracking cursors" might be useful.
+It is currently turned off by default.
 
 Here is the idea behind this feature.
 
@@ -1356,8 +1317,8 @@ every time the mouse is moved.
 Khartes is designed to be interactive, so every time you make a change to a fragment, for instance, by
 moving, adding, or deleting a node, the results of the change are shown instantly.  In the Data Slices,
 the curve passing through the nodes is updated, and in the Fragment View, the surface texture is
-updated.  Though these changes happen quickly, they do require a certain amount of time, and when you have a
-large group of nodes you need to edit, you might find that the updating is delaying your work.
+updated.  Though these changes happen quickly, updates do require a certain amount of time, and when
+you have a large group of nodes you need to edit, you might find that updates will delay your work.
 
 In order to lessen this delay, khartes offers the option to turn off live updates.  You can turn
 off live updates by pressing the `l` (small L) hot key, or by pressing the button marked `LU`
@@ -1388,7 +1349,7 @@ where each rectangle is drawn in a single shade: the shade representing the valu
 
 There is one exception: vertical interpolation in the Fragment View.
 
-Begin by defining a local coordinate system for the fragment view.
+Begin by defining a local coordinate system for the Fragment View.
 The sampling is the same, and the origin is the same, as for the original 3D data volume.
 The only thing that changes is the axis naming.
 The X axis in this new system runs in what the user sees as the left-to-right direction.
@@ -1405,7 +1366,7 @@ So, how to decide what brightness to assign to this location,
 since we only have data at integer X,Y,Z position?
 The answer is to find the data value at X,Y,Z+ (where Z+ is the integer just greater
 than the non-integer interpolated Z value) and at X,Y,Z- (you can probably guess what Z- is),
-and the value to be drawn in the fragment view is linearly interpolated between these two values.
+and the value to be drawn in the Fragment View is linearly interpolated between these two values.
 
 This linear interpolation is the only time something other than nearest-neighbor interpolation is
 used in khartes.
@@ -1424,7 +1385,7 @@ scroll volume.
 
 ### License
 
-Khartes is open-source code, licensed under the GPL 3.0 license.  See LICENSE.txt for details.
+Khartes is open-source code, licensed under the GPL 3.0 license.  See [LICENSE.txt](LICENSE.txt) for details.
 
 ### Contact
 
@@ -1435,10 +1396,9 @@ under my user name, @khartes_chuck .
 ### Acknowledgements
 
 I wrote khartes for my own gratification, and in the hope that it will prove useful;
-I did not receive a grant or salary from any organization
-to develop this software.
+I did not receive a grant or salary from any organization to develop this software.
 
-However, I benefitted immensely from the [Vesuvius Challenge](https://scrollprize.org/), who
+However, I benefitted immensely from the [Vesuvius Challenge](https://www.scrollprize.org/), who
 provided the following:
 * The X-ray tomography data set, without which I could not have developed khartes (along with
 making the data available under reasonable conditions,
@@ -1447,8 +1407,7 @@ download the data over the internet);
 * Permission to use small excerpts from the data set in this README file and the associated videos;
 * A [lively community](https://discord.gg/V4fJhvtaQn) of fellow enthusiasts;
 * In particular, the Segmentation Team (especially @hari_seldon and @djosey),
-who provided invaluable user feedback and suggestions while I
-was developing khartes;
+who provided invaluable user feedback and suggestions while I was developing khartes;
 * A [cash prize](https://scrollprize.substack.com/p/segmentation-tooling-winners-new), which I appreciated
 for its monetary value, but more so for the recognition of the work done so far,
 and for the encouragement to continue.
