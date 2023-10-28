@@ -947,31 +947,31 @@ These dots are actually the nodes of a fragment whose only purpose
 is to provide annotation.  Here are the steps to add an annotation to
 your fragment view:
 
-1.  Go to the Fragments tab in the Control Area and create a new fragment.
+1. Go to the Fragments tab in the Control Area and create a new fragment.
 
-2.  Set the name and color of the new fragment.  In this example I will
+2. Set the name and color of the new fragment.  In this example I will
 name the fragment "crackle".  The annotation dots will be drawn in the
 color that you give the fragment.
 
-3.  Set `Hide Mesh` for the new fragment.
+3. Set `Hide Mesh` for the new fragment.
 
-4.  Make sure that your new fragment ("crackle") and the fragment that you
+4. Make sure that your new fragment ("crackle") and the fragment that you
 want to annotate (the fragment that shows areas of crackling) are both `Active`
 (see "Advanced topic: Multiple active fragments").
 
-5.  Make sure that in the Fragments tab, your new fragment ("crackle") is
+5. Make sure that in the Fragments tab, your new fragment ("crackle") is
 highlighted in beige
 (slate gray if you are in dark mode).  One way to ensure this is to set
 the main fragment (the one you are annotating) to be `Active` but not `Visible`.
 
-6.  Now you should be able to add dots (annotation) using the same Shift+mouse
+6. Now you should be able to add dots (annotation) using the same Shift+mouse
 combination that you use to add nodes.  You can also move dots, or delete
 them, the way you would any other node.
 
-7.  If the dots are not the size you prefer, go to the Settings tab and change
+7. If the dots are not the size you prefer, go to the Settings tab and change
 the `Free Node` size.
 
-8.  If you want annotation in more than one color, just create more annotation
+8. If you want annotation in more than one color, just create more annotation
 fragments, one per color.  Make sure they are all `Active`.
 
 ### Exporting fragments
@@ -986,10 +986,10 @@ at the [University of Kentucky](https://uky.edu/) (USA).
 
 To export your fragment:
 
-1.  Make sure your fragment is active, that is, that it is visible
+1. Make sure your fragment is active, that is, that it is visible
 in the right-hand window.
-2.  In the File menu, select `Export file as mesh...`.
-3.  After you press the `Save` button, you will be asked to specify
+2. In the File menu, select `Export file as mesh...`.
+3. After you press the `Save` button, you will be asked to specify
 an "infill spacing".  Just accept the default value.
 
 This will create a `.obj` file, which contains a mesh representing your
@@ -1183,26 +1183,26 @@ In the terminology of khartes, this single-valued region
 is called the *working region*.
 To specify a working region, just follow these steps:
 
-1.  Decide on the area of the fragment that you want to use as your
+1. Decide on the area of the fragment that you want to use as your
 working region.  You want a part of the fragment that is fairly flat,
 as seen in the two upper Data Slices,
 preferably with a tilt of less than 45 degrees.
 
-2.  Find a node in this area.  You may need to pan through the data
+2. Find a node in this area.  You may need to pan through the data
 a little, perhaps using the page-up and page-down keys, to find
 a suitable node.
 
-3.  Place your cursor over the node, so that the node turns cyan.
+3. Place your cursor over the node, so that the node turns cyan.
 
-4.  Hit the `r` key on your keyboard (think 'r' for 'region').
+4. Hit the `r` key on your keyboard (think 'r' for 'region').
 
 If all works correctly, the view in khartes changes in two
 ways:
 
-1.  In the Data Slices, the active region is drawn with a thicker
+* In the Data Slices, the active region is drawn with a thicker
 line.
 
-2.  In the Fragment View, you will see the volume data corresponding to
+* In the Fragment View, you will see the volume data corresponding to
 the active region of the fragment.  (If you don't see anything, go
 to the Fragments tab in the Control Area and make sure your
 fragment is active).
