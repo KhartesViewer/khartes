@@ -204,6 +204,8 @@ class ST(object):
 
     # the idea of using Runge-Kutta (which solve_ivp uses)
     # was suggested by @TizzyTom
+    # Uses Runge-Kutta to extrapolate (to the left or
+    # right, depending on sign) from the given point.
     def call_ivp(self, xy, sign, nudge=0):
         vel_func = self.create_vel_func(xy, sign, nudge)
         tmax = 400
@@ -225,6 +227,7 @@ class ST(object):
             return None
         return sol.y.transpose()
 
+    # This is used by the Wu-Hale version of interp2d
     def solve2d(self, xs, ys, constraints):
         # return ys.copy()
 
@@ -348,8 +351,60 @@ class ST(object):
         return newys
         # return ys.copy()
 
-    def interp2d(self, xy1, xy2, nudge=0.):
-        print("interp2d", xy1, xy2)
+    # Wu-Hale version, using the Wu-Hale approach to
+    # solving (minimizing) the objective function.
+    def interp2dWH(self, xy1, xy2):
+        print("interp2dWH", xy1, xy2)
+        # order of xy1, xy2 shouldn't matter, except when creating xs
+        # create xs (ordered list of x values; y is to be solved for)
+        epsilon = .01
+        oxy1, oxy2 = xy1, xy2
+        if xy1[0] > xy2[0]:
+            oxy1,oxy2 = oxy2,oxy1
+        x1 = oxy1[0]
+        y1 = oxy1[1]
+        x2 = oxy2[0]
+        y2 = oxy2[1]
+        nx = int(x2-x1)+1
+        xs = np.linspace(x1,x2,nx, dtype=np.float64)
+        # create list of constraints (each is (index, y))
+        constraints = ((0, y1), (nx-1, y2))
+        # create initial ys (line interpolating xy1 and xy2)
+        ys = np.linspace(y1,y2,nx, dtype=np.float64)
+        prev_dys = -1.
+        min_dys = -1.
+        min_ys = None
+        for _ in range(20):
+            # call solver: given xs, ys, constraints, return new ys based on
+            # solving a linear equation
+            prev_ys = ys.copy()
+            ys = self.solve2d(xs, ys, constraints)
+            # print("new ys", ys)
+            # keep calling solver until solution stabilizes
+            # stop condition: average absolute update is less than epsilon
+            dys = np.abs(ys-prev_ys)
+            avg_dys = dys.sum()/nx
+            print("avg_dys", avg_dys)
+            if min_dys < 0. or avg_dys < min_dys:
+                min_dys = avg_dys
+                min_ys = ys.copy()
+            if avg_dys < epsilon:
+                break
+            # if prev_dys > 0 and prev_dys < avg_dys:
+            #     ys = prev_ys
+            #     break
+            prev_dys = avg_dys
+        # xys = np.stack((xs, ys), axis=1)
+        xys = np.stack((xs, min_ys), axis=1)
+        print("xys", xys.shape)
+        # print(xys)
+        return xys
+
+    # Interpolate between two points, using the same objective function
+    # as the Wu-Hale interpolator, but a different solver:
+    # least_squares from scipy.optimize
+    def interp2dLsqr(self, xy1, xy2, nudge=0.):
+        print("interp2dLsqr", xy1, xy2)
         oxy1, oxy2 = xy1, xy2
         if xy1[0] > xy2[0]:
             oxy1,oxy2 = oxy2,oxy1
@@ -387,9 +442,12 @@ class ST(object):
         # use_angle = True
         # coh_mult = abs(nudge)
         coh_thresh = .99
+        # If use_angle is true, instead of using the Wu-Hale
+        # objective function (error in slope) use error-in-angle
         use_angle = nudge < 0
         rweight = .1
 
+        # objective function used by least_squares
         def fun(iys):
             # print("iys", iys)
             oys = iys[cidxs]
@@ -477,6 +535,7 @@ class ST(object):
             # print()
             return fs
 
+        # Used to specify the Jacobian (see below)
         def matvec(idys):
             # print("idys", idys.shape)
             # print("idys", idys)
@@ -514,6 +573,7 @@ class ST(object):
             # print()
             return dfs
 
+        # Used to specify the Jacobian (see below)
         def rmatvec(idfs):
             # print("idfs", idfs)
             dfs = idfs
@@ -561,6 +621,9 @@ class ST(object):
             return dfs
         '''
 
+        # Jacobian function used by least_squares.
+        # If no Jacobian is specified, least_squares uses
+        # explicit differencing, which is much slower
         def jac(ys):
             return LinearOperator((2*ndx+ncidxs, nx), matvec=matvec, rmatvec=rmatvec)
 
@@ -619,53 +682,6 @@ class ST(object):
         # print(r.x)
         # return r.x
         xys = np.stack((xs, r.x), axis=1)
-        print("xys", xys.shape)
-        # print(xys)
-        return xys
-
-    def interp2dWH(self, xy1, xy2):
-        print("interp2dWH", xy1, xy2)
-        # order of xy1, xy2 shouldn't matter, except when creating xs
-        # create xs (ordered list of x values; y is to be solved for)
-        epsilon = .01
-        oxy1, oxy2 = xy1, xy2
-        if xy1[0] > xy2[0]:
-            oxy1,oxy2 = oxy2,oxy1
-        x1 = oxy1[0]
-        y1 = oxy1[1]
-        x2 = oxy2[0]
-        y2 = oxy2[1]
-        nx = int(x2-x1)+1
-        xs = np.linspace(x1,x2,nx, dtype=np.float64)
-        # create list of constraints (each is (index, y))
-        constraints = ((0, y1), (nx-1, y2))
-        # create initial ys (line interpolating xy1 and xy2)
-        ys = np.linspace(y1,y2,nx, dtype=np.float64)
-        prev_dys = -1.
-        min_dys = -1.
-        min_ys = None
-        for _ in range(20):
-            # call solver: given xs, ys, constraints, return new ys based on
-            # solving a linear equation
-            prev_ys = ys.copy()
-            ys = self.solve2d(xs, ys, constraints)
-            # print("new ys", ys)
-            # keep calling solver until solution stabilizes
-            # stop condition: average absolute update is less than epsilon
-            dys = np.abs(ys-prev_ys)
-            avg_dys = dys.sum()/nx
-            print("avg_dys", avg_dys)
-            if min_dys < 0. or avg_dys < min_dys:
-                min_dys = avg_dys
-                min_ys = ys.copy()
-            if avg_dys < epsilon:
-                break
-            # if prev_dys > 0 and prev_dys < avg_dys:
-            #     ys = prev_ys
-            #     break
-            prev_dys = avg_dys
-        # xys = np.stack((xs, ys), axis=1)
-        xys = np.stack((xs, min_ys), axis=1)
         print("xys", xys.shape)
         # print(xys)
         return xys

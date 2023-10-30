@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
             pt1 = (4235, 4495)
             # pt2 = (4621, 4378)
             pt2 = (4245, 4490)
-            y = self.st.interp2d(pt1, pt2)
+            y = self.st.interp2dWH(pt1, pt2)
             print("ti2d", y.shape)
 
 
@@ -214,7 +214,10 @@ class ImageViewer(QLabel):
             # for nudge in (.95, .98, .99, 1.):
                 y = None
                 if self.pt1 is not None and self.pt2 is not None:
-                    y = st.interp2d(self.pt1, self.pt2, nudge)
+                    if nudge > 0:
+                        y = st.interp2dLsqr(self.pt1, self.pt2, nudge)
+                    else:
+                        y = st.interp2dWH(self.pt1, self.pt2)
                 if y is not None:
                     print("ti2d", y.shape)
                     # pts = st.sparse_result(y, 0, 5)

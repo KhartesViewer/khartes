@@ -1064,7 +1064,7 @@ class DataWindow(QLabel):
         # correctly in sub-sampled data volumes as well.
         min_delta_shift = (gxyz[gaxis]/gstep) % min_delta
         # y = st.call_ivp(dij, sign, 5.)
-        y = st.interp2d(dija, dijb)
+        y = st.interp2dWH(dija, dijb)
         if y is None:
             print("no y values")
             return
