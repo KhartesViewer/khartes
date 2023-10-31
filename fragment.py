@@ -1310,6 +1310,7 @@ class FragmentView(BaseFragmentView):
         # If all these conditions are True, then it is possible
         # to update the zsurf within a smaller rectangle, rather than
         # over the entire surface.
+        # https://stackoverflow.com/questions/66674537/python-numpy-get-difference-between-2-two-dimensional-array
         if oldtri is not None and self.tri is not None and self.oldzs is not None:
             # Find the bounding rectangle within which
             # to update the zsurf, based on the points and triangles
