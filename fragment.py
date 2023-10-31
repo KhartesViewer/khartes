@@ -1017,6 +1017,7 @@ class FragmentView(BaseFragmentView):
         # fragment's direction
         self.fpoints = np.zeros((0,4), dtype=np.float32)
         self.oldzs = None
+        self.oldtri = None
         # same as above, but trijk based on cur_volume_view's 
         # direction
         self.vpoints = np.zeros((0,4), dtype=np.float32)
@@ -1276,21 +1277,29 @@ class FragmentView(BaseFragmentView):
     def workingVpoints(self):
         return self.working_vpoints
 
+    # Whenever createZsurf is called, fpoints are re-triangulated,
+    # so that fragment view triangles always look correct.
+    # However, if do_update is False, z values (which are based
+    # on the triangulation) are not recalculated.  The reason
+    # for sometimes setting do_update to be False is that the
+    # z calculation is relatively slow, so if there is a batch
+    # of changes occuring in quick succession (the user is moving
+    # a bunch of nodes, or the auto-segmentation is adding a
+    # bunch of points), it is better to wait until after the
+    # batch of changes before recalculating z values.
     def createZsurf(self, do_update=True):
         timer_active = False
         timer = Utils.Timer(timer_active)
-        oldtri = self.tri
-        # oldtri = None
         self.triangulate()
         timer.time("triangulate")
         if not do_update:
-            self.oldzs = None
             return
         changed_pts_idx = np.zeros((0,), dtype=np.int32)
         added_trgls_idx = np.zeros((0,), dtype=np.int32)
         deleted_trgls_idx = np.zeros((0,), dtype=np.int32)
         changed_rect = None
         frag_rect = self.computeFragRect()
+        oldtri = self.oldtri
         # https://stackoverflow.com/questions/66674537/python-numpy-get-difference-between-2-two-dimensional-array
         if oldtri is not None and self.tri is not None and self.oldzs is not None:
             # print("diffing")
@@ -1300,6 +1309,7 @@ class FragmentView(BaseFragmentView):
             # trgls rather than the added/deleted point
             if len(oldpts) == len(newpts):
                 # print("a0")
+                # print(self.fpoints.shape, self.oldzs.shape, oldpts.shape, newpts.shape)
                 # idx = (newpts[:,None]!=oldpts).any(-1).all(1)
                 # changed_pts_idx = idx.nonzero()[0]
                 changed_pts_idx = Utils.setDiff2DIndex(newpts, oldpts)
@@ -1442,6 +1452,7 @@ class FragmentView(BaseFragmentView):
         '''
 
         self.oldzs = np.copy(self.fpoints[:,2])
+        self.oldtri = self.tri
         timer.time("diff")
         nk,nj,ni = self.cur_volume_view.trdata.shape
         # if self.fragment.direction != self.cur_volume_view.direction:
