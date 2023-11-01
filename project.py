@@ -4,6 +4,7 @@ import time
 import json
 from utils import Utils
 from volume import Volume, VolumeView
+from volume_zarr import CachedZarrVolume
 from ppm import Ppm
 from fragment import Fragment, FragmentView
 from trgl_fragment import TrglFragment, TrglFragmentView
@@ -15,6 +16,7 @@ from PyQt5.QtGui import QColor
 class ProjectView:
 
     def __init__(self, project):
+        print("Initializing project view")
         self.project = project
         self.valid = False
         if not project.valid:
@@ -22,10 +24,12 @@ class ProjectView:
 
         self.volumes = {}
         for volume in project.volumes:
+            print(volume.name)
             self.addVolumeView(volume, no_notify=True)
 
         self.fragments = {}
         for fragment in project.fragments:
+            print(volume.name)
             self.addFragmentView(fragment, no_notify=True)
 
         self.cur_volume = None
@@ -610,6 +614,11 @@ class Project:
 
         for vfile in vdir.glob("*.nrrd"):
             vol = Volume.loadNRRD(vfile)
+            if vol is not None and vol.valid:
+                prj.addVolume(vol)
+
+        for vfile in vdir.glob("*.volzarr"):
+            vol = CachedZarrVolume.loadFile(vfile)
             if vol is not None and vol.valid:
                 prj.addVolume(vol)
 

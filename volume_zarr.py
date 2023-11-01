@@ -598,7 +598,7 @@ class Loader():
         """Overloads the slicing operator to get data with caching
         """
         islice, jslice, kslice = key
-        print(f"Querying {key}")
+        #print(f"Querying {key}")
         for item in (islice, jslice, kslice):
             if isinstance(item, slice) and item.step is not None:
                 raise ValueError("Sorry, we don't support strided slices yet")
