@@ -1963,7 +1963,7 @@ class MainWindow(QMainWindow):
 
     def settingsSaveDirectory(self, directory, prefix=""):
         self.settings.beginGroup("MainWindow")
-        print("settings: %sdirectory %s"%(prefix, str(directory)))
+        #print("settings: %sdirectory %s"%(prefix, str(directory)))
         self.settings.setValue(prefix+"directory", str(directory))
         self.settings.endGroup()
 
@@ -2201,15 +2201,14 @@ class MainWindow(QMainWindow):
 
     # TODO: Need to alert user if load fails
     def onOpenProjectButtonClick(self, s):
-        print("open project clicked")
-        ''''''
+        #print("open project clicked")
         if not self.warnIfNotSaved("load a new project"):
             # print("Canceled by user after warning")
             return
         dialog = QFileDialog(self)
         sdir = self.settingsGetDirectory()
         if sdir is not None:
-            print("setting directory to", sdir)
+            #print("setting directory to", sdir)
             dialog.setDirectory(sdir)
 
         # dialog.setOptions(QFileDialog.ShowDirsOnly|QFileDialog.DontUseNativeDialog)
@@ -2228,7 +2227,7 @@ class MainWindow(QMainWindow):
         khartes_directory = getattr(dialog, "khartes_directory", None)
         if khartes_directory is not None:
             file_names = [khartes_directory]
-        print(file_names)
+        #print(file_names)
         if len(file_names) < 1:
             print("The khprj directory list is empty")
             return
@@ -2237,6 +2236,7 @@ class MainWindow(QMainWindow):
         self.loadProject(idir)
 
     def loadProject(self, fname):
+        print(f"Loading project from {fname}")
         loading = self.showLoading()
         self.unsetProjectView()
         pv = ProjectView.open(fname)
@@ -2364,19 +2364,19 @@ class MainWindow(QMainWindow):
             font = self.label.font()
             font.setPointSize(16)
             self.label.setFont(font)
-            print("Loading widget created", self)
+            #print("Loading widget created", self)
             self.show()
 
         def closeEvent(self, e):
-            print("Loading widget close event", self)
+            #print("Loading widget close event", self)
             e.accept()
 
         def mousePressEvent(self, e):
-            print("Loading widget mouse press event", self)
+            #print("Loading widget mouse press event", self)
             self.close()
 
     def loadingDestroyed(self, widget):
-        print("Loading destroyed, loading widget to close", widget)
+        #print("Loading destroyed, loading widget to close", widget)
         widget.close()
 
     # Sort of complicated.  
@@ -2399,7 +2399,7 @@ class MainWindow(QMainWindow):
             widget = MainWindow.LoadingWidget(parent, text)
             widget.setAttribute(Qt.WA_DeleteOnClose)
             self.destroyed.connect(lambda o: parent.loadingDestroyed(widget))
-            print("Loading created", self, widget)
+            #print("Loading created", self, widget)
 
     def showLoading(self, text=None):
             loading = MainWindow.Loading(self, text)
