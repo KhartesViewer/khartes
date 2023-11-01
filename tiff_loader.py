@@ -32,7 +32,7 @@ class ColorEdit(QPushButton):
 
     def setColor(self, color_name):
         self.setStyleSheet("ColorEdit {background-color: %s}"%color_name)
-        print("set color to", color_name)
+        #print("set color to", color_name)
 
 
     def getColor(self):
