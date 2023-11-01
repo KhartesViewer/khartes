@@ -35,6 +35,7 @@ from PyQt5.QtXml import QDomDocument
 
 from tiff_loader import TiffLoader
 from data_window import DataWindow, SurfaceWindow
+from annotation_window import AnnotationWindow
 from project import Project, ProjectView
 from fragment import Fragment, FragmentsModel, FragmentView
 from trgl_fragment import TrglFragment, TrglFragmentView
@@ -250,6 +251,23 @@ class InfillDialog(QDialog):
         else:
             self.edit.setStyleSheet("QLineEdit { color: red }")
 
+class AnnotationWindowButton(QWidget):
+    def __init__(self, main_window, parent=None):
+        super(AnnotationWindowButton, self).__init__(parent)
+        self.main_window = main_window
+        self.window = None
+        self.button = QPushButton("Open Annotation Window")
+        self.button.clicked.connect(self.open_window)
+        hlayout = QHBoxLayout()
+        self.setLayout(hlayout)
+        hlayout.addWidget(self.button)
+
+    def open_window(self):
+        if self.window is None:
+            self.window = AnnotationWindow(self.main_window)
+            self.main_window.annotation_window = self.window
+        self.window.show()
+
 class PositionSetter(QWidget):
     def __init__(self, main_window, parent=None):
         super(PositionSetter, self).__init__(parent)
@@ -289,7 +307,6 @@ class PositionSetter(QWidget):
         y = self.ysetter.value()
         x = self.xsetter.value()
         self.main_window.recenterCurrentVolume(np.array([x, y, z]))
-
 
 class ZInterpolationSetter(QWidget):
     def __init__(self, main_window, parent=None):
@@ -740,6 +757,7 @@ class MainWindow(QMainWindow):
         self.project_view = None
         self.cursor_tijk = None
         self.cursor_window = None
+        self.annotation_window = None
         args = QCoreApplication.arguments()
         path = os.path.dirname(os.path.realpath(args[0]))
         # https://iconduck.com/icons/163625/openhand
@@ -1085,6 +1103,9 @@ class MainWindow(QMainWindow):
         possetter = PositionSetter(self)
         vlayout.addWidget(possetter)
         vlayout.addStretch()
+
+        annobutton = AnnotationWindowButton(self)
+        vlayout.addWidget(annobutton)
 
         # TODO: 
         # - Button w/ Window to load in volume label data from zarr
@@ -2425,12 +2446,15 @@ class MainWindow(QMainWindow):
         # print("pv set updata frag views")
         pv.updateFragmentViews()
         # print("set vol views")
-        self.depth.setVolumeView(vv);
-        self.xline.setVolumeView(vv);
-        self.inline.setVolumeView(vv);
-        self.surface.setVolumeView(vv);
+        self.depth.setVolumeView(vv)
+        self.xline.setVolumeView(vv)
+        self.inline.setVolumeView(vv)
+        self.surface.setVolumeView(vv)
         # print("draw slices")
         self.drawSlices()
+        if self.annotation_window is not None:
+            self.annotation_window.setVolumeView(vv)
+            self.annotation_window.drawSlices()
 
     def setVolumeViewColor(self, volume_view, color):
         self.volumes_table.model().beginResetModel()
@@ -2629,6 +2653,8 @@ class MainWindow(QMainWindow):
         self.xline.drawSlice()
         self.inline.drawSlice()
         self.surface.drawSlice()
+        if self.annotation_window is not None:
+            self.annotation_window.drawSlices()
 
     def getVoxelSizeUm(self):
         if self.project_view is None:
