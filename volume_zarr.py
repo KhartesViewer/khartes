@@ -87,6 +87,36 @@ def slice_to_hashable(slice):
 def hashable_to_slice(item):
     return slice(item[0], item[1], None)
 
+
+class TransposedDataView():
+    def __init__(self, data, direction=0):
+        self.data = data
+        assert direction in [0, 1]
+        self.direction = direction
+
+    @property
+    def shape(self):
+        shape = self.data.shape
+        if self.direction == 0:
+            return (shape[2], shape[0], shape[1])
+        elif self.direction == 1:
+            return (shape[1], shape[0], shape[2])
+
+    def __getitem__(self, key):
+        if self.direction == 0:
+            xslice, zslice, yslice = key
+        elif self.direction == 1:
+            yslice, zslice, xslice = key
+        result = self.data[zslice, yslice, xslice]
+        if len(result.shape) == 1:
+            # Fancy-indexing collapses the shape, so we don't need to transpose
+            return result
+        if self.direction == 0:
+            return result.transpose(2, 0, 1)
+        elif self.direction == 1:
+            return result.transpose(1, 0, 2)
+
+
 class CachedZarrVolume():
     """An interface to cached volume data stored on disk as .tif files
     but not fully loaded into memory.
@@ -108,6 +138,7 @@ class CachedZarrVolume():
 
     def __init__(self):
         self.data = None
+        self.trdatas = None
         self.is_zarr = True
         self.data_header = None
 
@@ -187,8 +218,8 @@ class CachedZarrVolume():
         output_filename = name
         if not output_filename.endswith(".volzarr"):
             output_filename += ".volzarr"
-        filepath = project.volumes_path / output_filename
-        if filepath.exists():
+        filepath = os.path.join(project.volumes_path, output_filename)
+        if os.path.exists(filepath):
             err = f"{filepath} already exists"
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
@@ -202,11 +233,11 @@ class CachedZarrVolume():
             "max_width": max_width,
         }
         # Write out the project file
-        with open(output_filename, "w") as outfile:
+        with open(filepath, "w") as outfile:
             for key, value in header.items():
                 outfile.write(f"{key}\t{value}\n")
         
-        volume = CachedZarrVolume.loadFile(output_filename)
+        volume = CachedZarrVolume.loadFile(filepath)
         project.addVolume(volume)
         return volume
 
@@ -243,6 +274,9 @@ class CachedZarrVolume():
 
         array = load_tif(tiff_directory.strip())
         volume.data = Loader(array, max_mem_gb=5)
+        volume.trdatas = []
+        volume.trdatas.append(TransposedDataView(volume.data, 0))
+        volume.trdatas.append(TransposedDataView(volume.data, 1))
         volume.sizes = tuple(int(size) for size in volume.data.shape)
         return volume
 
@@ -568,11 +602,37 @@ class Loader():
         for item in (islice, jslice, kslice):
             if isinstance(item, slice) and item.step is not None:
                 raise ValueError("Sorry, we don't support strided slices yet")
+            if not any([isinstance(item, slice), isinstance(item, int), isinstance(item, np.ndarray)]):
+                print("Sorry, we don't yet support arbitrary access to the array.")
+                print(type(item))
+                raise ValueError()
+
+        fancy_indexed = False
+        if isinstance(islice, np.ndarray):
+            minval, maxval = islice.min(), islice.max()
+            adj_i_array = islice - minval
+            islice = slice(minval, maxval + 1, None)
+            fancy_indexed = True
+
+        if isinstance(jslice, np.ndarray):
+            minval, maxval = jslice.min(), jslice.max()
+            adj_j_array = jslice - minval
+            jslice = slice(minval, maxval + 1, None)
+            fancy_indexed = True
+
+        if isinstance(kslice, np.ndarray):
+            minval, maxval = kslice.min(), kslice.max()
+            adj_k_array = kslice - minval
+            kslice = slice(minval, maxval + 1, None)
+            fancy_indexed = True
+
         # First check if we have the requested data already in memory
         result = self.check_cache(islice, jslice, kslice)
         if result is not None:
-            print("Serving from cache")
-            print(self.cache_size)
+            #print("Serving from cache")
+            #print(self.cache_size)
+            if fancy_indexed:
+                return result[adj_i_array, adj_j_array, adj_k_array]
             return result
         # Pad out the requested slice before we pull it from disk
         # so that we cache neighboring data in memory to avoid
@@ -602,4 +662,6 @@ class Loader():
             print(islice, jslice, kslice)
             print(padded_islice, padded_jslice, padded_kslice)
             raise ValueError("Cache miss after cache loading")
+        if fancy_indexed:
+            return result[adj_i_array, adj_j_array, adj_k_array]
         return result

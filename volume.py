@@ -453,6 +453,7 @@ class VolumeView():
         if self.volume.data is not None:
             if not self.volume.is_zarr:
                 self.trdata = self.volume.trdatas[direction]
+                self.trshape = self.trdata.shape
             else:
                 self.trshape = self.volume.trshape(direction)
             self.notifyModified()
@@ -463,6 +464,7 @@ class VolumeView():
     def dataLoaded(self):
         if not self.volume.is_zarr:
             self.trdata = self.volume.trdatas[self.direction]
+            self.trshape = self.trdata.shape
         else:
             self.trshape = self.volume.trshape(self.direction)
 
