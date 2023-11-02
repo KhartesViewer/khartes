@@ -1182,7 +1182,7 @@ into and out of the viewing plane.
             cv2.line(canvas, (cx,cy-r), (cx,cy+r), white, thickness+2)
             cv2.line(canvas, (cx,cy-r), (cx,cy+r), color, thickness)
 
-    def drawSlice(self):
+    def drawSlice(self, offsets=None, crosshairs=True, fragments=True):
         timera = Utils.Timer(False)
         volume = self.volume_view
         if volume is None :
@@ -1201,7 +1201,15 @@ into and out of the viewing plane.
         self.setMargin(0)
         self.window.setFocus()
         z = self.getZoom()
-        slc = volume.getSlice(self.axis, volume.ijktf)
+        if offsets is None:
+            ijktf = volume.ijktf
+        else:
+            ijktf = (
+                volume.ijktf[0] + offsets[0],
+                volume.ijktf[1] + offsets[1],
+                volume.ijktf[2] + offsets[2],
+            )
+        slc = volume.getSlice(self.axis, ijktf)
         # slice width, height
         sw = slc.shape[1]
         sh = slc.shape[0]
@@ -1286,7 +1294,7 @@ into and out of the viewing plane.
 
         # size = self.crosshairSize
         size = self.getDrawWidth("axes")
-        if size > 0:
+        if size > 0 and crosshairs:
             cv2.line(outrgbx, (fx,0), (fx,wh), self.axisColor(self.iIndex), size)
             cv2.line(outrgbx, (0,fy), (ww,fy), self.axisColor(self.jIndex), size)
             if not apply_axes_opacity:
@@ -1312,6 +1320,8 @@ into and out of the viewing plane.
         wj1 = max(oj0, oj1)
 
         for frag in self.fragmentViews():
+            if not fragments:
+                continue
             fragNodeSize = nodeSize
             apply_frag_node_opacity = apply_node_opacity
             if not frag.mesh_visible:
@@ -1496,6 +1506,8 @@ into and out of the viewing plane.
         # print(self.cur_frag_pts_xyijk.shape)
         label = self.sliceGlobalLabel()
         gpos = self.sliceGlobalPosition()
+        if offsets is not None:
+            gpos += offsets[self.axis]
         # print("label", self.axis, label, gpos)
         txt = "%s: %d" % (label, gpos)
         org = (10,20)

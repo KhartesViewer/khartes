@@ -266,6 +266,10 @@ class AnnotationWindowButton(QWidget):
         if self.window is None:
             self.window = AnnotationWindow(self.main_window)
             self.main_window.annotation_window = self.window
+            pv = self.main_window.project_view
+            vv = pv.cur_volume_view
+            self.window.setVolumeView(vv)
+            self.window.drawSlices()
         self.window.show()
 
 class PositionSetter(QWidget):
@@ -2451,10 +2455,9 @@ class MainWindow(QMainWindow):
         self.inline.setVolumeView(vv)
         self.surface.setVolumeView(vv)
         # print("draw slices")
-        self.drawSlices()
         if self.annotation_window is not None:
             self.annotation_window.setVolumeView(vv)
-            self.annotation_window.drawSlices()
+        self.drawSlices()
 
     def setVolumeViewColor(self, volume_view, color):
         self.volumes_table.model().beginResetModel()

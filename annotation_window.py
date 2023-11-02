@@ -53,6 +53,9 @@ class AnnotationWindow(QWidget):
         self.show()
         self.setWindowTitle("Volume Annotations")
         self.main_window = main_window
+        self.volume_view = None
+        self.has_had_volume_view = False
+        self.slices = slices
 
         grid = QGridLayout()
         self.depth = [
@@ -77,11 +80,21 @@ class AnnotationWindow(QWidget):
 
     def setVolumeView(self, volume_view):
         print("VV set")
-        pass
+        self.volume_view = volume_view
+        if volume_view is None:
+            return
+        for i in range(self.slices):
+            for datawindow in [self.depth[i], self.inline[i], self.xline[i]]:
+                datawindow.setVolumeView(volume_view)
 
     def drawSlices(self):
         print("drawing")
-        pass
+        for i in range(self.slices):
+            for datawindow in [self.depth[i], self.inline[i], self.xline[i]]:
+                offsets = [0, 0, 0]
+                axis = datawindow.axis
+                offsets[axis] += (i - (self.slices // 2)) * 10
+                datawindow.drawSlice(offsets, crosshairs=False, fragments=False)
 
     def closeEvent(self, event):
         """We need to reset the main window's link to this when 
