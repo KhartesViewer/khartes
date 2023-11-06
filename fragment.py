@@ -1225,13 +1225,14 @@ class FragmentView(BaseFragmentView):
         minx, miny = np.min(pts, axis=0)
         maxx, maxy = np.max(pts, axis=0)
         # print("min",minx,miny,"max",maxx,maxy)
-        return(minx, miny, maxx, maxy)
+        # return(minx, miny, maxx, maxy)
+        return ((minx,miny),(maxx,maxy))
     
     def computeFragRect(self):
         frag_rect = self.nodesBoundingBox(None, None)
         # print("fr", frag_rect)
         if frag_rect is not None:
-           minx, miny, maxx, maxy = frag_rect
+           (minx, miny), (maxx, maxy) = frag_rect
            nk,nj,ni = self.cur_volume_view.trdata.shape
            # if self.fragment.direction != self.cur_volume_view.direction:
            if not self.aligned():
@@ -1294,14 +1295,119 @@ class FragmentView(BaseFragmentView):
         timer.time("triangulate")
         if not do_update:
             return
+        '''
         changed_pts_idx = np.zeros((0,), dtype=np.int32)
         added_trgls_idx = np.zeros((0,), dtype=np.int32)
         deleted_trgls_idx = np.zeros((0,), dtype=np.int32)
+        '''
+        # If changed_rect is set to a rectangle rather than
+        # None, it will be used as the bounds of the area
+        # to be updated.
         changed_rect = None
         frag_rect = self.computeFragRect()
         oldtri = self.oldtri
-        # https://stackoverflow.com/questions/66674537/python-numpy-get-difference-between-2-two-dimensional-array
+
+        # If all these conditions are True, then it is possible
+        # to update the zsurf within a smaller rectangle, rather than
+        # over the entire surface.
         if oldtri is not None and self.tri is not None and self.oldzs is not None:
+            # Find the bounding rectangle within which
+            # to update the zsurf, based on the points and triangles
+            # that have been changed since the last update
+
+            # Need to check for changes in point positions in 3D, but
+            # tri.points only has 2D point positions, so append the
+            # z points
+            oldpts = np.append(oldtri.points, self.oldzs[:,np.newaxis], axis=1)
+            newpts = np.append(self.tri.points, self.fpoints[:,2:3], axis=1)
+            # print("old new",oldpts.shape, newpts.shape)
+
+            # Find points that have been deleted (oldpts minus newpts,
+            # where "minus" is a set operation)
+            # If a point has simply been moved, it will be detected
+            # twice: as if the point at the old position had been deleted,
+            # and the point at the new position had been added
+            deleted_pts = Utils.setDiff2DIndex(oldpts, newpts)
+            del_pts_rect = None
+            if len(deleted_pts) > 0:
+                # Neighboring points
+                nidxs = self.nodesNeighbors(oldtri, deleted_pts)
+                # Neighbors of neighboring points
+                nnidxs = self.nodesNeighbors(oldtri, nidxs)
+                del_pts_rect = self.nodesBoundingBox(oldtri, nnidxs)
+
+            # Find points which have been added (newpts minus oldpts)
+            added_pts = Utils.setDiff2DIndex(newpts, oldpts)
+            add_pts_rect = None
+            if len(added_pts) > 0:
+                nidxs = self.nodesNeighbors(self.tri, added_pts)
+                nnidxs = self.nodesNeighbors(self.tri, nidxs)
+                add_pts_rect = self.nodesBoundingBox(self.tri, nnidxs)
+
+            # rectUnion will correctly handle the case where either
+            # (or both) of the input rects is None
+            pts_rect = Utils.rectUnion(del_pts_rect, add_pts_rect)
+
+            # For each simplex (triangle), sort its point
+            # indices in ascending order, so that old and new
+            # triangulations can more easily be compared.
+            # As a result of the sorting, a large percentage
+            # of the sorted triangles will be flipped compared
+            # to their original orientation.
+            oldtris = np.sort(oldtri.simplices)
+            newtris = np.sort(self.tri.simplices)
+
+            # For each triangle, replace each point index by the
+            # point xy values.  The xy values, rather than the indices,
+            # will be used to compare triangulations, because
+            # the indices will change whenever a point is deleted.
+            # Bear in mind that if the points simply move a little,
+            # without affecting the original triangulation topology,
+            # this will still be seen as a change in the triangulation,
+            # because the xy locations will have changed even if the 
+            # indices haven't.
+            oldtrixys = oldtri.points[oldtris].reshape(-1,6)
+            newtrixys = self.tri.points[newtris].reshape(-1,6)
+
+            # old triangulation minus new triangulation
+            deleted_tris = Utils.setDiff2DIndex(oldtrixys, newtrixys)
+            del_tris_rect = None
+            if len(deleted_tris) > 0:
+                vrts = self.trglsNeighborsVertices(oldtri, deleted_tris)
+                if len(vrts) > 0:
+                    del_tris_rect = self.nodesBoundingBox(oldtri, vrts)
+
+            # new triangulation minus old triangulation
+            added_tris = Utils.setDiff2DIndex(newtrixys, oldtrixys)
+            add_tris_rect = None
+            if len(added_tris) > 0:
+                vrts = self.trglsNeighborsVertices(self.tri, added_tris)
+                if len(vrts) > 0:
+                    add_tris_rect = self.nodesBoundingBox(self.tri, vrts)
+
+            tris_rect = Utils.rectUnion(del_tris_rect, add_tris_rect)
+
+            changed_rect = Utils.rectUnion(pts_rect, tris_rect)
+
+
+            '''
+            # Diagnostics (keep)
+            if Utils.rectIsValid(changed_rect):
+                print("rects", self.fragment.name, len(deleted_pts), len(added_pts), len(deleted_tris), len(added_tris))
+                if pts_rect is not None and pts_rect != changed_rect:
+                    print("p  ", pts_rect)
+                if tris_rect is not None and pts_rect != changed_rect:
+                    print("t  ", tris_rect)
+                print("c  ", changed_rect)
+            '''
+
+            if not Utils.rectIsValid(changed_rect):
+                return
+
+
+            # TODO Old code; delete once new code is verified
+            """
+
             # print("diffing")
             oldpts = oldtri.points
             newpts = self.tri.points
@@ -1329,25 +1435,43 @@ class FragmentView(BaseFragmentView):
                     #     print(newzs[idx])
 
             # print("b")
-            oldtris = oldtri.simplices
-            newtris = self.tri.simplices
+            # For each simplex (triangle), sort the point
+            # indices in ascending order, so that old and new
+            # triangulations can more easily be compared.
+            # NOTE that the sorting means that the resulting
+            # triangles may not have the correct orientation
+            oldtris = np.sort(oldtri.simplices)
+            newtris = np.sort(self.tri.simplices)
+            # For each triangle, replace each point index by the
+            # point xy values.  The xy values, rather than the indices,
+            # will be used to compare triangulations, because
+            # the indices will change whenever a point is deleted.
+            oldtrixys = oldtri.points[oldtris].reshape(-1,6)
+            newtrixys = self.tri.points[newtris].reshape(-1,6)
+            # print("trixy", oldtris.shape, oldtri.points[oldtri.simplices].shape, oldtrixys.shape)
+            # print(oldtri.simplices[:5])
+            # print(oldtris[:5])
+            # print(self.tri.simplices[:5])
+            # print(newtris[:5])
             # idx = (newtris[:,None]!=oldtris).any(-1).all(1)
             # NOTE that this is an index into newtris
             # added_trgls_idx = idx.nonzero()[0]
-            added_trgls_idx = Utils.setDiff2DIndex(newtris, oldtris)
+            # added_trgls_idx = Utils.setDiff2DIndex(newtris, oldtris)
+            added_trgls_idx = Utils.setDiff2DIndex(newtrixys, oldtrixys)
             # print("d", added_trgls_idx.shape)
             # idx = (oldtris[:,None]!=newtris).any(-1).all(1)
             # NOTE that this is an index into oldtris
             # and that oldtris uses old vertex numbering
             # deleted_trgls_idx = idx.nonzero()[0]
-            deleted_trgls_idx = Utils.setDiff2DIndex(oldtris, newtris)
+            # deleted_trgls_idx = Utils.setDiff2DIndex(oldtris, newtris)
+            deleted_trgls_idx = Utils.setDiff2DIndex(oldtrixys, newtrixys)
             # print("f", deleted_trgls_idx.shape)
             # if len(nz) > 0:
             # print("idx sum", np.sum(idx))
             #     print("tris changed", nz)
             #     print(newtris[idx])
 
-            # print(len(added_trgls_idx), len(deleted_trgls_idx), len(changed_pts_idx))
+            print("changes", self.fragment.name, len(added_trgls_idx), len(deleted_trgls_idx), len(changed_pts_idx))
             '''
             If more than one point changed, recompute everywhere!
             If one point changed in x,y, or z and trgls did
@@ -1364,24 +1488,46 @@ class FragmentView(BaseFragmentView):
                 # print("neighbors", nidxs)
                 nnidxs = self.nodesNeighbors(self.tri, nidxs)
                 # print("next neighbors", nnidxs)
-                (ominx, ominy, omaxx, omaxy) = self.nodesBoundingBox(oldtri, nnidxs)
+                (ominx, ominy), (omaxx, omaxy) = self.nodesBoundingBox(oldtri, nnidxs)
                 # print("o",ominx, ominy, omaxx, omaxy)
-                (nminx, nminy, nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nnidxs)
+                (nminx, nminy), (nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nnidxs)
                 # print("n",nminx, nminy, nmaxx, nmaxy)
                 minx = min(ominx, nminx)
                 miny = min(ominy, nminy)
                 maxx = max(omaxx, nmaxx)
                 maxy = max(omaxy, nmaxy)
-                changed_rect = (minx, miny, maxx, maxy)
-                # print("v changed_rect", changed_rect)
+                changed_rect = (minx, miny), (maxx, maxy)
+                print("v changed_rect", changed_rect)
 
             elif len(changed_pts_idx) <= 1 and (len(added_trgls_idx) > 0 or len(deleted_trgls_idx) > 0):
+                # print(oldtri.simplices[:5])
+                # print(oldtris[:5])
+                # print(oldtrixys[:5].round(decimals=3))
+                # print(deleted_trgls_idx[:5])
+                # print(oldtris[deleted_trgls_idx[:5]])
+                # print(self.tri.simplices[:5])
+                # print(newtris[:5])
+                # print(newtrixys[:5].round(decimals=3))
+                # print(added_trgls_idx[:5])
+                # print(newtris[added_trgls_idx[:5]])
+
+                print("t0",len(changed_pts_idx), len(added_trgls_idx), len(deleted_trgls_idx))
+                # print(np.sort(oldtris[deleted_trgls_idx], axis=0))
+                # print(sorted(oldtris[deleted_trgls_idx].tolist()))
+                # print(sorted(newtris[added_trgls_idx].tolist()))
+                # print(oldtri.simplices[deleted_trgls_idx])
+                # print(oldtris[deleted_trgls_idx])
+                # print(deleted_trgls_idx)
+                # print(np.sort(newtris[added_trgls_idx], axis=0))
                 ovrts = self.trglsNeighborsVertices(oldtri, deleted_trgls_idx)
                 nvrts = self.trglsNeighborsVertices(self.tri, added_trgls_idx)
+                # print(len(ovrts), len(nvrts))
                 if len(nvrts) > 0:
-                    (nminx, nminy, nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nvrts)
+                    (nminx, nminy), (nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nvrts)
+                    # print("n", nminx, nminy, nmaxx, nmaxy)
                 if len(ovrts) > 0:
-                    (ominx, ominy, omaxx, omaxy) = self.nodesBoundingBox(oldtri, ovrts)
+                    (ominx, ominy), (omaxx, omaxy) = self.nodesBoundingBox(oldtri, ovrts)
+                    # print("o", ominx, ominy, omaxx, omaxy)
                 if len(ovrts) == 0:
                     minx = nminx
                     miny = nminy
@@ -1401,20 +1547,22 @@ class FragmentView(BaseFragmentView):
                     node_idx = changed_pts_idx[0]
                     nidxs = self.nodeNeighbors(self.tri, node_idx)
                     nnidxs = self.nodesNeighbors(self.tri, nidxs)
-                    (vminx, vminy, vmaxx, vmaxy) = self.nodesBoundingBox(self.tri, nnidxs)
+                    (vminx, vminy), (vmaxx, vmaxy) = self.nodesBoundingBox(self.tri, nnidxs)
+                    # print("v", vminx, vminy, vmaxx, vmaxy)
                     minx = min(minx, vminx)
                     miny = min(miny, vminy)
                     maxx = max(maxx, vmaxx)
                     maxy = max(maxy, vmaxy)
-                changed_rect = (minx, miny, maxx, maxy)
-                # print("t changed_rect", changed_rect)
+                changed_rect = (minx, miny), (maxx, maxy)
+                print("t changed_rect", changed_rect)
             elif len(changed_pts_idx) == 0 and len(added_trgls_idx) == 0 and len(deleted_trgls_idx) == 0:
                 # self.oldzs = None
-                # print("found 0 0 0")
+                print("found 0 0 0")
                 return
+            """
 
             if changed_rect is not None:
-                minx, miny, maxx, maxy = changed_rect
+                (minx, miny), (maxx, maxy) = changed_rect
                 if minx >= maxx or miny >= maxy:
                     # print("nulling changed_rect")
                     changed_rect = None
@@ -1428,7 +1576,7 @@ class FragmentView(BaseFragmentView):
                     miny = int(max(miny-1, 0))
                     maxx = int(min(maxx+1, ni))
                     maxy = int(min(maxy+1, nj))
-                    changed_rect = (minx, miny, maxx, maxy)
+                    changed_rect = (minx, miny), (maxx, maxy)
 
         '''
         if self.tri is not None:
@@ -1499,7 +1647,7 @@ class FragmentView(BaseFragmentView):
                     self.zsurf[miny:maxy,minx:maxx] = local_zsurf
                     self.clearZsliceCache()
             else:
-                minx, miny, maxx, maxy = changed_rect
+                (minx, miny), (maxx, maxy) = changed_rect
                 # print("cr",minx,miny,maxx,maxy)
                 nx = maxx-minx
                 ny = maxy-miny
@@ -1618,7 +1766,7 @@ class FragmentView(BaseFragmentView):
                 ssi[0,:,:] += int(minx)
                 ssi[1,:,:] += int(miny)
         else:
-            minx, miny, maxx, maxy = changed_rect
+            (minx, miny), (maxx, maxy) = changed_rect
             # print("cr2", changed_rect)
             nx = maxx-minx
             ny = maxy-miny
@@ -1878,10 +2026,37 @@ class FragmentView(BaseFragmentView):
             self.line = None
             self.lineAxis = -1
             return
+
         try:
             self.line = None
             self.lineAxis = -1
-            self.tri = Delaunay(nppoints)
+            # Mathematicians hate this trick!
+            # For certain positions of points (for instance,
+            # if four or more points lie on the
+            # circumference of a circle), Delaunay
+            # triangulation has a non-unique solution.
+            # When successive calls to Delaunay() return
+            # different (yet still valid) triangulations of the
+            # same points, this can force an unnecessary and
+            # time-consuming recomputation of zsurf.  To make
+            # non-unique solutions less likely, shift each point
+            # by a tiny but determinate (non-random) amount, based on
+            # the point's location (can't use the index, because indices
+            # change whenever a point is deleted).
+            # Side effect: self.tri.points is based on shifted_nppoints
+            # rather than on nppoints (fpoints), which may cause unexpected
+            # behavior in code that is unaware of this shift.
+            shifted_nppoints = nppoints.copy().astype(dtype=np.float64)
+            # ind = np.arange(shifted_nppoints.shape[0], dtype=np.int32)
+            ind = (nppoints[:,0]*1019+nppoints[:,1]*1013).astype(np.int64)
+            eps = 1./(1024*1024)
+            # 503, 509, 1013 and 1019 are prime
+            shifted_nppoints[:,0] += eps*np.remainder(ind, 503)
+            shifted_nppoints[:,1] += eps*np.remainder(ind, 509)
+
+            self.tri = Delaunay(shifted_nppoints)
+            # Can't do this!  self.tri.points cannot be reset
+            # self.tri.points = nppoints
         except QhullError as err:
             # print("qhull error")
             self.tri = None
@@ -1941,12 +2116,18 @@ class FragmentView(BaseFragmentView):
         ij = ijk[0:2]
         matches = np.where((np.rint(self.fpoints[:, 0:2]) == ij).all(axis=1))[0]
         # print(matches)
+        # Check if there is already a point at this 2D location
         if matches.shape[0] > 0:
             # print("duplicate at", tijk)
             # print("deleting duplicates at row", matches)
             # print("    ", self.vpoints[matches[0]])
             # delete old point if exists at same ij as new point
-            self.fragment.gpoints = np.delete(self.fragment.gpoints, matches, 0)
+            # self.fragment.gpoints = np.delete(self.fragment.gpoints, matches, 0)
+            # Move existing point rather than deleting and replacing
+            # it, to avoid reindexing the list of points
+            print("addPoint: duplicate at", ij, tijk)
+            self.movePoint(matches[0], tijk)
+            return
         # create new point
         gijk = self.cur_volume_view.transposedIjkToGlobalPosition(tijk)
         self.fragment.gpoints = np.append(self.fragment.gpoints, np.reshape(gijk, (1,3)), axis=0)

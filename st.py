@@ -733,6 +733,7 @@ class ST(object):
     # def sparse_result(self, xy, ix0, ix, sign, nudge=0):
     def sparse_result(self, y, ix0, ix):
         # esy = self.evenly_spaced_result(xy, ix0, ix, sign, nudge)
+        origx = y[:,0].copy()
         esy = self.evenly_spaced_result(y, ix0, ix)
         if esy is None:
             return None
@@ -743,16 +744,25 @@ class ST(object):
         xs = esy[:,0].copy()
         if xs[0] > xs[-1]:
             xs *= -1
+            origx *= -1
         ys = esy[:,1]
         # xmin = xs[0]
         # xmax = xs[-1]
 
         b = np.full(xs.shape, False)
+        # ignore = np.full(xs.shape, False)
+        # Always ignore (delete) points that are close (< 2*ix) to the
+        # start and end points
+        ignore_distance = 2*ix
+        ignore = (np.abs(xs-origx[0])<ignore_distance) | (np.abs(xs-origx[-1])<ignore_distance)
+        # b flags points that have already been checked
         b[0] = True
         b[-1] = True
         tol = 1.
         # print("b",b.shape,b.dtype)
         # print("xrange",xrange.shape,xrange.dtype)
+        # Delete as many points as possible while still keeping
+        # the curve within tolerance
         while b.sum() < len(xs):
             idxs = b.nonzero()
             itx = xs[idxs]
@@ -760,6 +770,8 @@ class ST(object):
             tcs = CubicSpline(itx,ity)
             oty = tcs(xs)
             diff = np.abs(oty-ys)
+            diff[ignore] = 0.
+            # print("diff", diff)
             # print("diff",diff.shape)
             midx = diff.argmax()
             # print("midx",midx)
@@ -770,6 +782,10 @@ class ST(object):
                 break
             b[midx] = True
 
+        # print(y)
+        # print(esy)
+        # print(ignore.nonzero(), b.nonzero())
+        b[ignore] = False
         idxs = b.nonzero()
         oy = esy[idxs]
         # print("oy", oy)

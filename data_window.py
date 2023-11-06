@@ -938,6 +938,8 @@ class DataWindow(QLabel):
             self.isMovingTiff = False
             self.checkCursor()
 
+    '''
+    Moved to utils.py
     # adapted from https://stackoverflow.com/questions/25068538/intersection-and-difference-of-two-rectangles/25068722#25068722
     # The C++ version of OpenCV provides operations, including intersection,
     # on rectangles, but the Python version doesn't.
@@ -953,6 +955,7 @@ class DataWindow(QLabel):
             r = ((x1, y1), (x2, y2))
             # print(r)
             return r
+    '''
 
     def axisColor(self, axis):
         color = [0]*4
@@ -1022,12 +1025,12 @@ class DataWindow(QLabel):
         margin = 32
         ij0m = (ij0[0]-margin,ij0[1]-margin)
         ij1m = (ij1[0]+margin,ij1[1]+margin)
-        ri = self.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
+        ri = Utils.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
         if ri is None:
             return
         ij0 = ri[0]
         ij1 = ri[1]
-        ri = self.rectIntersection((ij0,ij1), ((imin-500,jmin-500),(imax+500,jmax+500)))
+        ri = Utils.rectIntersection((ij0,ij1), ((imin-500,jmin-500),(imax+500,jmax+500)))
         if ri is None:
             return
         ij0 = ri[0]
@@ -1064,6 +1067,7 @@ class DataWindow(QLabel):
         # correctly in sub-sampled data volumes as well.
         min_delta_shift = (gxyz[gaxis]/gstep) % min_delta
         # y = st.call_ivp(dij, sign, 5.)
+        # print("end points", dija, dijb)
         y = st.interp2dWH(dija, dijb)
         if y is None:
             print("no y values")
@@ -1114,12 +1118,12 @@ class DataWindow(QLabel):
         margin = 32
         ij0m = (ij0[0]-margin,ij0[1]-margin)
         ij1m = (ij1[0]+margin,ij1[1]+margin)
-        ri = self.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
+        ri = Utils.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
         if ri is None:
             return
         ij0 = ri[0]
         ij1 = ri[1]
-        ri = self.rectIntersection((ij0,ij1), ((ij[0]-500,ij[1]-500),(ij[0]+500,ij[1]+500)))
+        ri = Utils.rectIntersection((ij0,ij1), ((ij[0]-500,ij[1]-500),(ij[0]+500,ij[1]+500)))
         if ri is None:
             return
         ij0 = ri[0]
@@ -1457,7 +1461,7 @@ into and out of the viewing plane.
         by1 = 0
         bx2 = ww
         by2 = wh
-        ri = self.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
+        ri = Utils.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
         if ri is not None:
             (x1,y1),(x2,y2) = ri
             # zoomed data slice
@@ -1862,7 +1866,7 @@ class SurfaceWindow(DataWindow):
                 by1 = 0
                 bx2 = ww
                 by2 = wh
-                ri = self.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
+                ri = Utils.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
                 if ri is not None:
                     (x1,y1),(x2,y2) = ri
                     x1s = int((x1-ax1)/z)
