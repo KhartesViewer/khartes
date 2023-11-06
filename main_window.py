@@ -272,6 +272,27 @@ class AnnotationWindowButton(QWidget):
             self.window.drawSlices()
         self.window.show()
 
+class OpenAnnotationFileButton(QWidget):
+    def __init__(self, main_window, parent=None):
+        super(AnnotationWindowButton, self).__init__(parent)
+        self.main_window = main_window
+        self.window = None
+        self.button = QPushButton("Open Saved Annotations")
+        self.button.clicked.connect(self.open_window)
+        hlayout = QHBoxLayout()
+        self.setLayout(hlayout)
+        hlayout.addWidget(self.button)
+
+    def open_window(self):
+        if self.window is None:
+            self.window = AnnotationWindow(self.main_window)
+            self.main_window.annotation_window = self.window
+            pv = self.main_window.project_view
+            vv = pv.cur_volume_view
+            self.window.setVolumeView(vv)
+            self.window.drawSlices()
+        self.window.show()
+
 class PositionSetter(QWidget):
     def __init__(self, main_window, parent=None):
         super(PositionSetter, self).__init__(parent)
@@ -311,6 +332,8 @@ class PositionSetter(QWidget):
         y = self.ysetter.value()
         x = self.xsetter.value()
         self.main_window.recenterCurrentVolume(np.array([x, y, z]))
+        if self.annotation_window is not None:
+            self.annotation_window.drawSlices()
 
 class ZInterpolationSetter(QWidget):
     def __init__(self, main_window, parent=None):
