@@ -408,8 +408,8 @@ press the left mouse button.
 
 There are two ways to toggle between the two modes.  One way is to
 click on the button, to the right of the `Files` menu, that contains
-a crosshairs icon.  When this button is enabled, khartes is in
-normal mode, and when it is disabled, khartes is in add-node mode.
+a crosshairs icon. When this button is not selected, khartes is in
+normal mode, and when it is selected, khartes is in add-node mode.
 
 The other, more convenient, way to toggle between normal and add-node mode
 is to quickly press and release the shift button.  You can see which
@@ -532,24 +532,22 @@ The prerequisites are:
 
 * You need to be working in one of the two top windows in the Data Slices area.
 
-At this point, you only need to choose where to begin, and in which
-direction to go.  If the cursor is near
-an existing node (the node has turned cyan), the auto-segmentation will start
-at that node.  Otherwise, it will start at the location of the cursor.
-
-To automatically create new nodes to the right of the first one, press
-the right bracket or brace key (`]` or `}`); either key will work.  To create new nodes to the
-left, press the left bracket or brace key (`[`] or `{`).
-
-The auto-segmentation algorithm will go as far as it can within the current view;
-this may not be all the way to the boundary, if the data is more complicated
-than the algorithm can handle.
+The auto-segmentation algorithm will automatically create new nodes, going as far as
+it can within the current view; this may not be all the way to the boundary,
+if the data is more complicated than the algorithm can handle.
 Note that it will not venture beyond the area that is visible in the Data Slice.
 It is a good idea, until you get a feeling for its capabilities,
-to work on a fairly zoomed-in
-area, in order to limit how far the algorithm goes.  This means you
-will not have to delete as many nodes if the algorithm goes
+to work on a fairly zoomed-in area, in order to limit how far the algorithm goes.
+This means you will not have to delete as many nodes if the algorithm goes
 astray (as it often does).
+
+You only need to choose where to begin, and in which direction to go.
+If the cursor is near an existing node (the node has turned cyan),
+the auto-segmentation will start at that node.  Otherwise, it will
+create a node at the location of the cursor and continue from there.
+
+To start and head to the right, press the right bracket or brace key (] or }).
+To start and head to the left, press the left bracket or brace key ([] or {) instead.
 
 Note that the algorithm is quite fast; it often adds the new nodes within
 a couple of seconds (longer for a larger surface, due to khartes updating
