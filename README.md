@@ -371,9 +371,9 @@ Here are some general user-interface aspects that you should
 have gathered from the video:
 
 * Each node that the user creates is added to a surface (the fragment);
-this surface is displayed in the map view under the Fragment View.  Of course, if
-the new nodes form a line, rather than a surface,
-it is shown in the Fragment View.  Once the user creates nodes
+a map view of this surface is displayed in the Fragment View window.
+If all the nodes lie in a straight line,
+then the Fragment View will display a line rather than a surface.  Once the user creates nodes
 in more than one Data Slice, a surface can be created, and
 this surface is shown in the Fragment View.
 
@@ -439,7 +439,7 @@ Data Slices.  Notice that **the order you add nodes does not matter**;
 if you feel your nodes are too far apart, simply add more.
 
 But what do you do if you discover that a node is in the wrong
-place? You have a couple of options.
+place?  You have a couple of options.
 
 #### Deleting a node
 
@@ -551,10 +551,10 @@ area, in order to limit how far the algorithm goes.  This means you
 will not have to delete as many nodes if the algorithm goes
 astray (as it often does).
 
-Note that the algorithm is quite fast; it often adds new nodes within
+Note that the algorithm is quite fast; it often adds the new nodes within
 a couple of seconds (longer for a larger surface, due to khartes updating
 the surface to account for the new nodes).  If nothing happens within 10 to 15 seconds,
-check to make sure that you meet the prerequisites above.
+check to make sure that you have met the prerequisites above.
 
 If you are unhappy with the results, or with a portion of the results, you can
 delete bad nodes using the `delete` or `backspace` key.  Handy hint: if deleting
@@ -681,7 +681,7 @@ cause undesirable waviness in the fragment.
 
 <img src="images/good start.JPG" width="800" />
 
-*Example of a good start.* A couple of inline slices (the horizontal lines
+*Example of a good start.*  A couple of inline slices (the horizontal lines
 in the Fragment View) and a crossline slice (the vertical line) have been
 interpreted.  Nodes near the lines have been moved onto the lines, to
 maintain good node spacing.
@@ -700,7 +700,7 @@ to make sure that the horizontal fibers are the ones that are the most visible
 
 ![sheet_skip](images/sheet_skip.JPG)
 
-***This is bad!*** The horizontal fibers are not continuous.  This needs to be repaired by
+***This is bad!***  The horizontal fibers are not continuous.  This needs to be repaired by
 moving nodes so that all the nodes lie on the same sheet.
 
 **Step 3 continued**: The main problem to watch out for, as illustrated above,
@@ -723,7 +723,7 @@ of the slice, but diverge in the other half.
 
 ### Workflow notes
 
-**Save often.** You simply need to type Ctrl-S to save your work; try to remember to do this whenever
+**Save often.**  You simply need to type Ctrl-S to save your work; try to remember to do this whenever
 you have added or moved a dozen or so nodes.  The "save" operation is very quick, since only
 fragments are saved; the data volumes do not change and thus do not slow down the operation.
 
@@ -747,7 +747,7 @@ by keeping your triangles regular and local.
 
 So, when segmenting, start in the center of a fragment
 and work your way out, keeping a fairly regular mesh, instead
-of trying to create a huge surface.  This practice
+of immediately trying to create a huge surface.  This practice
 will also make it less likely that you stray onto the wrong
 sheet of the scroll in difficult areas.
 
@@ -764,7 +764,7 @@ This tab allows you to control important aspects of your fragments.
 You have already visited this tab, in order to create new fragments;
 now you will have a chance to study it in detail.
 
-The first thing to notice is than one of the rows is highlighted with a
+The first thing to notice is that one of the rows is highlighted with a
 beige background (slate gray if your interface is set
 to dark mode).  The highlighting shows which fragment is
 accepting new nodes.  That is, if you create a new node
@@ -921,7 +921,7 @@ However, as shown in the picture above,
 it does allow you to add dots to the Fragment View to highlight features of interest.
 
 These dots are actually the nodes of a fragment whose only purpose
-is to provide annotation.  Here are the steps to add an annotation to
+is to provide annotation.  Here are the steps to add annotation to
 your Fragment View:
 
 1. Go to the Fragments tab in the Control Area and create a new fragment.
@@ -1202,7 +1202,7 @@ and then select your working region.
 When you save your project, the new fragments
 (and your changes)
 will be saved along with the rest of the project;
-you will not need to re-import the fragment
+you will not need to re-import the fragment the
 next time you load your project into khartes.
 And if you wish to use your mesh in another program,
 you can select the `File /Export file as mesh...` menu
@@ -1318,7 +1318,8 @@ Khartes is designed to be interactive, so every time you make a change to a frag
 moving, adding, or deleting a node, the results of the change are shown instantly.  In the Data Slices,
 the curve passing through the nodes is updated, and in the Fragment View, the surface texture is
 updated.  Though these changes happen quickly, updates do require a certain amount of time, and when
-you have a large group of nodes you need to edit, you might find that updates will delay your work.
+you have a large group of nodes you need to edit, you might find that waiting for the updates
+is delaying your work.
 
 In order to lessen this delay, khartes offers the option to turn off live updates.  You can turn
 off live updates by pressing the `l` (small L) hot key, or by pressing the button marked `LU`
