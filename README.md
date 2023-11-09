@@ -591,8 +591,8 @@ entitled "Advanced Topic: Control Area: Settings" for information on how to chan
 behavior.
 
 * **delete** and **backspace**: If you place the cursor over a node, so that the node turns cyan,
-you can delete the node by pressing either of these two keys.  As mentioned above, deleting a node
-will delete it permanently, so think carefully before doing this.
+you can delete the node by pressing either of these two keys. As mentioned above, deleted nodes
+can not be recovered, so think carefully before doing this.
 
 * **left/right brace/bracket** These keys bring khartes' auto-segmentation
 capability into play.  See the section above on "Auto-segmentation" for details.
@@ -984,7 +984,7 @@ To import the `.obj` file into `vc_render`, you first
 need to make sure you know where the following files and
 directories are located:
 
-- Your `.volpkg` folder, the one that contains the TIFF files that you
+- Your `.volpkg` directory, the one that contains the TIFF files that you
 imported into khartes
 - If your `.volpkg` directory contains more than one volume, you need
 to know the number of the volume that contains the TIFF files
@@ -998,7 +998,7 @@ So, the command you want to type will look something like:
 ```
 vc_render -v [your volpkg directory] --input-mesh [your .obj file] --output-ppm [the name of the ppm file you want to create]
 ```
-You might need to use `--volume` to specify your volume as well, if your `.volpkg` has more than one.
+You might need to use `--volume` to specify your volume as well, if your `.volpkg` directory has more than one.
 
 As already mentioned, the `.ppm` file that `vc_render` creates can be read into `vc_layers_from_ppm` to create a
 flattened surface volume.  And, as explained in the section on importing TIFF files, if you decide to import this
