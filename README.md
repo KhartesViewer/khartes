@@ -446,7 +446,8 @@ place?  You have a couple of options.
 It is very easy to delete a node.  Simply move the cursor over
 the node, so that the node turns cyan.
 At this point, simply hit the "Delete" or "Backspace" key (either will work).
-But bear in mind **deleting a node will remove it permanently**.
+But bear in mind that **deleting a node will remove it permanently**;
+it can not be recovered, as there is currently no undo action implemented.
 
 #### Moving a node
 
