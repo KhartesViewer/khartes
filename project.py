@@ -9,6 +9,7 @@ from ppm import Ppm
 from fragment import Fragment, FragmentView
 from trgl_fragment import TrglFragment, TrglFragmentView
 from base_fragment import BaseFragment, BaseFragmentView
+from annotation_loader import AnnotationData
 from PyQt5.QtGui import QColor 
 
 
@@ -393,9 +394,12 @@ class Project:
         vdir.mkdir()
         fdir = fp / 'fragments'
         fdir.mkdir()
+        annodir = fp / 'annotations'
+        annodir.mkdir()
         prj = Project()
         prj.volumes = []
         prj.fragments = []
+        prj.annotations = []
         prj.valid = True
         prj.path = fp
         prj.name = pname
@@ -404,6 +408,7 @@ class Project:
         prj.version = 1.0
         prj.volumes_path = vdir
         prj.fragments_path = fdir
+        prj.annotations_path = annodir
         info = {}
         for param in Project.info_parameters:
             info[param] = getattr(prj, param)
@@ -566,6 +571,12 @@ class Project:
             print(err)
             return Project.createErrorProject(err)
 
+        annodir = fp / 'annotations'
+        if not annodir.is_dir():
+            err = "Directory %s does not exist"%annodir
+            print(err)
+            return Project.createErrorProject(err)
+
         fdir = fp / 'fragments'
         if not fdir.is_dir():
             err = "Directory %s does not exist"%fdir
@@ -596,10 +607,12 @@ class Project:
         prj.volumes = []
         prj.ppms = []
         prj.fragments = []
+        prj.annotations = []
         prj.valid = True
         prj.path = fp
         prj.volumes_path = vdir
         prj.fragments_path = fdir
+        prj.annotations_path = annodir
 
         for param in Project.info_parameters:
             if param not in info:
@@ -641,6 +654,13 @@ class Project:
                     if frag.valid:
                         prj.addFragment(frag)
 
+        print(annodir)
+        for afile in annodir.glob("*.volzarr"):
+            print(afile)
+            anno = AnnotationData.load_from_ref(afile)
+            if anno is not None and anno.valid:
+                prj.addAnnotation(anno)
+
         return prj
 
     def isSaveUpToDate(self):
@@ -662,6 +682,12 @@ class Project:
 
     def addPpm(self, ppm):
         self.ppms.append(ppm)
+
+    def addAnnotation(self, anno):
+        if not self.annotations or self.annotations is None:
+            self.annotations = anno
+        else:
+            print("Multiple annotations not supported")
 
     def alphabetizeFragments(self):
         Fragment.sortFragmentList(self.fragments)
