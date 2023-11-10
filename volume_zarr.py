@@ -360,7 +360,9 @@ class CachedZarrVolume():
     def ijInPlaneOfSlice(self, axis, ijkt):
         #inds = self.ijIndexesInPlaneOfSlice(axis)
         #return(ijkt[inds[0]], ijkt[inds[1]])
-        return (self.max_width, self.max_width)
+        inds = self.ijIndexesInPlaneOfSlice(axis)
+        x,y = ijkt[inds[0]], ijkt[inds[1]]
+        return (min(x, self.max_width), min(y, self.max_width))
 
     def getSlices(self, ijkt, direction):
         depth = self.getSlice(2, ijkt, direction)
