@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import (
         QVBoxLayout, 
         QWidget,
         QSlider,
+        QHeaderView,
         )
 from PyQt5.QtCore import (
         QAbstractTableModel, QCoreApplication, QObject,
@@ -180,8 +181,8 @@ class AnnotationWindow(QWidget):
         hl = QHBoxLayout()
         hl.addWidget(QLabel("Z Radius:"))
         self.zslider = QSlider(Qt.Horizontal)
-        self.zslider.setMinimum(10)
-        self.zslider.setMaximum(50)
+        self.zslider.setMinimum(5)
+        self.zslider.setMaximum(75)
         self.zslider.setValue(self.radius[0])
         self.zslider.valueChanged.connect(self.updateSliders)
         hl.addWidget(self.zslider)
@@ -192,8 +193,8 @@ class AnnotationWindow(QWidget):
         hl = QHBoxLayout()
         hl.addWidget(QLabel("Y Radius:"))
         self.yslider = QSlider(Qt.Horizontal)
-        self.yslider.setMinimum(10)
-        self.yslider.setMaximum(50)
+        self.yslider.setMinimum(5)
+        self.yslider.setMaximum(75)
         self.yslider.setValue(self.radius[1])
         self.yslider.valueChanged.connect(self.updateSliders)
         hl.addWidget(self.yslider)
@@ -204,8 +205,8 @@ class AnnotationWindow(QWidget):
         hl = QHBoxLayout()
         hl.addWidget(QLabel("X Radius:"))
         self.xslider = QSlider(Qt.Horizontal)
-        self.xslider.setMinimum(10)
-        self.xslider.setMaximum(50)
+        self.xslider.setMinimum(5)
+        self.xslider.setMaximum(75)
         self.xslider.setValue(self.radius[2])
         self.xslider.valueChanged.connect(self.updateSliders)
         hl.addWidget(self.xslider)
@@ -217,7 +218,7 @@ class AnnotationWindow(QWidget):
             # Trying to pad things out a bit
             vlayout.addWidget(QLabel(""))
 
-        hlayout.addLayout(vlayout)
+        hlayout.addLayout(vlayout, stretch=1)
 
         # Table of annotations
         vlayout = QVBoxLayout()
@@ -229,8 +230,11 @@ class AnnotationWindow(QWidget):
         ]
         self.saved_table.setColumnCount(len(labels))
         self.saved_table.setHorizontalHeaderLabels(labels)
+        header = self.saved_table.horizontalHeader()
+        for i in range(len(labels)):
+            header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
         vlayout.addWidget(self.saved_table)
-        hlayout.addLayout(vlayout)
+        hlayout.addLayout(vlayout, stretch=3)
 
         # Table of novel annotations
         vlayout = QVBoxLayout()
@@ -240,15 +244,19 @@ class AnnotationWindow(QWidget):
             "Color",
             "# Pixels",
             "Mean Signal",
-            "Assigned Label ID",
             "Linked Labels",
+            "ID to Save As",
             "Split IDs",
-            "Controls",
+            "Save",
+            "Split",
         ]
         self.new_table.setColumnCount(len(labels))
         self.new_table.setHorizontalHeaderLabels(labels)
+        header = self.new_table.horizontalHeader()
+        for i in range(len(labels)):
+            header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
         vlayout.addWidget(self.new_table)
-        hlayout.addLayout(vlayout)
+        hlayout.addLayout(vlayout, stretch=3)
 
         panel.setLayout(hlayout)
 
@@ -280,6 +288,10 @@ class AnnotationWindow(QWidget):
             for datawindow in [self.depth[i], self.inline[i], self.xline[i]]:
                 datawindow.setVolumeView(volume_view)
 
+    def update_saved_label_table(self):
+        pass
+
+
     def update_new_label_table(self):
         if self.new_labels is None:
             return
@@ -296,7 +308,45 @@ class AnnotationWindow(QWidget):
             self.new_table.setItem(row_i, 3, 
                                    QTableWidgetItem(f"{int(np.mean(self.signal_section[mask])):,}")
                                                     )
-            self.new_table.setCellWidget(row_i, 4, QLineEdit())
+            # The label IDs to save to
+            self.new_table.setCellWidget(row_i, 5, QLineEdit())
+
+            # Save button
+            button = QPushButton()
+            button.setText("Save")
+            button.clicked.connect(self.save_button_clicked)
+            self.new_table.setCellWidget(row_i, 7, button)
+
+            # Split button
+            button = QPushButton()
+            button.setText("Split")
+            button.clicked.connect(self.split_button_clicked)
+            self.new_table.setCellWidget(row_i, 8, button)
+
+    def save_button_clicked(self):
+        button = self.sender()
+        col_idx = 7
+        row_idx = None
+        # TODO: this is a terrible hack
+        for i in range(self.new_table.rowCount()):
+            if self.new_table.cellWidget(i, col_idx) == button:
+                row_idx = i
+        if row_idx is None:
+            print("Button sender not found")
+            return
+        # TODO: actually save this ID to disk
+
+    def split_button_clicked(self):
+        button = self.sender()
+        col_idx = 8
+        row_idx = None
+        for i in range(self.new_table.rowCount()):
+            if self.new_table.cellWidget(i, col_idx) == button:
+                row_idx = i
+        if row_idx is None:
+            print("Button sender not found")
+            return
+        # TODO: run split on this ID and update the labels appropriately
 
     def drawSlices(self):
         # Pull in the central box region
