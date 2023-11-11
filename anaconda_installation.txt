@@ -37,4 +37,5 @@ conda install -c conda-forge rectpack
 # Additional requirements for Brett's speed improvement code.
 conda install zarr
 conda install tifffile
-conda install PIL
+conda install -c anaconda pillow # install PIL, "conda install PIL" fails
+conda install -c conda-forge pymaxflow
