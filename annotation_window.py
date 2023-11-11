@@ -354,6 +354,13 @@ class AnnotationWindow(QWidget):
                 line.setText(str(list(links.keys())[0]))
             self.new_table.setCellWidget(row_i, 5, line)
 
+            # Split IDs
+            line = QLineEdit()
+            if len(links) == 2:
+                ids = list(links.keys())
+                line.setText(f"{ids[0]},{ids[1]}")
+            self.new_table.setCellWidget(row_i, 6, line)
+
             # Save button
             button = QPushButton()
             button.setText("Save")
@@ -422,7 +429,28 @@ class AnnotationWindow(QWidget):
         if row_idx is None:
             print("Button sender not found")
             return
-        # TODO: run split on this ID and update the labels appropriately
+        label_id = int(self.new_table.item(row_idx, 0).text())
+        new_label_id = np.max(self.new_labels) + 1
+        split_str = self.new_table.cellWidget(row_idx, 6).text()
+        if not split_str:
+            print("No split labels provided")
+            return
+        try:
+            split1, split2 = tuple([int(s) for s in split_str.split(",")])
+        except:
+            print("Invalid split labels provided")
+            return
+        split_label_maxflow(
+            self.signal_section,
+            self.saved_labels,
+            self.new_labels,
+            label_id,
+            new_label_id,
+            split1,
+            split2,
+        )
+        self.update_new_label_table()
+        self.drawSlices(update_labels=False)
 
     def clear_button_clicked(self):
         button = self.sender()
@@ -458,26 +486,26 @@ class AnnotationWindow(QWidget):
         self.main_window.annotation.write_annotations(self.saved_labels, islice, jslice, kslice)
         self.drawSlices()
 
-    def drawSlices(self):
+    def drawSlices(self, update_labels=True):
         vv = self.volume_view
-        if self.update_annotations:
-            vol = self.volume_view.volume
-            it, jt, kt = vol.transposedIjkToIjk(vv.ijktf, vv.direction)
-            islice = slice(
-                max(0, it - self.radius[2]), 
-                min(vol.data.shape[2], it + self.radius[2] + 1),
-                None,
-            )
-            jslice = slice(
-                max(0, jt - self.radius[1]), 
-                min(vol.data.shape[1], jt + self.radius[1] + 1),
-                None,
-            )
-            kslice = slice(
-                max(0, kt - self.radius[0]), 
-                min(vol.data.shape[0], kt + self.radius[0] + 1),
-                None,
-            )
+        vol = self.volume_view.volume
+        it, jt, kt = vol.transposedIjkToIjk(vv.ijktf, vv.direction)
+        islice = slice(
+            max(0, it - self.radius[2]), 
+            min(vol.data.shape[2], it + self.radius[2] + 1),
+            None,
+        )
+        jslice = slice(
+            max(0, jt - self.radius[1]), 
+            min(vol.data.shape[1], jt + self.radius[1] + 1),
+            None,
+        )
+        kslice = slice(
+            max(0, kt - self.radius[0]), 
+            min(vol.data.shape[0], kt + self.radius[0] + 1),
+            None,
+        )
+        if self.update_annotations and update_labels:
             # Pull in saved annotations if available
             if self.main_window.annotation is not None:
                 self.saved_labels = self.main_window.annotation.volume[kslice, jslice, islice]
