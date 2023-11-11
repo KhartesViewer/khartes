@@ -67,7 +67,23 @@ MAXFLOW_STRUCTURE = np.array(
     [0, 0, 0]]]
 )
 
-def find_sheets(section, threshold=32000, minsize=50, minval=2500):
+def compute_linkages(new_labels, saved_labels):
+    """Counts the number of adjacent positions between every two labels.
+    """
+    linkages = {}
+    if saved_labels is None:
+        return linkages
+    expanded = expand_labels(new_labels)
+    for l in [label for label in np.unique(expanded) if label > 0]:
+        adjacent = (expanded == l) & (saved_labels > 0)
+        links = {}
+        for a in np.unique(saved_labels[adjacent]):
+            mask = adjacent & (saved_labels == a)
+            links[a] = mask.sum()
+        linkages[l] = links
+    return linkages
+
+def find_sheets(section, saved_labels=None, threshold=32000, minsize=50, minval=2500):
     """Takes a 3D numpy array of uint16s and tries to separate papyrus sheets from 
     background.  First applies a simple threshold, then filters the resulting
     regions for both pixel count and average signal.
@@ -75,7 +91,11 @@ def find_sheets(section, threshold=32000, minsize=50, minval=2500):
     Returns a new numpy array of the same size of integers indicating which 
     label is associated with each pixel.  
     """
-    section_labels = apply_labels(section > threshold)
+    if saved_labels is None:
+        mask = (section > threshold)
+    else:
+        mask = (section > threshold) & (saved_labels == 0)
+    section_labels = apply_labels(mask).astype(np.uint16)
     label_ids = np.unique(section_labels)
     for l in label_ids:
         if l == 0:
@@ -141,9 +161,10 @@ class AnnotationWindow(QWidget):
         # automatic volume segmentation on.
         self.signal_section = None
         self.new_labels = None
+        self.saved_labels = None
         self.slices = slices
         # Radius of the central region of the box
-        self.radius = [50, 50, 50]
+        self.radius = [30, 30, 30]
         self.update_annotations = False
 
         grid = QGridLayout()
@@ -289,12 +310,27 @@ class AnnotationWindow(QWidget):
                 datawindow.setVolumeView(volume_view)
 
     def update_saved_label_table(self):
-        pass
-
+        if self.saved_labels is None:
+            return
+        idxs = [idx for idx in np.unique(self.saved_labels) if idx > 0]
+        self.saved_table.clearContents()
+        self.saved_table.setRowCount(len(idxs))
+        for row_i, idx in enumerate(idxs):
+            #mask = self.saved_labels == idx
+            self.saved_table.setItem(row_i, 0, QTableWidgetItem(str(idx)))
+            # A cell needs empty text to be able to set the background color
+            self.saved_table.setItem(row_i, 1, QTableWidgetItem(""))
+            self.saved_table.item(row_i, 1).setBackground(COLORLIST[idx % len(COLORLIST)])
+            # Clear button
+            button = QPushButton()
+            button.setText("Clear")
+            button.clicked.connect(self.clear_button_clicked)
+            self.saved_table.setCellWidget(row_i, 2, button)
 
     def update_new_label_table(self):
         if self.new_labels is None:
             return
+        linkages = compute_linkages(self.new_labels, self.saved_labels)
         idxs = [idx for idx in np.unique(self.new_labels) if idx != 0]
         self.new_table.clearContents()
         self.new_table.setRowCount(len(idxs))
@@ -308,8 +344,15 @@ class AnnotationWindow(QWidget):
             self.new_table.setItem(row_i, 3, 
                                    QTableWidgetItem(f"{int(np.mean(self.signal_section[mask])):,}")
                                                     )
+            # Linkages
+            links = linkages[idx] if idx in linkages else {}
+            self.new_table.setItem(row_i, 4, QTableWidgetItem(str(links)))
+
             # The label IDs to save to
-            self.new_table.setCellWidget(row_i, 5, QLineEdit())
+            line = QLineEdit()
+            if len(links) == 1:
+                line.setText(str(list(links.keys())[0]))
+            self.new_table.setCellWidget(row_i, 5, line)
 
             # Save button
             button = QPushButton()
@@ -334,7 +377,40 @@ class AnnotationWindow(QWidget):
         if row_idx is None:
             print("Button sender not found")
             return
-        # TODO: actually save this ID to disk
+        if self.main_window.annotation is None:
+            print("Cannot save data without annotation file loaded")
+            return
+        label_id = int(self.new_table.item(row_idx, 0).text())
+        new_label_id = self.new_table.cellWidget(row_idx, 5).text()
+        if not new_label_id:
+            print("No saved label provided")
+            return
+        try:
+            new_label_id = int(new_label_id)
+        except:
+            print("Non-integer saved label provided")
+            return
+        mask = self.new_labels == label_id
+        self.saved_labels[mask] = new_label_id
+        vv = self.volume_view
+        vol = self.volume_view.volume
+        it, jt, kt = vol.transposedIjkToIjk(vv.ijktf, vv.direction)
+        islice = slice(
+            max(0, it - self.radius[2]), 
+            min(vol.data.shape[2], it + self.radius[2] + 1),
+            None,
+        )
+        jslice = slice(
+            max(0, jt - self.radius[1]), 
+            min(vol.data.shape[1], jt + self.radius[1] + 1),
+            None,
+        )
+        kslice = slice(
+            max(0, kt - self.radius[0]), 
+            min(vol.data.shape[0], kt + self.radius[0] + 1),
+        )
+        self.main_window.annotation.write_annotations(self.saved_labels, islice, jslice, kslice)
+        self.drawSlices()
 
     def split_button_clicked(self):
         button = self.sender()
@@ -348,8 +424,41 @@ class AnnotationWindow(QWidget):
             return
         # TODO: run split on this ID and update the labels appropriately
 
+    def clear_button_clicked(self):
+        button = self.sender()
+        col_idx = 2
+        row_idx = None
+        for i in range(self.saved_table.rowCount()):
+            if self.saved_table.cellWidget(i, col_idx) == button:
+                row_idx = i
+        if row_idx is None:
+            print("Button sender not found")
+            return
+        label_id = int(self.saved_table.item(row_idx, 0).text())
+        mask = self.saved_labels == label_id
+        # Set back to 0 to clear the annotation
+        self.saved_labels[mask] = 0
+        vv = self.volume_view
+        vol = self.volume_view.volume
+        it, jt, kt = vol.transposedIjkToIjk(vv.ijktf, vv.direction)
+        islice = slice(
+            max(0, it - self.radius[2]), 
+            min(vol.data.shape[2], it + self.radius[2] + 1),
+            None,
+        )
+        jslice = slice(
+            max(0, jt - self.radius[1]), 
+            min(vol.data.shape[1], jt + self.radius[1] + 1),
+            None,
+        )
+        kslice = slice(
+            max(0, kt - self.radius[0]), 
+            min(vol.data.shape[0], kt + self.radius[0] + 1),
+        )
+        self.main_window.annotation.write_annotations(self.saved_labels, islice, jslice, kslice)
+        self.drawSlices()
+
     def drawSlices(self):
-        # Pull in the central box region
         vv = self.volume_view
         if self.update_annotations:
             vol = self.volume_view.volume
@@ -369,8 +478,16 @@ class AnnotationWindow(QWidget):
                 min(vol.data.shape[0], kt + self.radius[0] + 1),
                 None,
             )
+            # Pull in saved annotations if available
+            if self.main_window.annotation is not None:
+                self.saved_labels = self.main_window.annotation.volume[kslice, jslice, islice]
+                self.update_saved_label_table()
+            else:
+                self.saved_labels = None
+
+            # Compute local annotations
             self.signal_section = vol.data[kslice, jslice, islice]
-            self.new_labels = find_sheets(self.signal_section)
+            self.new_labels = find_sheets(self.signal_section, self.saved_labels)
             self.update_new_label_table()
 
         # Actually draw the datawindows with appropriate shape offsets
@@ -391,21 +508,34 @@ class AnnotationWindow(QWidget):
                     jidx = list(range(vol.data.shape[1])[jslice]).index(jt)
                     kidx = list(range(vol.data.shape[0])[kslice]).index(kt)
                     slc = vv.getSlice(axis, ijktf)
-                    overlay = np.zeros_like(slc, dtype=int)
+                    if self.main_window.annotation is not None:
+                        overlay = np.copy(self.main_window.annotation.getSlice(vv, axis, ijktf))
+                        assert overlay.shape == slc.shape
+                    else:
+                        overlay = np.zeros_like(slc, dtype=int)
                     # TODO: pasting the overlay data into the center is a hack that 
                     # assumes we're not near the edge of a volume
                     if axis == 1:
-                        tmp = self.new_labels[kidx + offsets[axis], :, :]
+                        tmp = (
+                            self.new_labels[kidx + offsets[axis], :, :] +
+                            self.saved_labels[kidx + offsets[axis], :, :]
+                        )
                         x = (overlay.shape[0] - tmp.shape[0]) // 2
                         y = (overlay.shape[1] - tmp.shape[1]) // 2
                         overlay[x:x + tmp.shape[0], y:y + tmp.shape[1]] = tmp
                     elif axis == 2:
-                        tmp = self.new_labels[:, jidx + offsets[axis], :]
+                        tmp = (
+                            self.new_labels[:, jidx + offsets[axis], :] +
+                            self.saved_labels[:, jidx + offsets[axis], :]
+                        )
                         x = (overlay.shape[0] - tmp.shape[0]) // 2
                         y = (overlay.shape[1] - tmp.shape[1]) // 2
                         overlay[x:x + tmp.shape[0], y:y + tmp.shape[1]] = tmp
                     elif axis == 0:
-                        tmp = self.new_labels[:, :, iidx + offsets[axis]].T
+                        tmp = (
+                            self.new_labels[:, :, iidx + offsets[axis]].T +
+                            self.saved_labels[:, :, iidx + offsets[axis]].T
+                        )
                         x = (overlay.shape[0] - tmp.shape[0]) // 2
                         y = (overlay.shape[1] - tmp.shape[1]) // 2
                         overlay[x:x + tmp.shape[0], y:y + tmp.shape[1]] = tmp

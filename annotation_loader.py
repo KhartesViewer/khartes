@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import cv2
 from volume import Volume
-from volume_zarr import CachedZarrVolume
+from volume_zarr import CachedZarrVolume, Loader
 
 from PyQt5.QtWidgets import (
         QAction, QApplication, QAbstractItemView,
@@ -33,12 +33,14 @@ class AnnotationData():
     def __init__(self, path, volume_shape=None):
         self.path = path
         if os.path.exists(self.path):
-            self.volume = self.load_writable_volume()
+            self.raw_volume = self.load_writable_volume()
+            self.volume = Loader(self.raw_volume)
             if volume_shape is not None:
                 assert self.volume.shape == volume_shape
         else:
             assert volume_shape is not None
-            self.volume = self.create_writeable_volume(volume_shape)
+            self.raw_volume = self.create_writeable_volume(volume_shape)
+            self.volume = Loader(self.raw_volume)
         self.valid = True
 
     @property
@@ -84,8 +86,37 @@ class AnnotationData():
         )
         return volume
     
-    def write_annotations(self):
-        pass
+    def getSlice(self, vv, axis, ijktf):
+        vol = vv.volume
+        it, jt, kt = vol.transposedIjkToIjk(ijktf, vv.direction)
+        islice = slice(
+            max(0, it - vol.max_width), 
+            min(vol.data.shape[2], it + vol.max_width + 1),
+            None,
+        )
+        jslice = slice(
+            max(0, jt - vol.max_width), 
+            min(vol.data.shape[1], jt + vol.max_width + 1),
+            None,
+        )
+        kslice = slice(
+            max(0, kt - vol.max_width), 
+            min(vol.data.shape[0], kt + vol.max_width + 1),
+            None,
+        )
+
+        if axis == 1:
+            return self.volume[kt, jslice, islice]
+        elif axis == 2:
+            return self.volume[kslice, jt, islice]
+        elif axis == 0:
+            return self.volume[kslice, jslice, it].T
+        raise ValueError
+
+    def write_annotations(self, saved_labels, islice, jslice, kslice):
+        self.raw_volume[kslice, jslice, islice] = saved_labels
+        # We need to clear the cache so that we don't return old data when we query next
+        self.volume.clear_cache()
 
 class AnnotationLoader(QMainWindow):
     """Class to allow opening an existing annotation (as a .volzarr directory)

@@ -328,7 +328,7 @@ class PositionSetter(QWidget):
         x = self.xsetter.value()
         self.main_window.recenterCurrentVolume(np.array([x, y, z]))
         if self.main_window.annotation_window is not None:
-            self.annotation_window.drawSlices()
+            self.main_window.annotation_window.drawSlices()
 
 class ZInterpolationSetter(QWidget):
     def __init__(self, main_window, parent=None):
@@ -780,7 +780,7 @@ class MainWindow(QMainWindow):
         self.cursor_tijk = None
         self.cursor_window = None
         self.annotation_window = None
-        self.annotations = None
+        self.annotation = None
         args = QCoreApplication.arguments()
         path = os.path.dirname(os.path.realpath(args[0]))
         # https://iconduck.com/icons/163625/openhand

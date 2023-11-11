@@ -273,11 +273,9 @@ COLORLIST = [
     QCC.Svg.darkgreen,
     QCC.Svg.darkmagenta,
     QCC.Svg.darkorange,
-    QCC.Svg.darkorchid,
     QCC.Svg.darkseagreen,
     QCC.Svg.gold,
     QCC.Svg.greenyellow,
-    QCC.Svg.indianred,
     QCC.Svg.yellow,
     QCC.Svg.yellowgreen,
     ]
