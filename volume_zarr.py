@@ -46,8 +46,34 @@ def load_tif(path):
         store = tifffile.imread(paths, aszarr=True)
     elif all([filename.startswith("cell_yxz_") for filename in tiffs]):
         # This looks like a set of cell cuboid images
-        images = tifffile.TiffSequence(os.path.join(path, "*.tif"), pattern=r"cell_yxz_(\d+)_(\d+)_(\d+)")
-        store = images.aszarr(axestiled={0: 1, 1: 2, 2: 0})
+        pattern=r"cell_yxz_(\d+)_(\d+)_(\d+)"
+        images = tifffile.TiffSequence(os.path.join(path, "*.tif"), pattern=pattern)
+        # The indices (locations of chunks in zarr) are not
+        # set correctly in TiffSequence, so reset them
+        # below, based on the file names.
+        # They will be used by images.aszarr()
+        new_indices = []
+        pattern_compiled = re.compile(pattern)
+        maxx = 0
+        maxy = 0
+        maxz = 0
+        for i in range(len(images.indices)):
+            file = images.files[i]
+            m = pattern_compiled.search(file)
+            ystr,xstr,zstr = m.groups()
+            # -1 because the file names are indexed from 1,1,1
+            ix = int(xstr)-1
+            iy = int(ystr)-1
+            iz = int(zstr)-1
+            new_index = (iy,ix,iz)
+            maxx = max(maxx, ix)
+            maxy = max(maxy, iy)
+            maxz = max(maxz, iz)
+            new_indices.append(new_index)
+        images.indices = new_indices
+        images.shape=(maxy+1,maxx+1,maxz+1)
+        store = images.aszarr(axestiled={0: 1, 1: 2, 2: 0}, fillvalue=0)
+
     stack_array = zarr.open(store, mode="r")
     return stack_array
 
