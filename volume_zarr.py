@@ -338,7 +338,8 @@ class CachedZarrVolume():
 
     def unloadData(self, project_view):
         self.active_project_views.discard(project_view)
-        self.data.clear_cache()
+        self.data.store.invalidate()
+
 
     def createTransposedData(self):
         pass
