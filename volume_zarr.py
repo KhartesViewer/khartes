@@ -4,6 +4,7 @@ import os
 import zarr
 import time
 import pathlib
+import re
 from utils import Utils
 
 CHUNK_SIZE = 500
