@@ -300,7 +300,8 @@ class CachedZarrVolume():
         volume.gijk_steps = [1, 1, 1]
 
         array = load_tif(tiff_directory.strip())
-        volume.data = Loader(array, max_mem_gb=5)
+        volume.data = zarr.open(zarr.storage.LRUStoreCache(array.store, max_size=5*2**30), mode="r")
+
         volume.trdatas = []
         volume.trdatas.append(TransposedDataView(volume.data, 0))
         volume.trdatas.append(TransposedDataView(volume.data, 1))
