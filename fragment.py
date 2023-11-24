@@ -1391,7 +1391,7 @@ class FragmentView(BaseFragmentView):
 
 
             '''
-            # Diagnostics (keep)
+            # Diagnostics (keep in case they are needed later)
             if Utils.rectIsValid(changed_rect):
                 print("rects", self.fragment.name, len(deleted_pts), len(added_pts), len(deleted_tris), len(added_tris))
                 if pts_rect is not None and pts_rect != changed_rect:
@@ -1785,7 +1785,9 @@ class FragmentView(BaseFragmentView):
         # print ("xyzs shape", xyzs.shape, xyzs.dtype)
         xyzsn = xyzs[:,~np.isnan(zs)]
         # print ("xyzsn shape", xyzsn.shape, xyzsn.dtype)
+
         # Occurs when fragment has only 1 point
+        # or triangulated surface is very small
         if xyzsn.shape[1] == 0:
             # print("xyzsn wrong size")
             self.ssurf = None
@@ -1798,7 +1800,10 @@ class FragmentView(BaseFragmentView):
         ## print("trdata", trdata.shape)
         # print("ixyzs rot max", ixyzs[(2,0,1),:].max(axis=1))
         # print("rixyzs max", rixyzs.max(axis=1))
-        if changed_rect is None:
+
+        # self.ssurf might be None if previous triangulation
+        # was too thin
+        if changed_rect is None or self.ssurf is None:
             self.ssurf = np.zeros((nj,ni), dtype=np.uint16)
         else:
             self.ssurf[miny:maxy,minx:maxx] = np.zeros((maxy-miny,maxx-minx), dtype=np.uint16)
@@ -2020,6 +2025,67 @@ class FragmentView(BaseFragmentView):
                 return pts
 
     def triangulate(self):
+        self.tri = None
+        self.line = None
+        self.lineAxis = -1
+        if self.fpoints.shape[0] <= 1:
+            return
+
+       
+        # check if points all lie on the same line, parallel
+        # to one of the axes
+        iuniques = len(np.unique(self.fpoints[:,0]))
+        juniques = len(np.unique(self.fpoints[:,1]))
+        if iuniques == 1 and juniques > 1:
+            # points share a common i value
+            self.lineAxis = 0
+        elif juniques == 1 and iuniques > 1:
+            # points share a common j value
+            self.lineAxis = 1
+        if self.lineAxis >= 0:
+            self.lineAxisPosition = int(self.fpoints[0,self.lineAxis])
+            self.line = self.fpoints[:, (1-self.lineAxis, 2, 3)]
+            # print("sl1",self.line)
+            self.line = self.line[self.line[:,0].argsort()]
+            # print(self.lineAxis, self.lineAxisPosition)
+            # print(self.fpoints)
+            # print("sl1",self.line)
+            return
+
+        try:
+            nppoints = self.fpoints[:,0:2]
+            # Mathematicians hate this trick!
+            # For certain positions of points (for instance,
+            # if four or more points lie on the
+            # circumference of a circle), Delaunay
+            # triangulation has a non-unique solution.
+            # When successive calls to Delaunay() return
+            # different (yet still valid) triangulations of the
+            # same points, this can force an unnecessary and
+            # time-consuming recomputation of zsurf.  To make
+            # non-unique solutions less likely, shift each point
+            # by a tiny but determinate (non-random) amount, based on
+            # the point's location (can't use the index, because indices
+            # change whenever a point is deleted).
+            # Side effect: self.tri.points is based on shifted_nppoints
+            # rather than on nppoints (fpoints), which may cause unexpected
+            # behavior in code that is unaware of this shift.
+            shifted_nppoints = nppoints.copy().astype(dtype=np.float64)
+            # ind = np.arange(shifted_nppoints.shape[0], dtype=np.int32)
+            ind = (nppoints[:,0]*1019+nppoints[:,1]*1013).astype(np.int64)
+            eps = 1./(1024*1024)
+            # 503, 509, 1013 and 1019 are prime
+            shifted_nppoints[:,0] += eps*np.remainder(ind, 503)
+            shifted_nppoints[:,1] += eps*np.remainder(ind, 509)
+
+            self.tri = Delaunay(shifted_nppoints)
+            # Can't do this!  self.tri.points cannot be reset
+            # self.tri.points = nppoints
+        except QhullError as err:
+            print("qhull error", str(err))
+            self.tri = None
+
+    def triangulate_old(self):
         nppoints = self.fpoints[:,0:2]
         if self.fpoints.shape[0] == 0:
             self.tri = None
