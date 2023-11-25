@@ -69,6 +69,7 @@ class DataWindow(QLabel):
         self.nearNonMovingNodeCursor = self.window.openhand_transparent
         self.nearNonMovingNodeCursors = self.window.openhand_transparents
         self.addingCursor = Qt.CrossCursor
+        self.interpolatingCursor = Qt.SplitHCursor
         self.movingNodeCursor = Qt.ArrowCursor
         self.panningCursor = Qt.ClosedHandCursor
         self.upperLeftCursor = Qt.SizeFDiagCursor
@@ -474,7 +475,10 @@ class DataWindow(QLabel):
         if self.isPanning:
             new_cursor = self.panningCursor
         elif self.inAddNodeMode():
-            new_cursor = self.addingCursor
+            if self.bounding_nodes is not None:
+                new_cursor = self.interpolatingCursor
+            else:
+                new_cursor = self.addingCursor
         # elif self.allowMouseToDragNode() and (self.isMovingNode or self.localNearbyNodeIndex >= 0):
         elif self.allowMouseToDragNode() and self.localNearbyNodeIndex >= 0:
             new_cursor = self.movingNodeCursor
@@ -735,8 +739,11 @@ class DataWindow(QLabel):
         if nearbyTiffCorner < 0:
             nearbyNode = self.findNearbyNode(xy)
         self.setNearbyNode(nearbyNode)
-        bn = self.findBoundingNodes(xy)
-        self.setBoundingNodes(bn)
+        if self.inAddNodeMode() and self.localNearbyNodeIndex < 0:
+            bn = self.findBoundingNodes(xy)
+            self.setBoundingNodes(bn)
+        else:
+            self.setBoundingNodes(None)
 
     def wheelEvent(self, e):
         if self.volume_view is None:

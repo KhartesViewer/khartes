@@ -512,17 +512,25 @@ data volume.  This shape indicates that the cursor is near a corner of the
 outline of the proposed data volume.  If you press the left mouse button, you can drag the
 corner to change the shape of the volume.
 
-#### Auto-segmentation
+* **Vertical line with horizontal two-way arrow**: This shape
+indicates that the segment under the cursor is eligible for
+auto-interpolation (see the section Auto-Interpolation below)
 
-Auto-segmentation is the process where khartes automatically creates new
-nodes under your guidance.
+* **Spinning wheel or hourglass**: This is an indication
+that a long calculation or data transfer is taking place.
+
+#### Auto-extrapolation
+
+Auto-extrapolation is the process where khartes automatically creates new
+nodes starting from the cursor location.  The positions of these new nodes
+are based on khartes' analysis of the data.
 
 <img src="images/autoseg.jpg" width="300" />
 
-*Example of auto-segmentation.  The user added the left-most node; the others
+*Example of auto-extrapolation.  The user added the left-most node; the others
 were created by the algorithm.*
 
-Auto-segmentation is quite easy to use, but it often makes mistakes, so you
+Auto-extrapolation is quite easy to use, but it often makes mistakes, so you
 need to check its output.
 
 The prerequisites are:
@@ -533,7 +541,7 @@ The prerequisites are:
 
 * You need to be working in one of the two top windows in the Data Slices area.
 
-The auto-segmentation algorithm will automatically create new nodes, going as far as
+The auto-extrapolation algorithm will automatically create new nodes, going as far as
 it can within the current view; this may not be all the way to the boundary,
 if the data is more complicated than the algorithm can handle.
 Note that it will not venture beyond the area that is visible in the Data Slice.
@@ -544,7 +552,7 @@ astray (as it often does).
 
 You only need to choose where to begin, and in which direction to go.
 If the cursor is near an existing node (the node has turned cyan),
-the auto-segmentation will start at that node.  Otherwise, it will
+the auto-extrapolation will start at that node.  Otherwise, it will
 create a node at the location of the cursor and continue from there.
 
 To start and head to the right, press the right bracket or brace key (] or }).
@@ -562,10 +570,46 @@ the surface after each node is deleted.
 See the section below on "Advanced Topic: Live Updates"
 for details on how to temporarily turn this off, so deleting nodes goes faster.
 
-After each auto-segmentation, be sure to examine the results carefully.
+After each auto-extrapolation, be sure to examine the results carefully.
 The algorithm works pretty well in easy areas, but it often goes astray
 in more complicated areas (as you can see if you study the figure
 above carefully).
+
+#### Auto-interpolation
+
+Auto-interpolation is the process where khartes automatically creates
+new nodes between two existing nodes.  The positions of these new nodes are
+based on khartes' analysis of the data.
+
+Auto-interpolation is quite easy to use, but it often makes mistakes, so you
+need to check its output.
+
+The prerequisites are:
+
+* Have a fragment that is active (one that is accepting new nodes)
+
+* Make sure you are in add-node mode (the cursor is shaped like a crosshair)
+
+* You need to be working in one of the two top windows in the Data Slices area.
+
+The auto-interpolation algorithm will automatically create new nodes on a
+curve segment connecting two bounding nodes (these are the node to the left, and the
+node to the right, of the cursor).
+
+To invoke the algorithm, place the cursor over the curve where you want to
+create new nodes.  The curve segment must be bounded on both sides by nodes.
+As an indication that you can create new nodes, the cursor will change shape:
+it will look like a vertical line crossed by a two-sided horizontal arrow.
+
+Once you see that the cursor has changed shape, hit `i` or `I` (for interpolate).
+New nodes should soon appear.
+
+After each auto-interpolation, be sure to examine the results carefully.
+The algorithm works pretty well in easy areas, but it often goes astray
+in more complicated areas.
+
+If you need to make corrections, see the section above on Auto-extrapolation
+for some hints on efficiently deleting nodes.
 
 #### Hot keys
 
@@ -609,6 +653,13 @@ Tracking cursors are described in the "Tracking Cursors" section below.
 * **l**: This key (small L) turns on and off an advanced capability called "live updates".
 Live updates are turned on by default; the concept is described in the
 "Advanced topic: Live Updates" section below.
+
+* **[ { } ]**: These keys invoke auto-extrapolation; see the 
+Auto-extrapolation section above.
+
+* **i I**: These keys (lower-case i and capital I) 
+invoke auto-interpolation; see the 
+Auto-interpolation section above.
 
 ### General segmentation workflow
 
