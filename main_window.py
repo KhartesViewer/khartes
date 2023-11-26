@@ -1108,9 +1108,11 @@ class MainWindow(QMainWindow):
         self.live_zsurf_update = lzu
         pv = self.project_view
         if pv is not None:
+            self.app.setOverrideCursor(QCursor(Qt.WaitCursor))
             for fv in pv.fragments.values():
                 fv.setLiveZsurfUpdate(lzu)
-        self.drawSlices()
+            self.app.restoreOverrideCursor()
+            self.drawSlices()
 
     def setZInterpolation(self, index):
         linear = True

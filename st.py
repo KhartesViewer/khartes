@@ -4,9 +4,12 @@ import math
 
 import cv2
 import numpy as np
+import scipy
 # from scipy.ndimage import gaussian_filter, gaussian_filter1d
 from scipy.interpolate import RegularGridInterpolator, CubicSpline
 from scipy.integrate import solve_ivp
+from scipy.optimize import least_squares
+from scipy.sparse.linalg import LinearOperator
 import nrrd
 
 '''
@@ -46,6 +49,9 @@ class ST(object):
         self.linearity = None
         self.coherence = None
 
+    def saveImage(self, fname):
+        timage = (self.image*65535).astype(np.uint16)
+        cv2.imwrite(str(fname), timage)
 
     def computeEigens(self):
         tif = self.image
@@ -114,7 +120,19 @@ class ST(object):
         coherence = ((lu-lv)/(lu+lv))**2
 
         # explicitly calculate normalized eigenvectors
+
         # eigenvector u
+        # eigenvector u is perpendicular to the layering.
+        # The y component of eigenvector u is always >= 0.
+        # This can lead to trouble when the layering is
+        # nearly parallel to the y axis, because then eigenvector u
+        # is nearly parallel to the x axis.  Small changes in the
+        # slope can lead to a change in sign of u's x component,
+        # in order to keep the y component sign >= 0.  The sign
+        # change in x will cause trouble if the u eigenvector is
+        # linearly interpolated, because when the x component changes
+        # sign, linear interpolation will send the x component to zero.
+        # Yikes!
         vu = np.concatenate((gxy, lu-gx2)).reshape(2,gxy.shape[0],gxy.shape[1]).transpose(1,2,0)
         vu[lu0,:] = 0.
         vulen = np.sqrt((vu*vu).sum(axis=2))
@@ -123,12 +141,20 @@ class ST(object):
         # print("vu", vu.shape, vu.dtype)
         
         # eigenvector v
+        # eigenvector v is parallel to the layering,
+        # and perpendicular to eigenvector u
         vv = np.concatenate((gxy, lv-gx2)).reshape(2,gxy.shape[0],gxy.shape[1]).transpose(1,2,0)
         vv[lu0,:] = 0.
         vvlen = np.sqrt((vv*vv).sum(axis=2))
         vvlen[vvlen==0] = 1
         vv /= vvlen[:,:,np.newaxis]
-        
+        # At this point, the y component of eigenvector v is always <= 0.
+        # But it would be better (more consistent) for the cross
+        # product of eigenvectors u and v to always have a consistent
+        # sign.  This can be ensured by making sure the x component
+        # of eigenvector v is always >= 0.
+        vv[vv[:,:,0]<0] *= -1
+
         self.lambda_u = lu
         self.lambda_v = lv
         self.vector_u = vu
@@ -178,6 +204,8 @@ class ST(object):
 
     # the idea of using Runge-Kutta (which solve_ivp uses)
     # was suggested by @TizzyTom
+    # Uses Runge-Kutta to extrapolate (to the left or
+    # right, depending on sign) from the given point.
     def call_ivp(self, xy, sign, nudge=0):
         vel_func = self.create_vel_func(xy, sign, nudge)
         tmax = 400
@@ -190,20 +218,496 @@ class ST(object):
         sol = solve_ivp(fun=vel_func, t_span=[0,tmax], max_step=2., y0=xy)
         # print("solution")
         # print(sol)
-        return (sol.status, sol.y, sol.t, sol.nfev)
+        # return (sol.status, sol.y, sol.t, sol.nfev)
+        if sol.status != 0:
+            print("ivp status", sol.status)
+            return None
+        if sol.y is None:
+            print("ivp y is None")
+            return None
+        return sol.y.transpose()
+
+    # This is used by the Wu-Hale version of interp2d
+    def solve2d(self, xs, ys, constraints):
+        # return ys.copy()
+
+        # vv stores the vector at x,y in vv[y,x], but the
+        # vector itself is returned in x,y order
+        # yxs = np.stack((ys, xs), axis=1)
+        # vvecs = self.vector_v_interpolator(yxs)
+        # cohs = self.coherence_interpolator(yxs)
+
+        # for each segment in xs,ys, find the midpoint
+        mxs = .5*(xs[:-1]+xs[1:])
+        # length (in x direction) of each segment
+        lxs = xs[1:]-xs[:-1]
+        mys = .5*(ys[:-1]+ys[1:])
+        myxs = np.stack((mys, mxs), axis=1)
+        # print("xs")
+        # print(xs)
+        # print("myxs")
+        # print(myxs)
+        # vv stores the vector at x,y in vv[y,x], but the
+        # vector itself is returned in x,y order
+        vvecs = self.vector_v_interpolator(myxs)
+        # print("vvecs")
+        # print(vvecs)
+        cohs = self.coherence_interpolator(myxs)
+        # cohs = self.linearity_interpolator(myxs)
+        # cohs = np.full((myxs.shape[0]), 1.0, dtype=np.float64)
+        grads = self.grad_interpolator(myxs)
+        # make sure vvecs[:,0] is always > 0
+        vvecs[vvecs[:,0] < 0] *= 1
+        # nudge:
+        # vvecs[:,1] += 5.*grads[:,1]
+        vvzero = vvecs[:,0] == 0
+        vslope = np.zeros((vvecs.shape[0]), dtype=np.float64)
+        vslope[~vvzero] = vvecs[~vvzero,1]/vvecs[~vvzero,0]
+        # print("vslope")
+        # print(vslope)
+
+        # compute pim1 = slope = vvecs[:,1]/vvecs[:,0]
+        # compute dfidx = dy/dx from xs and ys
+        # wim1 = cohs
+        # print("cohs")
+        # print(cohs)
+
+        # xys = np.stack((xs, ys), axis=1)
+        
+        # Following the notation in Wu and Hale (2015):
+        f = ys
+        # print("f", f.shape)
+        # print(f)
+        # W = np.diag(cohs)
+        G = np.diag(-1./lxs)
+        # print(G.shape)
+        G = np.append(G, np.zeros((G.shape[0]),dtype=np.float64)[:,np.newaxis], axis=1)
+        # print(G.shape)
+        G[:,1:] += np.diag(1./lxs)
+        # print("G", G.shape)
+        # print(G)
+        # G = np.concatenate((G,G,G), axis=0)
+        G = np.concatenate((G,G), axis=0)
+        # print("G", G.shape)
+        # print(G)
+
+        # print("cohs", cohs.shape)
+        rweight = .1
+        rws = np.full(cohs.shape, rweight, dtype=np.float64)
+        # print("rws", rws.shape)
+        rvs = np.full(vslope.shape, 0., dtype=np.float64)
+        # print("rvs", rvs.shape)
+        # gweight = 0.1
+        # gws = np.full(cohs.shape, gweight, dtype=np.float64)
+        # # print("gws", gws.shape)
+        # gvs = grads[:,1]
+        # # print("gvs", gvs.shape)
+
+        # W = np.diag(np.concatenate((cohs,rws,gws)))
+        W = np.diag(np.concatenate((cohs,rws)))
+        # print("W", W.shape)
+        # v = np.concatenate((vslope, rvs, gvs))
+        v = np.concatenate((vslope, rvs))
+        # print("v", v.shape)
+
+        wgtw = (W@G).T @ W
+        A = wgtw@G
+        # print("A", A.shape)
+        # print(A)
+        # print(A.sum(axis=1))
+        b = wgtw@v
+        # print("b", b.shape)
+        # print(b)
+        cons = np.array(constraints, dtype=np.float64)
+        cidxs = cons[:,0].astype(np.int64)
+        cys = cons[:,1]
+
+        Z = np.identity(A.shape[0])
+        # Z = Z[:,1:]
+        Z = np.delete(Z, cidxs, axis=1)
+        # print("Z", Z.shape)
+        # print(np.linalg.inv(Z.T@A@Z))
+        f0 = np.zeros(f.shape[0], dtype=np.float64)
+        f0[cidxs] = cys
+        # print("f0", f0.shape)
+        # print(f0)
+
+        try:
+            p = np.linalg.inv(Z.T@A@Z)@Z.T@(b-A@f0)
+        except:
+            print("Singular matrix!")
+            return ys.copy()
+
+        newf = f0 + Z@p
+
+        # print(np.linalg.inv(A))
+        # print(scipy.linalg.inv(A))
+
+        # newf = np.linalg.inv(A)@b
+        # newf = np.linalg.inv(Z.T@A@Z)@b
+        # print("newf")
+        # print(newf)
+        newys = newf + ys[0] - newf[0]
+        return newys
+        # return ys.copy()
+
+    # Wu-Hale version, using the Wu-Hale approach to
+    # solving (minimizing) the objective function.
+    def interp2dWH(self, xy1, xy2):
+        print("interp2dWH", xy1, xy2)
+        # order of xy1, xy2 shouldn't matter, except when creating xs
+        # create xs (ordered list of x values; y is to be solved for)
+        epsilon = .01
+        oxy1, oxy2 = xy1, xy2
+        if xy1[0] > xy2[0]:
+            oxy1,oxy2 = oxy2,oxy1
+        x1 = oxy1[0]
+        y1 = oxy1[1]
+        x2 = oxy2[0]
+        y2 = oxy2[1]
+        nx = int(x2-x1)+1
+        xs = np.linspace(x1,x2,nx, dtype=np.float64)
+        # create list of constraints (each is (index, y))
+        constraints = ((0, y1), (nx-1, y2))
+        # create initial ys (line interpolating xy1 and xy2)
+        ys = np.linspace(y1,y2,nx, dtype=np.float64)
+        prev_dys = -1.
+        min_dys = -1.
+        min_ys = None
+        for _ in range(20):
+            # call solver: given xs, ys, constraints, return new ys based on
+            # solving a linear equation
+            prev_ys = ys.copy()
+            ys = self.solve2d(xs, ys, constraints)
+            # print("new ys", ys)
+            # keep calling solver until solution stabilizes
+            # stop condition: average absolute update is less than epsilon
+            dys = np.abs(ys-prev_ys)
+            avg_dys = dys.sum()/nx
+            print("avg_dys", avg_dys)
+            if min_dys < 0. or avg_dys < min_dys:
+                min_dys = avg_dys
+                min_ys = ys.copy()
+            if avg_dys < epsilon:
+                break
+            # if prev_dys > 0 and prev_dys < avg_dys:
+            #     ys = prev_ys
+            #     break
+            prev_dys = avg_dys
+        # xys = np.stack((xs, ys), axis=1)
+        xys = np.stack((xs, min_ys), axis=1)
+        print("xys", xys.shape)
+        # print(xys)
+        return xys
+
+    # Interpolate between two points, using the same objective function
+    # as the Wu-Hale interpolator, but a different solver:
+    # least_squares from scipy.optimize
+    def interp2dLsqr(self, xy1, xy2, nudge=0.):
+        print("interp2dLsqr", xy1, xy2)
+        oxy1, oxy2 = xy1, xy2
+        if xy1[0] > xy2[0]:
+            oxy1,oxy2 = oxy2,oxy1
+        ynudge = 0.
+        x1 = oxy1[0]
+        y1 = oxy1[1] + ynudge
+        x2 = oxy2[0]
+        y2 = oxy2[1] + ynudge
+        nx = int(x2-x1)+1
+        xs = np.linspace(x1,x2,nx, dtype=np.float64)
+        # create list of constraints (each is (index, y))
+        constraints = ((0, y1), (nx-1, y2))
+        cons = np.array(constraints, dtype=np.float64)
+        cidxs = cons[:,0].astype(np.int64)
+        ncidxs=cidxs.shape[0]
+        cys = cons[:,1]
+        # create initial ys (line interpolating xy1 and xy2)
+        y0s = np.linspace(y1,y2,nx, dtype=np.float64)
+
+        # for each segment in xs,ys, find the midpoint
+        mxs = .5*(xs[:-1]+xs[1:])
+        # length (in x direction) of each segment
+        lxs = xs[1:]-xs[:-1]
+        # nx = xs.shape[0]
+        ndx = nx-1
+        # fs = np.zeros((2*ndx+cidxs.shape[0],))
+        # print("fs", fs.shape)
+        vslope = np.zeros((ndx), dtype=np.float64)
+        # rweight = nudge
+        # rweight = .001
+        # nudge = 1.
+        self.global_cohs = None
+        # self.global_dcohs_dy = None
+        self.global_ddangle_dy = None
+        # use_angle = True
+        # coh_mult = abs(nudge)
+        coh_thresh = .99
+        # If use_angle is true, instead of using the Wu-Hale
+        # objective function (error in slope) use error-in-angle
+        use_angle = nudge < 0
+        rweight = .1
+
+        # objective function used by least_squares
+        def fun(iys):
+            # print("iys", iys)
+            oys = iys[cidxs]
+            ys = iys.copy()
+            ys[cidxs] = cys
+            # print("ys", ys.shape)
+            # print(ys)
+            mys = .5*(ys[:-1]+ys[1:])
+            myxs = np.stack((mys, mxs), axis=1)
+            vvecs = self.vector_v_interpolator(myxs)
+            # grads = self.grad_interpolator(myxs)
+            # vvecs[:,1] += nudge*grads[:,1]
+            cohs = self.coherence_interpolator(myxs)
+            # cohs = self.linearity_interpolator(myxs)
+            # myxsd = myxs.copy()
+            # dyc = .01
+            # myxsd[:,0] += dyc
+            # cohsd = self.linearity_interpolator(myxsd)
+            # TODO: Testing only!!
+            # cohs = np.linspace(.8,.8+(ndx+1)*.01,ndx, dtype=np.float64)
+            # self.global_dcohs_dy = (cohsd-cohs)/dyc
+            # print("cohs", cohs)
+            # make sure vvecs[:,0] is always > 0
+            vvecs[vvecs[:,0] < 0] *= -1
+            fs = np.zeros((2*ndx+ncidxs,))
+            vys = vvecs[:,1]
+            # if coh_mult < 19.:
+            #     cohs = cohs*(1.-(abs(vys)+.0001)**coh_mult)
+            cohs[np.abs(vys)>coh_thresh] = 0.
+            self.global_cohs = cohs
+
+            if use_angle:
+                vangle = np.arctan2(vvecs[:,1],vvecs[:,0])
+                yangle = np.arctan2(ys[1:]-ys[:-1], lxs)
+                dya = .01
+                yanglep = np.arctan2(dya+ys[1:]-ys[:-1], lxs)
+                ddangle = (yanglep-yangle)/dya
+                # ddangle[ddangle<-np.pi/2] += np.pi
+                # ddangle[ddangle>np.pi/2] -= np.pi
+                self.global_ddangle_dy = ddangle
+
+                dangle = vangle-yangle
+                dangle[dangle<-np.pi/2] += np.pi
+                dangle[dangle>np.pi/2] -= np.pi
+                fs[:ndx] = dangle*cohs
+
+                yslope = (ys[1:]-ys[:-1])/lxs
+                fs[ndx:2*ndx] = rweight*yslope
+                # fs[ndx:2*ndx] = rweight*yangle
+            else:
+                # nudge:
+                # vvecs[:,1] += 5.*grads[:,1]
+                vvzero = vvecs[:,0] == 0
+                vslope[:] = 0.
+                # vslope = np.zeros((vvecs.shape[0]), dtype=np.float64)
+                vslope[~vvzero] = vvecs[~vvzero,1]/vvecs[~vvzero,0]
+                # aslope = np.abs(vslope)**2
+                # aslopegt1 = aslope > 1.
+                # cohs[aslopegt1] /= aslope[aslopegt1]
+                self.global_cohs = cohs
+
+                yslope = (ys[1:]-ys[:-1])/lxs
+                # fs = np.array((2*ndx+cidxs.shape[0],))
+                # print("fs fun", fs.shape)
+                fs = np.zeros((2*ndx+ncidxs,))
+                fs[:ndx] = (vslope-yslope)*cohs
+                fs[ndx:2*ndx] = rweight*yslope
+            fs[2*ndx:] = cys-oys
+
+            '''
+            print("vangle", vangle.shape)
+            print(vangle)
+            print("vvecs", vvecs.shape)
+            print(vvecs)
+            print("yangle", yangle.shape)
+            print(yangle)
+            print("dy")
+            print(ys[1:]-ys[:-1])
+            print("lxs", lxs.shape)
+            print(lxs)
+            '''
+            # print("fs", fs.shape)
+            # print(fs)
+            # print("fs", fs)
+            # print()
+            return fs
+
+        # Used to specify the Jacobian (see below)
+        def matvec(idys):
+            # print("idys", idys.shape)
+            # print("idys", idys)
+            idys = idys.flatten()
+            dys = idys.copy()
+            odys = dys[cidxs]
+            # print(dys)
+            dys[cidxs] = 0.
+            # print(cidxs, odys)
+            dfs = np.zeros((2*ndx+ncidxs,))
+            # print("dfs", dfs.shape)
+
+            if use_angle:
+                dfs[:ndx] = self.global_ddangle_dy*dys[:-1]
+                dfs[:ndx] += -self.global_ddangle_dy*dys[1:]
+                dfs[:ndx] *= self.global_cohs
+                # dfs[ndx:2*ndx] = -rweight*self.global_ddangle_dy*dys[:-1]
+                # dfs[ndx:2*ndx] += rweight*self.global_ddangle_dy*dys[1:]
+                dfs[ndx:2*ndx] = -rweight*dys[:-1]
+                dfs[ndx:2*ndx] += rweight*dys[1:]
+                dfs[ndx:2*ndx] /= lxs
+            else:
+                dfs[:ndx] = dys[:-1]
+                dfs[:ndx] += -dys[1:]
+                dfs[:ndx] *= self.global_cohs
+                # dfs[:ndx] += .5*dys[:-1]*self.global_dcohs_dy
+                # dfs[:ndx] += .5*dys[1:]*self.global_dcohs_dy
+                dfs[:ndx] /= lxs
+                dfs[ndx:2*ndx] = -rweight*dys[:-1]
+                dfs[ndx:2*ndx] += rweight*dys[1:]
+                dfs[ndx:2*ndx] /= lxs
+
+            dfs[2*ndx:] = -odys
+            # print("dfs", dfs)
+            # print()
+            return dfs
+
+        # Used to specify the Jacobian (see below)
+        def rmatvec(idfs):
+            # print("idfs", idfs)
+            dfs = idfs
+            dys = np.zeros((nx,))
+            cohs = self.global_cohs
+            if use_angle:
+                dys[:ndx] = self.global_ddangle_dy*dfs[:ndx]*cohs
+                dys[1:nx] += -self.global_ddangle_dy*dfs[:ndx]*cohs
+                # dys[1:nx] += rweight*self.global_ddangle_dy*dfs[ndx:2*ndx]
+                # dys[:ndx] += -rweight*self.global_ddangle_dy*dfs[ndx:2*ndx]
+                dys[:ndx] += -rweight*dfs[ndx:2*ndx]/lxs
+                dys[1:nx] += rweight*dfs[ndx:2*ndx]/lxs
+            else:
+                dys[:ndx] = dfs[:ndx]*cohs/lxs
+                dys[1:nx] += -dfs[:ndx]*cohs/lxs
+
+                # dcohs_dy = self.global_dcohs_dy
+                # dys[:ndx] += dcohs_dy
+                # dys[1:nx] += dcohs_dy
+                dys[:ndx] += -rweight*dfs[ndx:2*ndx]/lxs
+                dys[1:nx] += rweight*dfs[ndx:2*ndx]/lxs
+
+
+            # Notice: not +=
+            dys[cidxs] = -dfs[2*ndx:]
+            # print("dys", dys)
+            # print()
+            return dys
+
+
+        '''
+        def matmat(idys):
+            dys = idys.copy()
+            odys = dys[cidxs,:]
+            # print(dys)
+            dys[cidxs,:] = 0.
+            # print(cidxs, odys)
+            dfs = np.zeros((2*ndx+ncidxs,dys.shape[1]))
+            dfs[:ndx,:] = dys[:-1,:]
+            dfs[:ndx,:] += -dys[1:,:]
+            dfs[:ndx,:] *= self.global_cohs
+            dfs[ndx:2*ndx,:] = -rweight*dys[:-1,:]
+            dfs[ndx:2*ndx,:] += rweight*dys[1:,:]
+            dfs[2*ndx:,:] = -odys
+            return dfs
+        '''
+
+        # Jacobian function used by least_squares.
+        # If no Jacobian is specified, least_squares uses
+        # explicit differencing, which is much slower
+        def jac(ys):
+            return LinearOperator((2*ndx+ncidxs, nx), matvec=matvec, rmatvec=rmatvec)
+
+        '''
+        f0 = fun(y0s)
+        print(self.global_cohs)
+        # print(self.global_dcohs_dy)
+        # lo = jac(y0s)
+        # for i in range(nx):
+        for i in range(2):
+            y1 = y0s.copy()
+            y1[i] += .001
+            f1 = fun(y1)
+            print(f1-f0)
+            # print(matvec(y1-y0s))
+            print(matvec(y1-y0s))
+            print()
+        '''
+
+        '''
+        maxx = 3
+        # maxx = 100
+
+        f0 = fun(y0s)
+
+        for i in range(min(maxx,nx)):
+            y1 = y0s.copy()
+            y1[i] += .001
+            f1 = fun(y1)
+            print(f1-f0)
+        print()
+
+        for i in range(min(maxx,nx)):
+            y1 = np.zeros((y0s.shape))
+            y1[i] += .001
+            print(matvec(y1))
+        print()
+
+        for i in range(min(maxx,2*ndx+ncidxs)):
+            f1 = np.zeros((2*ndx+ncidxs))
+            f1[i] += .001
+            print(rmatvec(f1))
+        print()
+        '''
+
+        r = least_squares(fun, y0s, jac=jac)
+        # r = least_squares(fun, y0s)
+
+        # if self.global_cohs is not None:
+        #     print("global_cohs")
+        #     print(self.global_cohs)
+        print("r", r.status, r.nfev, r.njev, r.cost)
+        # print("r.grad")
+        # print(r.grad)
+        # print("r.x")
+        # print(r.x)
+        # return r.x
+        xys = np.stack((xs, r.x), axis=1)
+        print("xys", xys.shape)
+        # print(xys)
+        return xys
 
     # ix is rounding pixel position, ix0 is shift before rounding
     # output is transposed relative to y from call_ivp
-    def evenly_spaced_result(self, xy, ix0, ix, sign, nudge=0):
-        status, y, t, nfev = self.call_ivp(xy, sign, nudge)
-        if status != 0:
-            print("status", status)
-            return None
-        y = y.transpose()
+    # def evenly_spaced_result(self, xy, ix0, ix, sign, nudge=0):
+    def evenly_spaced_result(self, y, ix0, ix):
+        # status, y, t, nfev = self.call_ivp(xy, sign, nudge)
+        # if status != 0:
+        #     print("status", status)
+        #     return None
+        # y = y.transpose()
         # print("y 1", y.shape)
+        if y is None:
+            return None
+        if len(y) < 2:
+            print("too few points", len(y))
+            return None
         dx = np.diff(y[:,0])
+        sign = 1
+        if dx[0] < 0:
+            sign = -1
         bad = (sign*dx <= 0)
         ibad = np.argmax(bad)
+        # can't happen now; sign is based on dx[0]
         if bad[0]:
             print("bad0")
             print(y)
@@ -221,28 +725,44 @@ class ST(object):
         xmax = math.floor((xs[-1]+six0)/ix)*ix - six0
         xrange = np.arange(xmin,xmax,ix)
         csys = cs(xrange)
+        # esy = np.stack((sign*xrange,csys), axis=1)
         esy = np.stack((sign*xrange,csys), axis=1)
         return esy
 
 
-    def sparse_result(self, xy, ix0, ix, sign, nudge=0):
-        esy = self.evenly_spaced_result(xy, ix0, ix, sign, nudge)
+    # def sparse_result(self, xy, ix0, ix, sign, nudge=0):
+    def sparse_result(self, y, ix0, ix):
+        # esy = self.evenly_spaced_result(xy, ix0, ix, sign, nudge)
+        origx = y[:,0].copy()
+        esy = self.evenly_spaced_result(y, ix0, ix)
         if esy is None:
             return None
         # print("esy", esy.shape)
         if len(esy) == 0:
             return None
-        xs = sign*esy[:,0]
+        # xs = sign*esy[:,0]
+        xs = esy[:,0].copy()
+        if xs[0] > xs[-1]:
+            xs *= -1
+            origx *= -1
         ys = esy[:,1]
         # xmin = xs[0]
         # xmax = xs[-1]
 
         b = np.full(xs.shape, False)
+        # ignore = np.full(xs.shape, False)
+        # Always ignore (delete) points that are close (< 2*ix) to the
+        # start and end points
+        ignore_distance = 2*ix
+        ignore = (np.abs(xs-origx[0])<ignore_distance) | (np.abs(xs-origx[-1])<ignore_distance)
+        # b flags points that have already been checked
         b[0] = True
         b[-1] = True
         tol = 1.
         # print("b",b.shape,b.dtype)
         # print("xrange",xrange.shape,xrange.dtype)
+        # Delete as many points as possible while still keeping
+        # the curve within tolerance
         while b.sum() < len(xs):
             idxs = b.nonzero()
             itx = xs[idxs]
@@ -250,6 +770,8 @@ class ST(object):
             tcs = CubicSpline(itx,ity)
             oty = tcs(xs)
             diff = np.abs(oty-ys)
+            diff[ignore] = 0.
+            # print("diff", diff)
             # print("diff",diff.shape)
             midx = diff.argmax()
             # print("midx",midx)
@@ -260,8 +782,13 @@ class ST(object):
                 break
             b[midx] = True
 
+        # print(y)
+        # print(esy)
+        # print(ignore.nonzero(), b.nonzero())
+        b[ignore] = False
         idxs = b.nonzero()
         oy = esy[idxs]
+        # print("oy", oy)
 
         return oy
 
@@ -320,6 +847,13 @@ class ST(object):
 
         self.lambda_u_interpolator = ST.createInterpolator(self.lambda_u)
         self.lambda_v_interpolator = ST.createInterpolator(self.lambda_v)
+        # TODO: vector_u can abruptly change sign in areas of
+        # near-vertical layers, in whichy case linear interpolation
+        # of vector_u is invalid.  To avoid this, vector_u (and vector_v) 
+        # should be computed, instead of interpolated, at each interpolation
+        # point, from interpolated lambda_u and lambda_v.  Or do
+        # the lambdas need to be computed instead of interpolated
+        # as well?
         self.vector_u_interpolator = ST.createInterpolator(self.vector_u)
         self.vector_v_interpolator = ST.createInterpolator(self.vector_v)
         self.grad_interpolator = ST.createInterpolator(self.grad)

@@ -40,6 +40,8 @@ class DataWindow(QLabel):
         self.maxNearbyNodeDistance = 10
         self.nearbyNodeDistance = -1
         self.nearby_tiff_corner = -1
+        self.bounding_nodes = None
+        self.bounding_nodes_fv = None
         # self.nearby_tiff_xy = None
         self.tfStartPoint = None
         self.nnStartPoint = None
@@ -52,6 +54,7 @@ class DataWindow(QLabel):
         self.nodeColor = (m,0,0,m)
         self.mutedNodeColor = ((3*m)//4,0,0,m)
         self.highlightNodeColor = (0,m,m,m)
+        self.boundingNodeColor = (m,m//4,m//4,m)
         self.inactiveNodeColor = (m//2,m//4,m//4,m)
         self.triLineColor = (3*m//4,2*m//4,3*m//4,m)
         self.splineLineColor = self.triLineColor
@@ -66,10 +69,12 @@ class DataWindow(QLabel):
         self.nearNonMovingNodeCursor = self.window.openhand_transparent
         self.nearNonMovingNodeCursors = self.window.openhand_transparents
         self.addingCursor = Qt.CrossCursor
+        self.interpolatingCursor = Qt.SplitHCursor
         self.movingNodeCursor = Qt.ArrowCursor
         self.panningCursor = Qt.ClosedHandCursor
         self.upperLeftCursor = Qt.SizeFDiagCursor
         self.upperRightCursor = Qt.SizeBDiagCursor
+        self.waitCursor = Qt.WaitCursor
         # c = QCursor(Qt.CrossCursor)
         # px = c.pixmap()
         # print("pixmap", px)
@@ -283,6 +288,71 @@ class DataWindow(QLabel):
         # print("shift_pressed", shift_pressed)
         return shift_pressed
 
+    def findBoundingNodes(self, xy):
+        if self.axis == 2:
+            # print("a")
+            return None
+        xyijks = self.cur_frag_pts_xyijk
+        if xyijks is None:
+            # print("b")
+            return None
+        if xyijks.shape[0] == 0:
+            # print("c")
+            return None
+        xys = xyijks[:,0:2]
+        curfv = self.currentFragmentView()
+
+        d = 3
+        ijl = self.xyToIj((xy[0]-d, xy[1]-d))
+        ijg = self.xyToIj((xy[0]+d, xy[1]+d))
+        line_found = False
+        for fv, zpts in self.fv2zpoints.items():
+            if len(zpts) == 0:
+                continue
+            if fv != curfv:
+                continue
+            matches = ((zpts >= ijl).all(axis=1) & (zpts <= ijg).all(axis=1)).nonzero()[0]
+            if len(matches) > 0:
+                line_found = True
+                break
+
+        if not line_found:
+            # print("d")
+            return None
+
+        fvs = self.cur_frag_pts_fv
+        flags = np.zeros((len(fvs)), dtype=np.bool_)
+        for i in range(len(fvs)):
+            flags[i] = (fvs[i] == curfv)
+
+        ds = xys[:,0] - xy[0]
+        big = 1000000
+        dslt = ds.copy()
+        dslt[dslt>0] = -big
+        dslt[~flags] = -big
+        dsgt = ds.copy()
+        dsgt[dsgt<=0] = big
+        dsgt[~flags] = big
+
+        ilt = np.argmax(dslt)
+        igt = np.argmin(dsgt)
+        if ilt < 0 or igt < 0:
+            # print("e")
+            return None
+        vlt = dslt[ilt]
+        vgt = dsgt[igt]
+        if vlt == -big or vgt == big:
+            # print("f")
+            return None
+        xlt = xys[ilt,0]
+        xgt = xys[igt,0]
+        if xlt < 0 or xgt >= self.width():
+            # print("g")
+            return None
+        filt = int(xyijks[ilt, 5])
+        figt = int(xyijks[igt, 5])
+        return (filt, figt)
+
     def findNearbyNode(self, xy):
         # if self.inAddNodeMode():
         #     return -1
@@ -331,6 +401,7 @@ class DataWindow(QLabel):
                 tijk = self.ijToTijk(ij)
                 # print("adding point at",tijk)
                 if self.currentFragmentView() is not None:
+                    self.setWaitCursor()
                     self.window.addPointToCurrentFragment(tijk)
                     nearbyNode = self.findNearbyNode(wxy)
                     if not self.setNearbyNode(nearbyNode):
@@ -382,14 +453,16 @@ class DataWindow(QLabel):
             self.isMovingTiff = False
             wpos = e.localPos()
             wxy = (wpos.x(), wpos.y())
-            nearbyNode = self.findNearbyNode(wxy)
-            self.setNearbyNode(nearbyNode)
+            # nearbyNode = self.findNearbyNode(wxy)
+            # self.setNearbyNode(nearbyNode)
+            self.setNearbyTiffAndNode(wxy)
         self.checkCursor()
 
     def leaveEvent(self, e):
         if self.volume_view is None:
             return
         self.setNearbyNode(-1)
+        self.setBoundingNodes(None)
         self.window.setStatusText("")
         self.window.setCursorPosition(None, None)
         self.checkCursor()
@@ -402,7 +475,10 @@ class DataWindow(QLabel):
         if self.isPanning:
             new_cursor = self.panningCursor
         elif self.inAddNodeMode():
-            new_cursor = self.addingCursor
+            if self.bounding_nodes is not None:
+                new_cursor = self.interpolatingCursor
+            else:
+                new_cursor = self.addingCursor
         # elif self.allowMouseToDragNode() and (self.isMovingNode or self.localNearbyNodeIndex >= 0):
         elif self.allowMouseToDragNode() and self.localNearbyNodeIndex >= 0:
             new_cursor = self.movingNodeCursor
@@ -539,6 +615,7 @@ class DataWindow(QLabel):
             nij[0] += di
             nij[1] += dj
             self.setNearbyNodeIjk(nij)
+            self.setWaitCursor()
             self.window.drawSlices()
         elif self.isMovingTiff:
             if self.ntStartPoint is None:
@@ -570,6 +647,19 @@ class DataWindow(QLabel):
         tijk = self.ijToTijk(ij)
         self.window.setCursorPosition(self, tijk)
         self.checkCursor()
+
+    def setBoundingNodes(self, bns):
+        prev = self.bounding_nodes
+        if prev == bns:
+            return
+        self.bounding_nodes = bns
+        curfv = self.currentFragmentView()
+        if bns is None:
+            curfv = None
+        self.bounding_nodes_fv = curfv
+        # if bns is not None:
+            # print("bns", bns)
+        self.drawSlice()
 
     def setNearbyTiff(self, nearby_tiff_corner):
         prev_corner = self.nearby_tiff_corner
@@ -649,6 +739,11 @@ class DataWindow(QLabel):
         if nearbyTiffCorner < 0:
             nearbyNode = self.findNearbyNode(xy)
         self.setNearbyNode(nearbyNode)
+        if self.inAddNodeMode() and self.localNearbyNodeIndex < 0:
+            bn = self.findBoundingNodes(xy)
+            self.setBoundingNodes(bn)
+        else:
+            self.setBoundingNodes(None)
 
     def wheelEvent(self, e):
         if self.volume_view is None:
@@ -680,6 +775,10 @@ class DataWindow(QLabel):
     # out of the plane, the localNearbyNodeIndex is no longer valid
     def nodeMovementAllowedInK(self):
         return False
+
+    def setWaitCursor(self):
+        self.setCursor(self.waitCursor)
+        # self.window.app.processEvents()
 
     # Note that this is called from MainWindow whenever MainWindow
     # catches a keyPressEvent; since the DataWindow widgets never
@@ -737,6 +836,7 @@ class DataWindow(QLabel):
                 nij[0] -= d[0]
                 nij[1] -= d[1]
                 nij[2] -= d[2]
+                self.setWaitCursor()
                 self.setNearbyNodeIjk(nij)
         elif not self.isMovingNode and (key == Qt.Key_Backspace or key == Qt.Key_Delete):
             # print("backspace/delete")
@@ -746,14 +846,16 @@ class DataWindow(QLabel):
             # print("ijk", ijk)
             # tijk = self.ijToTijk(ijk[0:2])
             # print("tijk", tijk)
+            self.setWaitCursor()
             self.window.deleteNearbyNode()
             # this repopulates local node list
             self.drawSlice()
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
-            nearbyNode = self.findNearbyNode(mxy)
+            # nearbyNode = self.findNearbyNode(mxy)
             # print("del nearby node", nearbyNode)
-            self.setNearbyNode(nearbyNode)
+            # self.setNearbyNode(nearbyNode)
+            self.setNearbyTiffAndNode(mxy)
             # print("del localNearbyNodeIndex", self.localNearbyNodeIndex)
             self.window.drawSlices()
         elif not self.isMovingNode and key == Qt.Key_X:
@@ -777,6 +879,7 @@ class DataWindow(QLabel):
             gxy = self.mapToGlobal(QPoint(*xy))
             QCursor.setPos(gxy)
         elif self.inAddNodeMode() and not self.isMovingNode and self.axis in (0,1) and key in (Qt.Key_BracketLeft, Qt.Key_BracketRight, Qt.Key_BraceLeft, Qt.Key_BraceRight):
+            self.setWaitCursor()
             ijk = self.getNearbyNodeIjk()
             if ijk is None:
                 pt = self.mapFromGlobal(QCursor.pos())
@@ -788,7 +891,10 @@ class DataWindow(QLabel):
             if key in (Qt.Key_BracketLeft, Qt.Key_BraceLeft):
                 sign = -1
             # self.window.drawSlices()
-            self.autoSegment(sign, ij)
+            self.autoExtrapolate(sign, ij)
+        elif not self.isMovingNode and self.axis in (0,1) and key == Qt.Key_I:
+            self.setWaitCursor()
+            self.autoInterpolate()
         elif key == Qt.Key_T:
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
@@ -800,6 +906,7 @@ class DataWindow(QLabel):
             mxy = (pt.x(), pt.y())
             self.setNearbyTiffAndNode(mxy)
         elif key == Qt.Key_R:
+            self.setWaitCursor()
             self.setWorkingRegion()
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
@@ -838,6 +945,8 @@ class DataWindow(QLabel):
             self.isMovingTiff = False
             self.checkCursor()
 
+    '''
+    Moved to utils.py
     # adapted from https://stackoverflow.com/questions/25068538/intersection-and-difference-of-two-rectangles/25068722#25068722
     # The C++ version of OpenCV provides operations, including intersection,
     # on rectangles, but the Python version doesn't.
@@ -853,6 +962,7 @@ class DataWindow(QLabel):
             r = ((x1, y1), (x2, y2))
             # print(r)
             return r
+    '''
 
     def axisColor(self, axis):
         color = [0]*4
@@ -880,8 +990,123 @@ class DataWindow(QLabel):
         gxyz = self.volume_view.transposedIjkToGlobalPosition(self.volume_view.ijktf)
         gaxis = self.volume_view.globalAxisFromTransposedAxis(self.axis)
         return gxyz[gaxis]
+    
+    def autoInterpolate(self):
+        if self.bounding_nodes is None:
+            return
+        volume = self.volume_view
+        if volume is None :
+            return
+        curfv = self.currentFragmentView()
+        if self.bounding_nodes_fv != curfv:
+            return
+        bns = self.bounding_nodes
+        bia = bns[0]
+        bib = bns[1]
+        if bia >= len(curfv.vpoints) or bib >= len(curfv.vpoints):
+            print("bia or bib out of range", bia, bib, len(curfv.vpoints))
+            return
+        tijka = curfv.vpoints[bia]
+        tijkb = curfv.vpoints[bib]
+        ija = self.tijkToIj(tijka)
+        ijb = self.tijkToIj(tijkb)
+        if ija[0] > ijb[0]:
+            ija,ijb = ijb,ija
+        ja = ija[1]
+        jb = ijb[1]
+        imin = ija[0]
+        imax = ijb[0]
+        jmin = min(ja,jb)
+        jmax = max(ja,jb)
 
-    def autoSegment(self, sign, ij):
+        ww = self.size().width()
+        wh = self.size().height()
+        ij0 = self.xyToIj((0,0))
+        ij1 = self.xyToIj((ww,wh))
+        ijo0 = ij0
+        ijo1 = ij1
+        z = self.getZoom()
+        slc = volume.getSlice(self.axis, volume.ijktf)
+        sw = slc.shape[1]
+        sh = slc.shape[0]
+        margin = 32
+        ij0m = (ij0[0]-margin,ij0[1]-margin)
+        ij1m = (ij1[0]+margin,ij1[1]+margin)
+        ri = Utils.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
+        if ri is None:
+            return
+        ij0 = ri[0]
+        ij1 = ri[1]
+        ri = Utils.rectIntersection((ij0,ij1), ((imin-500,jmin-500),(imax+500,jmax+500)))
+        if ri is None:
+            return
+        ij0 = ri[0]
+        ij1 = ri[1]
+        print("autointerpolate", ija, ijb, ij0, ij1)
+        if imin < ij0[0] or imax >= ij1[0]:
+            return
+        if jmin < ij0[1] or jmax >= ij1[1]:
+            return
+        st = ST((slc[int(ij0[1]):int(ij1[1]),int(ij0[0]):int(ij1[0])]).astype(np.float64)/65535.)
+        print ("st created", st.image.shape)
+        st.computeEigens()
+        '''
+        path = self.window.project_view.project.path
+        st.saveImage(path / "st_debug.tif")
+        st.saveEigens(path / "st_debug.nrrd")
+        '''
+        # print ("eigens computed")
+        # dij = (ij[0]-ij0[0], ij[1]-ij0[1])
+        dija = (ija[0]-ij0[0], ija[1]-ij0[1])
+        dijb = (ijb[0]-ij0[0], ijb[1]-ij0[1])
+        # min distance between computed auto-pick points
+        # note this is in units of data-volume voxel size,
+        # which differ from that of the original data,
+        # due to subsampling
+        min_delta = 5
+        ijk = self.ijToTijk(ij0)
+        gxyz = self.volume_view.transposedIjkToGlobalPosition(ijk)
+        gaxis = self.volume_view.globalAxisFromTransposedAxis(self.iIndex)
+        gstep = self.volume_view.volume.gijk_steps[gaxis]
+        # attempt to align the computed points so that they
+        # lie at global coordinates (along the appropriate axis)
+        # that are mutiples of min_delta.  Seems to work
+        # correctly in sub-sampled data volumes as well.
+        min_delta_shift = (gxyz[gaxis]/gstep) % min_delta
+        # y = st.call_ivp(dij, sign, 5.)
+        # print("end points", dija, dijb)
+        y = st.interp2dWH(dija, dijb)
+        if y is None:
+            print("no y values")
+            return
+        # pts = st.sparse_result(dij, min_delta_shift, min_delta, sign, 5.)
+        pts = st.sparse_result(y, min_delta_shift, min_delta)
+        if pts is None:
+            print("no points")
+            return
+        # print (len(pts),"points returned")
+        pts[:,0] += ij0[0]
+        pts[:,1] += ij0[1]
+        # print("xs",pts[:,0])
+        zsurf_update = self.window.live_zsurf_update
+        self.window.setLiveZsurfUpdate(False)
+        for pt in pts:
+            # pt = (dpt[0]+ij0[0], dpt[1]+ij0[1])
+            if pt[0] < ijo0[0] or pt[0] >= ijo1[0] or pt[1] < ijo0[1] or pt[1] >= ijo1[1]:
+                break
+            tijk = self.ijToTijk(pt)
+            # print("adding point at",tijk)
+            self.window.addPointToCurrentFragment(tijk)
+        self.window.setLiveZsurfUpdate(zsurf_update)
+        mpt = self.mapFromGlobal(QCursor.pos())
+        mxy = (mpt.x(), mpt.y())
+        # nearbyNode = self.findNearbyNode(mxy)
+        # self.setNearbyNode(nearbyNode)
+        self.setNearbyTiffAndNode(mxy)
+        self.window.drawSlices()
+
+
+    def autoExtrapolate(self, sign, ij):
         volume = self.volume_view
         if volume is None :
             return
@@ -900,12 +1125,12 @@ class DataWindow(QLabel):
         margin = 32
         ij0m = (ij0[0]-margin,ij0[1]-margin)
         ij1m = (ij1[0]+margin,ij1[1]+margin)
-        ri = self.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
+        ri = Utils.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
         if ri is None:
             return
         ij0 = ri[0]
         ij1 = ri[1]
-        ri = self.rectIntersection((ij0,ij1), ((ij[0]-500,ij[1]-500),(ij[0]+500,ij[1]+500)))
+        ri = Utils.rectIntersection((ij0,ij1), ((ij[0]-500,ij[1]-500),(ij[0]+500,ij[1]+500)))
         if ri is None:
             return
         ij0 = ri[0]
@@ -934,7 +1159,12 @@ class DataWindow(QLabel):
         # that are mutiples of min_delta.  Seems to work
         # correctly in sub-sampled data volumes as well.
         min_delta_shift = (gxyz[gaxis]/gstep) % min_delta
-        pts = st.sparse_result(dij, min_delta_shift, min_delta, sign, 5.)
+        y = st.call_ivp(dij, sign, 5.)
+        if y is None:
+            print("no y values")
+            return
+        # pts = st.sparse_result(dij, min_delta_shift, min_delta, sign, 5.)
+        pts = st.sparse_result(y, min_delta_shift, min_delta)
         if pts is None:
             print("no points")
             return
@@ -954,8 +1184,9 @@ class DataWindow(QLabel):
         self.window.setLiveZsurfUpdate(zsurf_update)
         mpt = self.mapFromGlobal(QCursor.pos())
         mxy = (mpt.x(), mpt.y())
-        nearbyNode = self.findNearbyNode(mxy)
-        self.setNearbyNode(nearbyNode)
+        # nearbyNode = self.findNearbyNode(mxy)
+        # self.setNearbyNode(nearbyNode)
+        self.setNearbyTiffAndNode(mxy)
         self.window.drawSlices()
 
     def drawScaleBar(self, outrgbx):
@@ -1235,7 +1466,7 @@ into and out of the viewing plane.
         by1 = 0
         bx2 = ww
         by2 = wh
-        ri = self.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
+        ri = Utils.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
         if ri is not None:
             (x1,y1),(x2,y2) = ri
             # zoomed data slice
@@ -1451,6 +1682,9 @@ into and out of the viewing plane.
                 if not frag.mesh_visible:
                     color = frag.fragment.cvcolor
                 # print(pt, self.volume_view.nearbyNode)
+                if self.bounding_nodes_fv == frag and self.bounding_nodes is not None and pt[3] in self.bounding_nodes:
+                    color = self.boundingNodeColor
+                    size += 1
                 if (frag, pt[3]) == nearbyNode:
                     color = self.highlightNodeColor
                     self.nearbyNode = i0+i
@@ -1637,7 +1871,7 @@ class SurfaceWindow(DataWindow):
                 by1 = 0
                 bx2 = ww
                 by2 = wh
-                ri = self.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
+                ri = Utils.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
                 if ri is not None:
                     (x1,y1),(x2,y2) = ri
                     x1s = int((x1-ax1)/z)

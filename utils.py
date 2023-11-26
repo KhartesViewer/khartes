@@ -116,6 +116,48 @@ class Utils:
         # print(nzc)
         return nzc
 
+    # adapted from https://stackoverflow.com/questions/25068538/intersection-and-difference-of-two-rectangles/25068722#25068722
+    # The C++ version of OpenCV provides operations, including intersection,
+    # on rectangles, but the Python version doesn't.
+    def rectIntersection(ra, rb):
+        if not Utils.rectIsValid(ra) or not Utils.rectIsValid(rb):
+            return Utils.emptyRect()
+        (ax1, ay1), (ax2, ay2) = ra
+        (bx1, by1), (bx2, by2) = rb
+        # print(ra, rb)
+        x1 = max(min(ax1, ax2), min(bx1, bx2))
+        y1 = max(min(ay1, ay2), min(by1, by2))
+        x2 = min(max(ax1, ax2), max(bx1, bx2))
+        y2 = min(max(ay1, ay2), max(by1, by2))
+        if (x1<x2) and (y1<y2):
+            r = ((x1, y1), (x2, y2))
+            # print(r)
+            return r
+
+    def rectIsValid(r):
+        if r is None:
+            return False
+        (x1, y1), (x2, y2) = r
+        if x1 >= x2:
+            return False
+        if y1 >= y2:
+            return False
+        return True
+
+    def emptyRect():
+        return (0,0),(0,0)
+
+    def rectUnion(ra, rb):
+        if not Utils.rectIsValid(ra):
+            return rb
+        if not Utils.rectIsValid(rb):
+            return ra
+        (ax1, ay1), (ax2, ay2) = ra
+        (bx1, by1), (bx2, by2) = rb
+        ru = ((min(ax1,bx1), min(ay1,by1)),
+              (max(ax2,bx2), max(ay2,by2)))
+        return ru
+
     def getNextColorOld():
         Utils.colorCounter = (Utils.colorCounter+1)%len(Utils.colors)
         color = Utils.colors[Utils.colorCounter]
