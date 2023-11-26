@@ -1392,11 +1392,7 @@ class FragmentView(BaseFragmentView):
 
 
             '''
-<<<<<<< HEAD
             # Diagnostics (keep in case they are needed later)
-=======
-            # Diagnostics (keep)
->>>>>>> f1dbc62 (Improve estimate of bounding rectangle for updating zsurf; improve deletion of points near endpoints in auto-segmentation)
             if Utils.rectIsValid(changed_rect):
                 print("rects", self.fragment.name, len(deleted_pts), len(added_pts), len(deleted_tris), len(added_tris))
                 if pts_rect is not None and pts_rect != changed_rect:

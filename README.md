@@ -541,6 +541,7 @@ The prerequisites are:
 
 * You need to be working in one of the two top windows in the Data Slices area.
 
+
 The auto-extrapolation algorithm will automatically create new nodes, going as far as
 it can within the current view; this may not be all the way to the boundary,
 if the data is more complicated than the algorithm can handle.
