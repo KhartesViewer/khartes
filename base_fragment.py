@@ -166,6 +166,7 @@ class BaseFragmentView:
     def setVolumeView(self, vol_view):
         if vol_view == self.cur_volume_view:
             return
+        self.invalidateCache()
         self.cur_volume_view = vol_view
         self.clearCaches()
         if vol_view is not None:
@@ -179,6 +180,9 @@ class BaseFragmentView:
         self.project_view.notifyModified(tstamp)
 
     def getZsurfPoints(self, axis, axis_pos):
+        return None
+
+    def invalidateCache(self):
         return None
 
     def line(self):

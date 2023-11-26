@@ -1305,6 +1305,10 @@ class FragmentView(BaseFragmentView):
     def workingVpoints(self):
         return self.working_vpoints
 
+    def invalidateCache(self):
+        self.oldtri = None
+        self.oldzs = None
+
     # Whenever createZsurf is called, fpoints are re-triangulated,
     # so that fragment view triangles always look correct.
     # However, if do_update is False, z values (which are based
