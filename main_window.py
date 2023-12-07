@@ -2566,7 +2566,7 @@ class MainWindow(QMainWindow):
         self.settingsSaveSizePos()
 
     def keyPressEvent(self, e):
-        # print("key press event in main window")
+        print("key press event in main window:", e.key())
         if e.key() == Qt.Key_Shift:
             t = time.time()
             # if self.shift_lock_double_click:
@@ -2590,21 +2590,21 @@ class MainWindow(QMainWindow):
         elif e.key() == Qt.Key_T:
             self.toggleTrackingCursorsVisible()
             w = QApplication.widgetAt(QCursor.pos())
-            method = getattr(w, "keyPressEvent", None)
+            method = getattr(w, "dwKeyPressEvent", None)
             if w != self and method is not None:
-                w.keyPressEvent(e)
+                w.dwKeyPressEvent(e)
             self.drawSlices()
         elif e.key() == Qt.Key_V:
             self.toggleFragmentVisibility()
             w = QApplication.widgetAt(QCursor.pos())
-            method = getattr(w, "keyPressEvent", None)
+            method = getattr(w, "dwKeyPressEvent", None)
             if w != self and method is not None:
-                w.keyPressEvent(e)
+                w.dwKeyPressEvent(e)
         else:
             w = QApplication.widgetAt(QCursor.pos())
-            method = getattr(w, "keyPressEvent", None)
+            method = getattr(w, "dwKeyPressEvent", None)
             if w != self and method is not None:
-                w.keyPressEvent(e)
+                w.dwKeyPressEvent(e)
 
     def keyReleaseEvent(self, e):
         # if e.key() == Qt.Key_Shift and not self.shift_lock_double_click:
@@ -2616,15 +2616,15 @@ class MainWindow(QMainWindow):
                 self.add_node_mode = not self.add_node_mode
                 self.add_node_mode_button.setChecked(self.add_node_mode)
             w = QApplication.widgetAt(QCursor.pos())
-            method = getattr(w, "keyReleaseEvent", None)
+            method = getattr(w, "dwKeyReleaseEvent", None)
             if w != self and method is not None:
-                w.keyReleaseEvent(e)
+                w.dwKeyReleaseEvent(e)
             self.last_shift_time = 0
         else:
             w = QApplication.widgetAt(QCursor.pos())
-            method = getattr(w, "keyReleaseEvent", None)
+            method = getattr(w, "dwKeyReleaseEvent", None)
             if w != self and method is not None:
-                w.keyReleaseEvent(e)
+                w.dwKeyReleaseEvent(e)
 
     def drawSlices(self):
         self.depth.drawSlice()
