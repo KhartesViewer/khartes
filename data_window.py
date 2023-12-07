@@ -783,7 +783,7 @@ class DataWindow(QLabel):
     # Note that this is called from MainWindow whenever MainWindow
     # catches a keyPressEvent; since the DataWindow widgets never
     # have focus, they never receive keyPressEvents directly
-    def keyPressEvent(self, e):
+    def dwKeyPressEvent(self, e):
         if self.volume_view is None:
             return
         key = e.key()
@@ -928,7 +928,7 @@ class DataWindow(QLabel):
     # Note that this is called from MainWindow whenever MainWindow
     # catches a keyReleaseEvent; since the DataWindow widgets never
     # have focus, they never receive keyReleaseEvents directly
-    def keyReleaseEvent(self, e):
+    def dwKeyReleaseEvent(self, e):
         if self.volume_view is None:
             return
         key = e.key()
