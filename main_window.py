@@ -2165,18 +2165,20 @@ class MainWindow(QMainWindow):
         name = pname.name
 
         project = self.project_view.project
+        ppm = None
+        infill = 0
         if needs_infill or self.canUsePpm():
             dialog = InfillDialog(self, needs_infill)
             dialog.exec()
-        if not dialog.is_accepted:
+            if not dialog.is_accepted:
                 print("Export mesh cancelled by user")
                 return
-        infill = dialog.getValue()
-        ppm = dialog.getPpm()
-        ppm_name = "(None)"
-        if ppm is not None:
-            ppm_name = ppm.name
-        print("infill dialog", infill, ppm_name)
+            infill = dialog.getValue()
+            ppm = dialog.getPpm()
+            ppm_name = "(None)"
+            if ppm is not None:
+                ppm_name = ppm.name
+            print("infill dialog", infill, ppm_name)
 
         # TODO: make sure ppm data is loaded (show Loading... overlay)
         if ppm is not None and ppm.data is None:
