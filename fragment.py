@@ -338,7 +338,7 @@ class Fragment(BaseFragment):
         self.project.notifyModified(tstamp)
     '''
 
-    def createErrorFragment():
+    def createErrorFragment(err):
         frag = Fragment("", -1)
         frag.error = err
         return frag
@@ -347,7 +347,7 @@ class Fragment(BaseFragment):
     def fragFromDict(info):
         for attr in ['name', 'direction', 'gpoints']:
             if attr not in info:
-                err = "file %s missing parameter %s"%(json_file, attr)
+                err = "file missing parameter %s"%(attr)
                 print(err)
                 return Fragment.createErrorFragment(err)
 
@@ -527,6 +527,8 @@ class Fragment(BaseFragment):
         tgijks = Volume.globalIjksToTransposedGlobalIjks(gijks, direction)
 
         print("tgijks", tgijks.shape, tgijks.dtype)
+        if tgijks.shape == 0:
+            return ngijks
         mini = np.amin(tgijks[:,0])
         maxi = np.amax(tgijks[:,0])
         minj = np.amin(tgijks[:,1])
@@ -591,7 +593,7 @@ class Fragment(BaseFragment):
         try:
             # triangulate the original gpoints
             tri = Delaunay(tgijks[:,0:2])
-        except QhullError as err:
+        except Exception as err:
             err = str(err).splitlines()[0]
             print("createInfillPoints triangulation error: %s"%err)
             return ngijks
@@ -665,7 +667,8 @@ class Fragment(BaseFragment):
             try:
                 # triangulate the new gpoints
                 tri = Delaunay(tgps[:,0:2])
-            except QhullError as err:
+            # except QhullError as err:
+            except Exception as err:
                 self.err = "%s triangulation error: %s"%(fname,err)
                 self.err = self.err.splitlines()[0]
                 print(self.err)
@@ -933,6 +936,25 @@ class Fragment(BaseFragment):
             if tfilename != "":
                 print("map_Kd %s"%tfilename.name, file=ofm)
 
+        jfilename = filename.with_suffix(".json")
+        jdict = {}
+        for ef in efs:
+            frag = ef.frag
+            fv = ef.fv
+            fdict = {}
+            fdict["name"] = frag.name
+            fdict["area_sq_cm"] = fv.sqcm
+            fdict["n_vrts"] = len(ef.vrts)
+            fdict["n_trgls"] = len(ef.trgs)
+            jdict[frag.name] = fdict
+        info_txt = json.dumps(jdict, indent=4)
+        try:
+            ofj = jfilename.open("w")
+            print(info_txt, file=ofj)
+        except Exception as e:
+            err = "Could not open %s: %s"%(str(jfilename), e)
+            print(err)
+            # return err
 
         return err
 

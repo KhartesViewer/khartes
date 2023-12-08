@@ -1,4 +1,5 @@
 import math
+import json
 import numpy as np
 from pathlib import Path
 from collections import deque
@@ -155,11 +156,11 @@ class TrglFragment(BaseFragment):
             else:
                 opath = path
             print("TF slaom", opath)
-            frag.save(opath, ppm)
+            frag.save(opath, ppm, fv)
 
         return ""
 
-    def save(self, fpath, ppm=None):
+    def save(self, fpath, ppm=None, fv=None):
         obj_path = fpath.with_suffix(".obj")
         name = fpath.name
         print("TF save", obj_path)
@@ -197,7 +198,12 @@ class TrglFragment(BaseFragment):
                     ostr += " %d/%d"%(v,v)
             print(ostr, file=of)
         mtl_path = fpath.with_suffix(".mtl")
-        of = mtl_path.open("w")
+        try:
+            of = mtl_path.open("w")
+        except Exception as e:
+            print("Could not open %s: %s"%(str(mtl_path), e))
+            return
+            
         print("newmtl default", file=of)
         rgb = self.color.getRgbF()
         print("Ka %f %f %f"%(rgb[0],rgb[1],rgb[2]), file=of)
@@ -208,6 +214,24 @@ class TrglFragment(BaseFragment):
         # TODO: print this only if TIFF file exists
         # if has_texture:
         #     print("map_Kd %s.tif"%name, file=of)
+
+        if fv is not None:
+            jfilename = fpath.with_suffix(".json")
+            jdict = {}
+            fdict = {}
+            fdict["name"] = self.name
+            area = fv.sqcm
+            fdict["area_sq_cm"] = area
+            fdict["n_vrts"] = len(self.gpoints)
+            fdict["n_trgls"] = len(self.trgls)
+            jdict[self.name] = fdict
+            info_txt = json.dumps(jdict, indent=4)
+            try:
+                ofj = jfilename.open("w")
+                print(info_txt, file=ofj)
+            except Excepton as e:
+                print("Could not open %s: %s"%(str(jfilename), e))
+                return
 
     # find the intersections between a plane defined by axis and position,
     # and the triangles.  

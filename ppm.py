@@ -49,7 +49,7 @@ class Ppm():
 
     def loadData(self):
         if self.data is not None:
-            rturn
+            return
         print("reading data from %s for %s"%(str(self.path), self.name))
 
         fstr = str(self.path)
