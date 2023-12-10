@@ -1088,6 +1088,11 @@ class FragmentView(BaseFragmentView):
         # print(self.fragment.name, self.sqcm, "sq cm")
         return self.sqcm
 
+    def clearCaches(self):
+        self.oldzs = None
+        self.oldtri = None
+        self.clearZsliceCache()
+
     def clearZsliceCache(self):
         self.prevZslice = -1
         self.prevZslicePts = None
