@@ -2482,6 +2482,7 @@ class MainWindow(QMainWindow):
             return
         self.fragments_table.model().beginResetModel()
         fragment_view.mesh_visible = mesh_visible
+        fragment_view.clearCaches()
         fragment_view.setLocalPoints(True)
 
         fragment_view.notifyModified()
