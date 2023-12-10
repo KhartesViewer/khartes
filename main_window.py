@@ -2568,7 +2568,7 @@ class MainWindow(QMainWindow):
         self.settingsSaveSizePos()
 
     def keyPressEvent(self, e):
-        print("key press event in main window:", e.key())
+        # print("key press event in main window:", e.key())
         if e.key() == Qt.Key_Shift:
             t = time.time()
             # if self.shift_lock_double_click:

@@ -167,6 +167,7 @@ class BaseFragmentView:
         if vol_view == self.cur_volume_view:
             return
         self.cur_volume_view = vol_view
+        self.clearCaches()
         if vol_view is not None:
             self.setLocalPoints(False)
 
@@ -233,7 +234,11 @@ class BaseFragmentView:
     # direction is not used here, but this notifies fragment view
     # to recompute things
     def setVolumeViewDirection(self, direction):
+        self.clearCaches()
         self.setLocalPoints(False)
+
+    def clearCaches(self):
+        pass
     
     def pointNormals(self):
         self.triangulate()
