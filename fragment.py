@@ -1843,6 +1843,9 @@ class FragmentView(BaseFragmentView):
         ixyzs = ixyzs[:,ixyzs[0,:]<ftrdata.shape[0]]
         ixyzs = ixyzs[:,ixyzs[0,:]>=0]
         # use_linear_interpolation = True
+        vol = self.cur_volume_view.volume
+        if vol.is_zarr:
+            vol.setImmediateDataMode(True)
         if FragmentView.use_linear_interpolation:
             # print("linear")
             z0s = ixyzs[0,:]
@@ -1857,6 +1860,8 @@ class FragmentView(BaseFragmentView):
         else: # nearest neighbor
             # print("nn")
             self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = ftrdata[(ixyzs[0,:], ixyzs[1,:], ixyzs[2,:])]
+        if vol.is_zarr:
+            vol.setImmediateDataMode(False)
 
 
         timer.time("ssurf")

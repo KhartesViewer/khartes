@@ -156,6 +156,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         self.callback_called = False
         self.zero_vols = set()
         self.submitted = set()
+        self.immediate_data_mode = False
         self.executor = ThreadPoolExecutor(max_workers=4)
         self._mutex2 = Lock()
 
@@ -163,6 +164,9 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         print("get item", key)
         return super().__getitem__(key)
 
+    def setImmediateDataMode(self, flag):
+        with self._mutex:
+            self.immediate_data_mode = flag
 
     def __getitem__(self, key):
         try:
@@ -177,24 +181,38 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
 
         except KeyError:
             # cache miss, retrieve value from the store
+            # print("cache miss", key)
+            dont_thread = (self.immediate_data_mode or len(key) == 0 or key[0] == '.')
             with self._mutex:
                 if key in self.zero_vols or key in self.submitted:
                     raise KeyError(key)
-                self.submitted.add(key)
+                if not dont_thread:
+                    self.submitted.add(key)
                 # print("submitted",self.submitted)
-            if len(key) == 0 or key[0] == '.':
-                return self.getValue(key)
+            if dont_thread:
+                value = self.getValue(key)
+                self.cacheValue(key, value)
+                return value
             else:
                 future = self.executor.submit(self.getValue, key)
                 future.add_done_callback(lambda x: self.processValue(key, x))
                 raise KeyError(key)
-
 
     def getValue(self, key):
         # print("getValue", key)
         value = self._store[key]
         # print("  found", key)
         return value
+
+    def cacheValue(self, key, value):
+        with self._mutex:
+            self.misses += 1
+            # need to check if key is not in the cache, as it may have been cached
+            # while we were retrieving the value from the store
+            if key not in self._values_cache:
+                # print("pv caching",key)
+                self._cache_value(key, value)
+                # print("  pv done")
 
     def processValue(self, key, future):
         # print("pv", key)
@@ -211,14 +229,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             if self.future_done_callback is not None:
                 self.future_done_callback(key)
             return
-        with self._mutex:
-            self.misses += 1
-            # need to check if key is not in the cache, as it may have been cached
-            # while we were retrieving the value from the store
-            if key not in self._values_cache:
-                # print("pv caching",key)
-                self._cache_value(key, value)
-                # print("  pv done")
+        self.cacheValue(key, value)
         if self.future_done_callback is not None:
             self.future_done_callback(key)
 
@@ -313,6 +324,9 @@ class CachedZarrVolume():
     @property
     def shape(self):
         return self.data.shape
+
+    def setImmediateDataMode(self, flag):
+        self.klru.setImmediateDataMode(flag)
     
     def trshape(self, direction):
         shape = self.shape
