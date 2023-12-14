@@ -5,6 +5,8 @@ import zarr
 import time
 import pathlib
 import re
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 from utils import Utils
 
 CHUNK_SIZE = 500
@@ -77,6 +79,10 @@ def load_tif(path):
     stack_array = zarr.open(store, mode="r")
     return stack_array
 
+def load_zarr(dirname):
+    stack_array = zarr.open(dirname, mode="r")
+    return stack_array
+
 def load_writable_volume(path):
     """This function takes a path to a zarr DirectoryStore folder that contains
     chunked volume information.  This zarr Array is writable and can be used
@@ -143,6 +149,135 @@ class TransposedDataView():
         elif self.direction == 1:
             return result.transpose(1, 0, 2)
 
+class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
+    def __init__(self, store, max_size):
+        super().__init__(store, max_size)
+        self.future_done_callback = None
+        self.callback_called = False
+        self.zero_vols = set()
+        self.submitted = set()
+        self.executor = ThreadPoolExecutor(max_workers=4)
+        self._mutex2 = Lock()
+
+    def __getitem__old(self, key):
+        print("get item", key)
+        return super().__getitem__(key)
+
+
+    def __getitem__(self, key):
+        try:
+            # first try to obtain the value from the cache
+            with self._mutex:
+                value = self._values_cache[key]
+                # cache hit if no KeyError is raised
+                self.hits += 1
+                # treat the end as most recently used
+                self._values_cache.move_to_end(key)
+                return value
+
+        except KeyError:
+            # cache miss, retrieve value from the store
+            with self._mutex:
+                if key in self.zero_vols or key in self.submitted:
+                    raise KeyError(key)
+                self.submitted.add(key)
+                # print("submitted",self.submitted)
+            if len(key) == 0 or key[0] == '.':
+                return self.getValue(key)
+            else:
+                future = self.executor.submit(self.getValue, key)
+                future.add_done_callback(lambda x: self.processValue(key, x))
+                raise KeyError(key)
+
+
+    def getValue(self, key):
+        # print("getValue", key)
+        value = self._store[key]
+        # print("  found", key)
+        return value
+
+    def processValue(self, key, future):
+        # print("pv", key)
+        with self._mutex:
+            self.submitted.discard(key)
+            # print("pv submitted", self.submitted)
+        try:
+            value = future.result()
+            # print("pv got value")
+        except KeyError:
+            # print("pv key error", key)
+            with self._mutex:
+                self.zero_vols.add(key)
+            if self.future_done_callback is not None:
+                self.future_done_callback(key)
+            return
+        with self._mutex:
+            self.misses += 1
+            # need to check if key is not in the cache, as it may have been cached
+            # while we were retrieving the value from the store
+            if key not in self._values_cache:
+                # print("pv caching",key)
+                self._cache_value(key, value)
+                # print("  pv done")
+        if self.future_done_callback is not None:
+            self.future_done_callback(key)
+
+'''
+class KhartesLRUCache(zarr.storage.LRUStoreCache):
+    def __init__(self, store, max_size):
+        super().__init__(store, max_size)
+        self.before_callback = None
+        self.zero_vols = set()
+
+    def __getitem__old(self, key):
+        print("get item", key)
+        return super().__getitem__(key)
+
+    def __getitem__(self, key):
+        try:
+            # first try to obtain the value from the cache
+            with self._mutex:
+                value = self._values_cache[key]
+                # cache hit if no KeyError is raised
+                self.hits += 1
+                # treat the end as most recently used
+                self._values_cache.move_to_end(key)
+
+        except KeyError:
+            # cache miss, retrieve value from the store
+            with self._mutex:
+                if key in self.zero_vols:
+                    # print("key in zero_vols")
+                    raise KeyError(key)
+            return_flag = False
+            if self.before_callback is not None:
+                return_flag = self.before_callback(key)
+            if return_flag:
+                # print("raising error")
+                raise KeyError(key)
+
+            # print("checking value", key)
+            try:
+                value = self._store[key]
+            except KeyError:
+                # print("key error", key)
+                with self._mutex:
+                    self.zero_vols.add(key)
+                raise KeyError(key)
+            # print("got value", key)
+            # print("cache miss", key)
+
+            with self._mutex:
+                self.misses += 1
+                # need to check if key is not in the cache, as it may have been cached
+                # while we were retrieving the value from the store
+                if key not in self._values_cache:
+                    # print("caching", key)
+                    self._cache_value(key, value)
+
+        return value
+'''
+
 
 class CachedZarrVolume():
     """An interface to cached volume data stored on disk as .tif files
@@ -173,6 +308,7 @@ class CachedZarrVolume():
         self.error = "no error message set"
         self.active_project_views = set()
         self.from_vc_render = False
+        self.processing = False
 
     @property
     def shape(self):
@@ -226,12 +362,58 @@ class CachedZarrVolume():
         """Does an in-place sort of a list of volumes by name"""
         vols.sort(key=lambda v: v.name)
 
+    # TODO: createFromZarr and createFromTiffs share a lot of code!
+    @staticmethod
+    def createFromZarr(
+            project,
+            zarr_directory,
+            name,
+            # max_width=150,
+            max_width=240,
+        ):
+        """
+        Generates a new volume object from a zarr directory
+        """
+        tdir = pathlib.Path(zarr_directory)
+        if not tdir.is_dir():
+            err = f"{tdir} is not a directory"
+            print(err)
+            return CachedZarrVolume.createErrorVolume(err)
+
+        output_filename = name
+        if not output_filename.endswith(".volzarr"):
+            output_filename += ".volzarr"
+        filepath = os.path.join(project.volumes_path, output_filename)
+        if os.path.exists(filepath):
+            err = f"{filepath} already exists"
+            print(err)
+            return CachedZarrVolume.createErrorVolume(err)
+
+        timestamp = Utils.timestamp()
+        header = {
+            "khartes_version": "1.0",
+            "khartes_created": timestamp,
+            "khartes_modified": timestamp,
+            "zarr_dir": zarr_directory,
+            "max_width": max_width,
+        }
+        # Write out the project file
+        with open(filepath, "w") as outfile:
+            for key, value in header.items():
+                outfile.write(f"{key}\t{value}\n")
+
+        volume = CachedZarrVolume.loadFile(filepath)
+        # print("about to set callback")
+        project.addVolume(volume)
+        return volume
+
+
     @staticmethod
     def createFromTiffs(
             project, 
             tiff_directory, 
             name,
-            max_width=150,
+            max_width=240,
         ):
         """
         Generates a new volume object from a directory of TIF files.
@@ -276,12 +458,16 @@ class CachedZarrVolume():
                 for line in infile:
                     key, value = line.split("\t")
                     header[key] = value
-            tiff_directory = header["tiff_dir"]
+            tiff_directory = header.get("tiff_dir", None)
+            zarr_directory = header.get("zarr_dir", None)
             max_width = int(header["max_width"])
         except Exception as e:
             err = f"Failed to read input file {filename}"
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
+        if tiff_directory is None and zarr_directory is None:
+            err = f"Input file {filename} does not specify a data store"
+            print(err)
 
         volume = CachedZarrVolume()
         volume.data_header = header
@@ -298,15 +484,60 @@ class CachedZarrVolume():
         # at the global origin with no stepping.
         volume.gijk_starts = [0, 0, 0]
         volume.gijk_steps = [1, 1, 1]
+        ddir = ""
+        if tiff_directory is not None:
+            ddir = tiff_directory.strip()
+        elif zarr_directory is not None:
+            ddir = zarr_directory.strip()
 
-        array = load_tif(tiff_directory.strip())
-        volume.data = zarr.open(zarr.storage.LRUStoreCache(array.store, max_size=5*2**30), mode="r")
+        try:
+            if tiff_directory is not None:
+                array = load_tif(ddir)
+            elif zarr_directory is not None:
+                array = load_zarr(ddir)
+        except Exception as e:
+            err = f"Failed to read input directory {ddir}\n  specified in {filename}"
+            print(err)
+            return CachedZarrVolume.createErrorVolume(err)
+        # volume.data = zarr.open(zarr.storage.LRUStoreCache(array.store, max_size=5*2**30), mode="r")
+        # klru = KhartesLRUCache(array.store, max_size=5*2**30)
+        klru = KhartesThreadedLRUCache(array.store, max_size=5*2**30)
+        # klru.before_callback = volume.beforeCallback
+        volume.data = zarr.open(klru, mode="r")
+        volume.klru = klru
 
         volume.trdatas = []
         volume.trdatas.append(TransposedDataView(volume.data, 0))
         volume.trdatas.append(TransposedDataView(volume.data, 1))
         volume.sizes = tuple(int(size) for size in volume.data.shape)
         return volume
+
+    def setCallback(self, cb):
+        print("setting callback")
+        # self.klru.before_callback = cb
+        self.klru.future_done_callback = cb
+
+    """
+    def beforeCallback(self, key):
+        print("bc", key)
+        '''
+        try:
+            parts = [int(k) for k in key.split('/')]
+            if parts[0]%3 == 0:
+                return True
+        except:
+            pass
+        '''
+        if self.processing:
+            print("already processing")
+            return True
+        self.processing = True
+        app = QGuiApplication.instance()
+        app.processEvents()
+        self.processing = False
+
+        return False
+    """
 
     def dataSize(self):
         """Size of the whole dataset in bytes
@@ -339,7 +570,6 @@ class CachedZarrVolume():
     def unloadData(self, project_view):
         self.active_project_views.discard(project_view)
         self.data.store.invalidate()
-
 
     def createTransposedData(self):
         pass

@@ -569,6 +569,10 @@ class Volume():
         self.active_project_views = set()
         self.from_vc_render = False
 
+    @property
+    def shape(self):
+        return self.data.shape
+
     def createErrorVolume(err):
         vol = Volume()
         vol.error = err

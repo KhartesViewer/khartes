@@ -229,6 +229,7 @@ class TiffLoader(QMainWindow):
         hbox.addWidget(self.vcrender)
         vbox.addLayout(hbox)
 
+        '''
         hbox = QHBoxLayout()
         self.load_as_zarr_widget = QCheckBox("Load TIFFs as Zarr")
         self.load_as_zarr_widget.setChecked(self.load_as_zarr)
@@ -236,6 +237,7 @@ class TiffLoader(QMainWindow):
         hbox.addStretch()
         hbox.addWidget(self.load_as_zarr_widget)
         vbox.addLayout(hbox)
+        '''
 
         hbox = QHBoxLayout()
         hbox.addWidget(QLabel("Volume color:"))
