@@ -528,8 +528,10 @@ class CachedZarrVolume():
 
         try:
             if tiff_directory is not None:
+                print(f"Loading tiff directory {ddir}")
                 array = load_tif(ddir)
             elif zarr_directory is not None:
+                print(f"Loading zarr directory {ddir}")
                 array = load_zarr(ddir)
         except Exception as e:
             err = f"Failed to read input directory {ddir}\n  specified in {filename}"

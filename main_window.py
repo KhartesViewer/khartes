@@ -2286,6 +2286,12 @@ class MainWindow(QMainWindow):
         path = path.absolute()
         parent = path.parent
         self.settingsSaveDirectory(str(parent))
+        print(f"Finished loading project from {fname}")
+        # In theory, this shouldn't be needed, since
+        # "loading" is about to go out of scope.  But in
+        # practice, if this line isn't here, the "Loading data..."
+        # widget sometimes doesn't go away
+        loading = None
 
     def onLoadHardwiredProjectButtonClick(self, s):
         print("load hardwired project clicked")
@@ -2387,19 +2393,19 @@ class MainWindow(QMainWindow):
             font = self.label.font()
             font.setPointSize(16)
             self.label.setFont(font)
-            #print("Loading widget created", self)
+            print("Loading widget created", self)
             self.show()
 
         def closeEvent(self, e):
-            #print("Loading widget close event", self)
+            print("Loading widget close event", self)
             e.accept()
 
         def mousePressEvent(self, e):
-            #print("Loading widget mouse press event", self)
+            print("Loading widget mouse press event", self)
             self.close()
 
     def loadingDestroyed(self, widget):
-        #print("Loading destroyed, loading widget to close", widget)
+        print("Loading destroyed, loading widget to close", widget)
         widget.close()
 
     # Sort of complicated.  
