@@ -204,18 +204,42 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         except KeyError:
             # cache miss, retrieve value from the store
             # print("cache miss", key)
-            dont_thread = (self.immediate_data_mode or len(key) == 0 or key[0] == '.')
+
+            # dont_thread = True means don't submit the file-read
+            # request to the thread pool; do the read right away.
+            # dont_thread = False means submit the request
+            # to the thread pool.
+            dont_thread = False
+            if self.immediate_data_mode:
+                dont_thread = True
+            elif len(key) == 0: # not sure this ever happens
+                dont_thread = True
+            else:
+                # Check if key is the name of a metadata file
+                # (for instance, '0/.zarray'), in which case
+                # the value must be read immediately
+                parts = key.split('/')
+                if parts[-1][0] == '.':
+                    dont_thread = True
             with self._mutex:
+                # check whether
+                # key is known to correspond to an all-zeros volume,
+                # or key has already been submitted to the thread queue:
                 if key in self.zero_vols or key in self.submitted:
+                    # this tells the caller to treat the current
+                    # chunk as all zeros
                     raise KeyError(key)
                 if not dont_thread:
+                    # the add() is done here, instead of below,
+                    # where the request is submitted, because here
+                    # the add() operation is protected by the _mutex
                     self.submitted.add(key)
                 # print("submitted",self.submitted)
-            if dont_thread:
+            if dont_thread:  # read the value immediately
                 value = self.getValue(key)
                 self.cacheValue(key, value)
                 return value
-            else:
+            else:  # submit to the thread pool a request to read the value
                 future = self.executor.submit(self.getValue, key)
                 future.add_done_callback(lambda x: self.processValue(key, x))
                 raise KeyError(key)
@@ -236,15 +260,24 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                 self._cache_value(key, value)
                 # print("  pv done")
 
+    # This is called when the thread reports that it has
+    # completed the getValue (disk read) operation
     def processValue(self, key, future):
         # print("pv", key)
         with self._mutex:
             self.submitted.discard(key)
             # print("pv submitted", self.submitted)
         try:
+            # get the result
             value = future.result()
             # print("pv got value")
         except KeyError:
+            # KeyError implies that the data store has no file
+            # corresponding to this key, meaning that the data
+            # for this chunk is all zeros.
+            # The "return" statement below means that this 
+            # KeyError will be relayed to the caller, who will
+            # know what it means (chunk is all zeros).
             # print("pv key error", key)
             with self._mutex:
                 self.zero_vols.add(key)
@@ -539,11 +572,27 @@ class CachedZarrVolume():
             return CachedZarrVolume.createErrorVolume(err)
         # volume.data = zarr.open(zarr.storage.LRUStoreCache(array.store, max_size=5*2**30), mode="r")
         # klru = KhartesLRUCache(array.store, max_size=5*2**30)
+        # print("zarr array", array)
         max_mem_gb = 5
         # max_mem_gb = 12
         klru = KhartesThreadedLRUCache(array.store, max_size=max_mem_gb*2**30)
         # klru.before_callback = volume.beforeCallback
-        volume.data = zarr.open(klru, mode="r")
+        zdata = zarr.open(klru, mode="r")
+        # print("volume data", volume.data)
+
+        # if zdata is a zarr group rather than a zarr array
+        # (as is the case if the input is an OME directory),
+        # look for '0', which by convention is the 
+        # highest-resolution data array in the OME hierarchy, and 
+        # set zdata to point to this array.  Note that this is NOT
+        # taking advantage of the multi-resolution data
+        # in the OME directory!  That is yet to be coded...
+        if isinstance(zdata, zarr.hierarchy.Group):
+            # print("converting data")
+            # print("tree", volume.data.tree())
+            zdata = zdata['0']
+            # print("new volume data", volume.data)
+        volume.data = zdata
         volume.klru = klru
 
         volume.trdatas = []
