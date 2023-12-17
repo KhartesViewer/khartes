@@ -2679,6 +2679,8 @@ class MainWindow(QMainWindow):
         self.project_view.project.setVoxelSizeUm(size)
         self.drawSlices()
 
+    # The self.processing_zarr check is left over from a previous 
+    # non-threaded version; it will be removed at some point
     def zarrTimerCallback(self):
         if self.processing_zarr:
             # print("skipping single shot")
@@ -2686,6 +2688,7 @@ class MainWindow(QMainWindow):
         # print("single shot")
         self.drawSlices()
 
+    # left over from a previous non-threaded version
     def zarrCacheCallback(self, key):
         print('zbc', key)
         self.zarr_timer.start(10)
@@ -2700,11 +2703,21 @@ class MainWindow(QMainWindow):
 
         return False
 
+    # This receives the "emit" from zarrFutureDoneCallback;
+    # it calls a one-shot timer with a delay of 100 msec
+    # (0.1 seconds).  The delay is to allow multiple callbacks
+    # to be consolidated
     def zarrSlot(self, key):
         # print("zslot", key)
         self.zarr_timer.start(100)
         pass
 
+    # This is called from KhartesThreadedLRUCache whenever
+    # a thread has finished loading a chunk.  This callback
+    # is called from within that thread; the "emit" is used to
+    # pass the callback to the Qt GUI thread.  Khartes code 
+    # is in general not thread-safe, so it should only be 
+    # called from within the Qt GUI thread.
     def zarrFutureDoneCallback(self, key):
         # print("done callback", key)
         # print("thread",QThread.currentThread())

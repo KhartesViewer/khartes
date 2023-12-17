@@ -160,7 +160,9 @@ zeros), and a request is submitted to ThreadPoolExecutor
 to retrieve the chunk.  Once a thread has retrieved the
 chunk, the chunk is added to the cache, and (optionally)
 a callback is called.
-However, sometimes the caller would rather wait for the
+NOTE: In khartes, this callback is set to MainWindow.zarrFutureDoneCallback.
+
+Sometimes the caller would rather wait for the
 data, instead of having the request put on the work queue.
 In this case, the caller needs to call 
 setImmediateDataMode(True), before making requesting any data,
