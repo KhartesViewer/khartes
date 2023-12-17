@@ -6,7 +6,6 @@ from PyQt5.QtWidgets import QLabel, QApplication
 from PyQt5.QtCore import QPoint, Qt
 import numpy as np
 import numpy.linalg as npla
-import time
 import cv2
 
 from utils import Utils
@@ -76,7 +75,6 @@ class DataWindow(QLabel):
         self.upperLeftCursor = Qt.SizeFDiagCursor
         self.upperRightCursor = Qt.SizeBDiagCursor
         self.waitCursor = Qt.WaitCursor
-        self.latestDraw = 0
         # c = QCursor(Qt.CrossCursor)
         # px = c.pixmap()
         # print("pixmap", px)
@@ -1434,12 +1432,7 @@ into and out of the viewing plane.
         self.setMargin(0)
         self.window.setFocus()
         z = self.getZoom()
-        my_time = time.time()
         slc = volume.getSlice(self.axis, volume.ijktf)
-        if my_time < self.latestDraw:
-            print("data arrived too late")
-            return
-        self.latestDraw = my_time
         # slice width, height
         sw = slc.shape[1]
         sh = slc.shape[0]

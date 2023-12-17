@@ -157,7 +157,7 @@ that is, when __getitem__ is called, if the requested
 chunk is not in cache, a KeyError is immediately returned
 to the caller (telling the caller to treat the chunk as all
 zeros), and a request is submitted to ThreadPoolExecutor
-to retrieve the chunk.  Once a thread has retrieved the
+to run a thread to retrieve the chunk.  Once the thread has retrieved the
 chunk, the chunk is added to the cache, and (optionally)
 a callback is called.
 NOTE: In khartes, this callback is set to MainWindow.zarrFutureDoneCallback.
@@ -207,22 +207,23 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             # cache miss, retrieve value from the store
             # print("cache miss", key)
 
-            # dont_thread = True means don't submit the file-read
-            # request to the thread pool; do the read right away.
-            # dont_thread = False means submit the request
+            # wait_for_data = True means do the read right away.
+            # Note that this blocks the calling program until
+            # the data has been read.
+            # wait_for_data = False means submit the request
             # to the thread pool.
-            dont_thread = False
+            wait_for_data = False
             if self.immediate_data_mode:
-                dont_thread = True
+                wait_for_data = True
             elif len(key) == 0: # not sure this ever happens
-                dont_thread = True
+                wait_for_data = True
             else:
                 # Check if key is the name of a metadata file
                 # (for instance, '0/.zarray'), in which case
                 # the value must be read immediately
                 parts = key.split('/')
                 if parts[-1][0] == '.':
-                    dont_thread = True
+                    wait_for_data = True
             with self._mutex:
                 # check whether
                 # key is known to correspond to an all-zeros volume,
@@ -231,13 +232,13 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                     # this tells the caller to treat the current
                     # chunk as all zeros
                     raise KeyError(key)
-                if not dont_thread:
+                if not wait_for_data:
                     # the add() is done here, instead of below,
                     # where the request is submitted, because here
                     # the add() operation is protected by the _mutex
                     self.submitted.add(key)
                 # print("submitted",self.submitted)
-            if dont_thread:  # read the value immediately
+            if wait_for_data:  # read the value immediately
                 value = self.getValue(key)
                 self.cacheValue(key, value)
                 return value
@@ -289,62 +290,6 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         self.cacheValue(key, value)
         if self.future_done_callback is not None:
             self.future_done_callback(key)
-
-'''
-class KhartesLRUCache(zarr.storage.LRUStoreCache):
-    def __init__(self, store, max_size):
-        super().__init__(store, max_size)
-        self.before_callback = None
-        self.zero_vols = set()
-
-    def __getitem__old(self, key):
-        print("get item", key)
-        return super().__getitem__(key)
-
-    def __getitem__(self, key):
-        try:
-            # first try to obtain the value from the cache
-            with self._mutex:
-                value = self._values_cache[key]
-                # cache hit if no KeyError is raised
-                self.hits += 1
-                # treat the end as most recently used
-                self._values_cache.move_to_end(key)
-
-        except KeyError:
-            # cache miss, retrieve value from the store
-            with self._mutex:
-                if key in self.zero_vols:
-                    # print("key in zero_vols")
-                    raise KeyError(key)
-            return_flag = False
-            if self.before_callback is not None:
-                return_flag = self.before_callback(key)
-            if return_flag:
-                # print("raising error")
-                raise KeyError(key)
-
-            # print("checking value", key)
-            try:
-                value = self._store[key]
-            except KeyError:
-                # print("key error", key)
-                with self._mutex:
-                    self.zero_vols.add(key)
-                raise KeyError(key)
-            # print("got value", key)
-            # print("cache miss", key)
-
-            with self._mutex:
-                self.misses += 1
-                # need to check if key is not in the cache, as it may have been cached
-                # while we were retrieving the value from the store
-                if key not in self._values_cache:
-                    # print("caching", key)
-                    self._cache_value(key, value)
-
-        return value
-'''
 
 
 class CachedZarrVolume():
@@ -572,15 +517,9 @@ class CachedZarrVolume():
             err = f"Failed to read input directory {ddir}\n  specified in {filename}"
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
-        # volume.data = zarr.open(zarr.storage.LRUStoreCache(array.store, max_size=5*2**30), mode="r")
-        # klru = KhartesLRUCache(array.store, max_size=5*2**30)
-        # print("zarr array", array)
         max_mem_gb = 5
-        # max_mem_gb = 12
         klru = KhartesThreadedLRUCache(array.store, max_size=max_mem_gb*2**30)
-        # klru.before_callback = volume.beforeCallback
         zdata = zarr.open(klru, mode="r")
-        # print("volume data", volume.data)
 
         # if zdata is a zarr group rather than a zarr array
         # (as is the case if the input is an OME directory),
@@ -590,10 +529,7 @@ class CachedZarrVolume():
         # taking advantage of the multi-resolution data
         # in the OME directory!  That is yet to be coded...
         if isinstance(zdata, zarr.hierarchy.Group):
-            # print("converting data")
-            # print("tree", volume.data.tree())
             zdata = zdata['0']
-            # print("new volume data", volume.data)
         volume.data = zdata
         volume.klru = klru
 
@@ -607,28 +543,6 @@ class CachedZarrVolume():
         print("setting callback")
         # self.klru.before_callback = cb
         self.klru.future_done_callback = cb
-
-    """
-    def beforeCallback(self, key):
-        print("bc", key)
-        '''
-        try:
-            parts = [int(k) for k in key.split('/')]
-            if parts[0]%3 == 0:
-                return True
-        except:
-            pass
-        '''
-        if self.processing:
-            print("already processing")
-            return True
-        self.processing = True
-        app = QGuiApplication.instance()
-        app.processEvents()
-        self.processing = False
-
-        return False
-    """
 
     def dataSize(self):
         """Size of the whole dataset in bytes

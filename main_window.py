@@ -888,7 +888,6 @@ class MainWindow(QMainWindow):
         self.volumes_model = VolumesModel(None, self)
         self.tiff_loader = TiffLoader(self)
         self.zarr_loader = ZarrLoader(self)
-        self.processing_zarr = False
         self.zarr_timer = QTimer()
         self.zarr_timer.setSingleShot(True)
         self.zarr_timer.timeout.connect(self.zarrTimerCallback)
@@ -2452,7 +2451,6 @@ class MainWindow(QMainWindow):
             if vv.minZoom == 0.:
                 vv.setDefaultMinZoom(self)
             if volume.is_zarr:
-                # volume.setCallback(self.zarrCacheCallback)
                 volume.setCallback(self.zarrFutureDoneCallback)
         # print("pv set updata frag views")
         pv.updateFragmentViews()
@@ -2679,29 +2677,9 @@ class MainWindow(QMainWindow):
         self.project_view.project.setVoxelSizeUm(size)
         self.drawSlices()
 
-    # The self.processing_zarr check is left over from a previous 
-    # non-threaded version; it will be removed at some point
+    # called by self.zarr_timer
     def zarrTimerCallback(self):
-        if self.processing_zarr:
-            # print("skipping single shot")
-            return
-        # print("single shot")
         self.drawSlices()
-
-    # left over from a previous non-threaded version
-    def zarrCacheCallback(self, key):
-        print('zbc', key)
-        self.zarr_timer.start(10)
-        if self.processing_zarr:
-            print("already processing")
-            # QTimer.singleShot(250, self.zarrTimerCallback)
-            # self.zarr_timer.start(100)
-            return True
-        self.processing_zarr = True
-        self.app.processEvents()
-        self.processing_zarr = False
-
-        return False
 
     # This receives the "emit" from zarrFutureDoneCallback;
     # it calls a one-shot timer with a delay of 100 msec
@@ -2716,13 +2694,8 @@ class MainWindow(QMainWindow):
     # a thread has finished loading a chunk.  This callback
     # is called from within that thread; the "emit" is used to
     # pass the callback to the Qt GUI thread.  Khartes code 
-    # is in general not thread-safe, so it should only be 
-    # called from within the Qt GUI thread.
+    # is in general not thread-safe, so it should be 
+    # called only from within the Qt GUI thread.
     def zarrFutureDoneCallback(self, key):
-        # print("done callback", key)
-        # print("thread",QThread.currentThread())
-        # self.zarr_timer.start(100)
-        # self.drawSlices()
         self.zarr_signal.emit(key)
-        # print("  dc finished")
 
