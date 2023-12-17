@@ -29,7 +29,7 @@ class ProjectView:
 
         self.fragments = {}
         for fragment in project.fragments:
-            print(volume.name)
+            print(fragment.name)
             self.addFragmentView(fragment, no_notify=True)
 
         self.cur_volume = None

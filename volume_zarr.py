@@ -5,6 +5,7 @@ import zarr
 import time
 import pathlib
 import re
+import queue
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from utils import Utils
@@ -148,7 +149,24 @@ class TransposedDataView():
             return result.transpose(2, 0, 1)
         elif self.direction == 1:
             return result.transpose(1, 0, 2)
-
+'''
+LRU (least-recently-used) cache based on the version
+in https://github.com/zarr-developers/zarr-python.
+It has been modified to work in threaded mode:
+that is, when __getitem__ is called, if the requested
+chunk is not in cache, a KeyError is immediately returned
+to the caller (telling the caller to treat the chunk as all
+zeros), and a request is submitted to ThreadPoolExecutor
+to retrieve the chunk.  Once a thread has retrieved the
+chunk, the chunk is added to the cache, and (optionally)
+a callback is called.
+However, sometimes the caller would rather wait for the
+data, instead of having the request put on the work queue.
+In this case, the caller needs to call 
+setImmediateDataMode(True), before making requesting any data,
+and after the data has been retrieved, call setImmediateDataMode(False)
+(to restore request queueing).
+'''
 class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
     def __init__(self, store, max_size):
         super().__init__(store, max_size)
@@ -158,6 +176,10 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         self.submitted = set()
         self.immediate_data_mode = False
         self.executor = ThreadPoolExecutor(max_workers=4)
+        # This is a dubious thing to do from a coding standpoint,
+        # but over a slow connection, the user probably wants to
+        # see the most-recently-requested data first.
+        self.executor._work_queue = queue.LifoQueue()
         self._mutex2 = Lock()
 
     def __getitem__old(self, key):
@@ -515,7 +537,9 @@ class CachedZarrVolume():
             return CachedZarrVolume.createErrorVolume(err)
         # volume.data = zarr.open(zarr.storage.LRUStoreCache(array.store, max_size=5*2**30), mode="r")
         # klru = KhartesLRUCache(array.store, max_size=5*2**30)
-        klru = KhartesThreadedLRUCache(array.store, max_size=5*2**30)
+        max_mem_gb = 5
+        # max_mem_gb = 12
+        klru = KhartesThreadedLRUCache(array.store, max_size=max_mem_gb*2**30)
         # klru.before_callback = volume.beforeCallback
         volume.data = zarr.open(klru, mode="r")
         volume.klru = klru

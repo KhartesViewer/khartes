@@ -1464,19 +1464,26 @@ into and out of the viewing plane.
         # panning into account.
         # In OpenCV, unlike PIL, need to calculate the interesection
         # of the two rectangles: 1) the panned and zoomed slice, and 2) the
-        # viewing window, before pasting
+        # viewing window, before pasting.
+        # all coordinates below are in drawing window coordinates,
+        # unless specified otherwise
+        # location of upper left corner of data slice:
         ax1 = int(whw-z*fi)
         ay1 = int(whh-z*fj)
+        # location of lower right corner of data slice:
         ax2 = ax1+zsw
         ay2 = ay1+zsh
+        # locations of upper left and lower right corners of drawing window
         bx1 = 0
         by1 = 0
         bx2 = ww
         by2 = wh
         ri = Utils.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
         if ri is not None:
+            # upper left and lower right corners of intersected rectangle
             (x1,y1),(x2,y2) = ri
-            # zoomed data slice
+            # corners of windowed data slice, in
+            # data slice coordinates
             x1s = int((x1-ax1)/z)
             y1s = int((y1-ay1)/z)
             x2s = int((x2-ax1)/z)
@@ -1484,7 +1491,11 @@ into and out of the viewing plane.
             # print(sw,sh,ww,wh)
             # print(x1,y1,x2,y2)
             # print(x1s,y1s,x2s,y2s)
+            # resize windowed data slice to its size in drawing
+            # window coordinates
             zslc = cv2.resize(slc[y1s:y2s,x1s:x2s], (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+            # paste resized data slice into the intersection window
+            # in the drawing window
             out[y1:y2, x1:x2] = zslc
 
             timera.time("resize")
