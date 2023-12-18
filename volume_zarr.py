@@ -182,7 +182,6 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         # but over a slow connection, the user probably wants to
         # see the most-recently-requested data first.
         self.executor._work_queue = queue.LifoQueue()
-        self._mutex2 = Lock()
 
     def __getitem__old(self, key):
         print("get item", key)
@@ -224,6 +223,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                 parts = key.split('/')
                 if parts[-1][0] == '.':
                     wait_for_data = True
+            raise_error = False
             with self._mutex:
                 # check whether
                 # key is known to correspond to an all-zeros volume,
@@ -231,13 +231,16 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                 if key in self.zero_vols or key in self.submitted:
                     # this tells the caller to treat the current
                     # chunk as all zeros
-                    raise KeyError(key)
-                if not wait_for_data:
+                    # raise KeyError(key)
+                    raise_error = True
+                if not raise_error and not wait_for_data:
                     # the add() is done here, instead of below,
                     # where the request is submitted, because here
                     # the add() operation is protected by the _mutex
                     self.submitted.add(key)
                 # print("submitted",self.submitted)
+            if raise_error:
+                raise KeyError(key)
             if wait_for_data:  # read the value immediately
                 value = self.getValue(key)
                 self.cacheValue(key, value)

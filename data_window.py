@@ -592,6 +592,7 @@ class DataWindow(QLabel):
         mxy = (e.localPos().x(), e.localPos().y())
         self.setStatusTextFromMousePosition()
         if self.isPanning:
+            self.window.zarrResetActiveTimer()
             delta = e.localPos()-self.mouseStartPoint
             dx,dy = delta.x(), delta.y()
             # print("delta", dx, dy)
@@ -808,6 +809,7 @@ class DataWindow(QLabel):
             # if self.inAddNodeMode() or (self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0):
             if self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0:
                 # pan
+                self.window.zarrResetActiveTimer()
                 tfijk = list(self.volume_view.ijktf)
                 # print(d)
                 tfijk[self.iIndex] += d[0]

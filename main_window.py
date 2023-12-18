@@ -2681,14 +2681,21 @@ class MainWindow(QMainWindow):
     def zarrTimerCallback(self):
         self.drawSlices()
 
+    # This function slows down the pace of redraws 
+    # initiated by zarr threads.
+    # This function is called from within drawSlice when the user is
+    # using the mouse or keyboard to pan the view.  
+    def zarrResetActiveTimer(self):
+        if self.zarr_timer.isActive():
+            self.zarr_timer.start(500)
+
     # This receives the "emit" from zarrFutureDoneCallback;
     # it calls a one-shot timer with a delay of 100 msec
     # (0.1 seconds).  The delay is to allow multiple callbacks
     # to be consolidated
     def zarrSlot(self, key):
-        # print("zslot", key)
-        self.zarr_timer.start(100)
-        pass
+        if not self.zarr_timer.isActive():
+            self.zarr_timer.start(100)
 
     # This is called from KhartesThreadedLRUCache whenever
     # a thread has finished loading a chunk.  This callback
