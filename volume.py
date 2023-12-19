@@ -569,10 +569,17 @@ class Volume():
         self.active_project_views = set()
         self.from_vc_render = False
 
+    @property
+    def shape(self):
+        return self.data.shape
+
     def createErrorVolume(err):
         vol = Volume()
         vol.error = err
         return vol
+
+    def setImmediateDataMode(self, flag):
+        pass
 
     # return size of data in bytes
     def dataSize(self):
@@ -997,6 +1004,9 @@ class Volume():
     def ijInPlaneOfSlice(self, axis, ijkt):
         inds = self.ijIndexesInPlaneOfSlice(axis)
         return(ijkt[inds[0]], ijkt[inds[1]])
+
+    def ijCornerInPlaneOfSlice(self, axis, ijkt):
+        return (0,0)
 
     def globalSlicePositionAlongAxis(self, axis, ijkt, direction):
         gi,gj,gk = self.transposedIjkToGlobalPosition(ijkt, direction)

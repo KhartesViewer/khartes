@@ -592,6 +592,7 @@ class DataWindow(QLabel):
         mxy = (e.localPos().x(), e.localPos().y())
         self.setStatusTextFromMousePosition()
         if self.isPanning:
+            self.window.zarrResetActiveTimer()
             delta = e.localPos()-self.mouseStartPoint
             dx,dy = delta.x(), delta.y()
             # print("delta", dx, dy)
@@ -808,6 +809,7 @@ class DataWindow(QLabel):
             # if self.inAddNodeMode() or (self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0):
             if self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0:
                 # pan
+                self.window.zarrResetActiveTimer()
                 tfijk = list(self.volume_view.ijktf)
                 # print(d)
                 tfijk[self.iIndex] += d[0]
@@ -990,7 +992,7 @@ class DataWindow(QLabel):
         gxyz = self.volume_view.transposedIjkToGlobalPosition(self.volume_view.ijktf)
         gaxis = self.volume_view.globalAxisFromTransposedAxis(self.axis)
         return gxyz[gaxis]
-    
+
     def autoInterpolate(self):
         if self.bounding_nodes is None:
             return
@@ -1026,13 +1028,19 @@ class DataWindow(QLabel):
         ijo0 = ij0
         ijo1 = ij1
         z = self.getZoom()
+        # vol = volume.volume
+        # vol.setImmediateDataMode(True)
         slc = volume.getSlice(self.axis, volume.ijktf)
+        # vol.setImmediateDataMode(False)
         sw = slc.shape[1]
         sh = slc.shape[0]
+        cij = volume.volume.ijCornerInPlaneOfSlice(self.axis, volume.ijktf)
+        s0 = cij
+        s1 = (s0[0]+sw,s0[1]+sh)
         margin = 32
         ij0m = (ij0[0]-margin,ij0[1]-margin)
         ij1m = (ij1[0]+margin,ij1[1]+margin)
-        ri = Utils.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
+        ri = Utils.rectIntersection((ij0m,ij1m), (s0,s1))
         if ri is None:
             return
         ij0 = ri[0]
@@ -1047,7 +1055,7 @@ class DataWindow(QLabel):
             return
         if jmin < ij0[1] or jmax >= ij1[1]:
             return
-        st = ST((slc[int(ij0[1]):int(ij1[1]),int(ij0[0]):int(ij1[0])]).astype(np.float64)/65535.)
+        st = ST((slc[int(ij0[1]-s0[1]):int(ij1[1]-s0[1]),int(ij0[0]-s0[0]):int(ij1[0]-s0[0])]).astype(np.float64)/65535.)
         print ("st created", st.image.shape)
         st.computeEigens()
         '''
@@ -1119,20 +1127,29 @@ class DataWindow(QLabel):
         ijo0 = ij0
         ijo1 = ij1
         z = self.getZoom()
+        # vol = volume.volume
+        # vol.setImmediateDataMode(True)
         slc = volume.getSlice(self.axis, volume.ijktf)
+        # vol.setImmediateDataMode(False)
         sw = slc.shape[1]
         sh = slc.shape[0]
+        cij = volume.volume.ijCornerInPlaneOfSlice(self.axis, volume.ijktf)
+        s0 = cij
+        s1 = (s0[0]+sw,s0[1]+sh)
         margin = 32
         ij0m = (ij0[0]-margin,ij0[1]-margin)
         ij1m = (ij1[0]+margin,ij1[1]+margin)
-        ri = Utils.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
+        # print("s0,s1",s0,s1)
+        ri = Utils.rectIntersection((ij0m,ij1m), (s0,s1))
         if ri is None:
             return
+        # print("ri",ri)
         ij0 = ri[0]
         ij1 = ri[1]
         ri = Utils.rectIntersection((ij0,ij1), ((ij[0]-500,ij[1]-500),(ij[0]+500,ij[1]+500)))
         if ri is None:
             return
+        # print("ri",ri)
         ij0 = ri[0]
         ij1 = ri[1]
         # print("autosegment", ij, sign, ij0, ij1)
@@ -1140,7 +1157,7 @@ class DataWindow(QLabel):
             return
         if ij[1] < ij0[1] or ij[1] >= ij1[1]:
             return
-        st = ST((slc[int(ij0[1]):int(ij1[1]),int(ij0[0]):int(ij1[0])]).astype(np.float64)/65535.)
+        st = ST((slc[int(ij0[1]-s0[1]):int(ij1[1]-s0[1]),int(ij0[0]-s0[0]):int(ij1[0]-s0[0])]).astype(np.float64)/65535.)
         # print ("st created", st.image.shape)
         st.computeEigens()
         # print ("eigens computed")
@@ -1163,11 +1180,13 @@ class DataWindow(QLabel):
         if y is None:
             print("no y values")
             return
+        # print("pts", y.shape)
         # pts = st.sparse_result(dij, min_delta_shift, min_delta, sign, 5.)
         pts = st.sparse_result(y, min_delta_shift, min_delta)
         if pts is None:
             print("no points")
             return
+        # print("sparse pts", pts.shape)
         # print (len(pts),"points returned")
         pts[:,0] += ij0[0]
         pts[:,1] += ij0[1]
@@ -1176,6 +1195,7 @@ class DataWindow(QLabel):
         self.window.setLiveZsurfUpdate(False)
         for pt in pts:
             # pt = (dpt[0]+ij0[0], dpt[1]+ij0[1])
+            # print("   ", pt)
             if pt[0] < ijo0[0] or pt[0] >= ijo1[0] or pt[1] < ijo0[1] or pt[1] >= ijo1[1]:
                 break
             tijk = self.ijToTijk(pt)
@@ -1457,19 +1477,26 @@ into and out of the viewing plane.
         # panning into account.
         # In OpenCV, unlike PIL, need to calculate the interesection
         # of the two rectangles: 1) the panned and zoomed slice, and 2) the
-        # viewing window, before pasting
+        # viewing window, before pasting.
+        # all coordinates below are in drawing window coordinates,
+        # unless specified otherwise
+        # location of upper left corner of data slice:
         ax1 = int(whw-z*fi)
         ay1 = int(whh-z*fj)
+        # location of lower right corner of data slice:
         ax2 = ax1+zsw
         ay2 = ay1+zsh
+        # locations of upper left and lower right corners of drawing window
         bx1 = 0
         by1 = 0
         bx2 = ww
         by2 = wh
         ri = Utils.rectIntersection(((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
         if ri is not None:
+            # upper left and lower right corners of intersected rectangle
             (x1,y1),(x2,y2) = ri
-            # zoomed data slice
+            # corners of windowed data slice, in
+            # data slice coordinates
             x1s = int((x1-ax1)/z)
             y1s = int((y1-ay1)/z)
             x2s = int((x2-ax1)/z)
@@ -1477,7 +1504,11 @@ into and out of the viewing plane.
             # print(sw,sh,ww,wh)
             # print(x1,y1,x2,y2)
             # print(x1s,y1s,x2s,y2s)
+            # resize windowed data slice to its size in drawing
+            # window coordinates
             zslc = cv2.resize(slc[y1s:y2s,x1s:x2s], (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+            # paste resized data slice into the intersection window
+            # in the drawing window
             out[y1:y2, x1:x2] = zslc
 
             timera.time("resize")

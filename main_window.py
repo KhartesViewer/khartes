@@ -25,7 +25,8 @@ from PyQt5.QtWidgets import (
         )
 from PyQt5.QtCore import (
         QAbstractTableModel, QCoreApplication, QObject,
-        QSize, QTimer, Qt, qVersion, QSettings,
+        QThread, QSize, QTimer, Qt, qVersion, QSettings,
+        pyqtSignal
         )
 from PyQt5.QtGui import QPainter, QPalette, QColor, QCursor, QIcon, QPixmap, QImage
 
@@ -34,6 +35,7 @@ from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtXml import QDomDocument
 
 from tiff_loader import TiffLoader
+from zarr_loader import ZarrLoader
 from data_window import DataWindow, SurfaceWindow
 from project import Project, ProjectView
 from fragment import Fragment, FragmentsModel, FragmentView
@@ -708,6 +710,8 @@ class MainWindow(QMainWindow):
         },
     }
 
+    zarr_signal = pyqtSignal(str)
+
     def __init__(self, appname, app):
         super(MainWindow, self).__init__()
 
@@ -823,6 +827,10 @@ class MainWindow(QMainWindow):
         self.import_tiffs_action.triggered.connect(self.onImportTiffsButtonClick)
         self.import_tiffs_action.setEnabled(False)
 
+        self.attach_zarr_action = QAction("Attach Zarr/OME/TIFF data store...", self)
+        self.attach_zarr_action.triggered.connect(self.onAttachZarrButtonClick)
+        self.attach_zarr_action.setEnabled(False)
+
         self.export_mesh_action = QAction("Export fragment as mesh...", self)
         self.export_mesh_action.triggered.connect(self.onExportAsMeshButtonClick)
         self.export_mesh_action.setEnabled(False)
@@ -847,6 +855,7 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(self.import_nrrd_action)
         self.file_menu.addAction(self.import_ppm_action)
         self.file_menu.addAction(self.import_tiffs_action)
+        self.file_menu.addAction(self.attach_zarr_action)
         self.file_menu.addAction(self.export_mesh_action)
         # self.file_menu.addAction(self.load_hardwired_project_action)
         self.file_menu.addAction(self.exit_action)
@@ -878,6 +887,11 @@ class MainWindow(QMainWindow):
         # is this needed?
         self.volumes_model = VolumesModel(None, self)
         self.tiff_loader = TiffLoader(self)
+        self.zarr_loader = ZarrLoader(self)
+        self.zarr_timer = QTimer()
+        self.zarr_timer.setSingleShot(True)
+        self.zarr_timer.timeout.connect(self.zarrTimerCallback)
+        self.zarr_signal.connect(self.zarrSlot)
         # self.setDrawSettingsToDefaults()
         # command line arguments
         args = QCoreApplication.arguments()
@@ -2203,6 +2217,10 @@ class MainWindow(QMainWindow):
         self.tiff_loader.show()
         self.tiff_loader.raise_()
 
+    def onAttachZarrButtonClick(self, s):
+        self.zarr_loader.show()
+        self.zarr_loader.raise_()
+
     # TODO: Need to alert user if load fails
     def onOpenProjectButtonClick(self, s):
         #print("open project clicked")
@@ -2267,6 +2285,12 @@ class MainWindow(QMainWindow):
         path = path.absolute()
         parent = path.parent
         self.settingsSaveDirectory(str(parent))
+        print(f"Finished loading project from {fname}")
+        # In theory, this shouldn't be needed, since
+        # "loading" is about to go out of scope.  But in
+        # practice, if this line isn't here, the "Loading data..."
+        # widget sometimes doesn't go away
+        loading = None
 
     def onLoadHardwiredProjectButtonClick(self, s):
         print("load hardwired project clicked")
@@ -2368,19 +2392,19 @@ class MainWindow(QMainWindow):
             font = self.label.font()
             font.setPointSize(16)
             self.label.setFont(font)
-            #print("Loading widget created", self)
+            print("Loading widget created", self)
             self.show()
 
         def closeEvent(self, e):
-            #print("Loading widget close event", self)
+            print("Loading widget close event", self)
             e.accept()
 
         def mousePressEvent(self, e):
-            #print("Loading widget mouse press event", self)
+            print("Loading widget mouse press event", self)
             self.close()
 
     def loadingDestroyed(self, widget):
-        #print("Loading destroyed, loading widget to close", widget)
+        print("Loading destroyed, loading widget to close", widget)
         widget.close()
 
     # Sort of complicated.  
@@ -2426,6 +2450,8 @@ class MainWindow(QMainWindow):
                 vv.setDefaultParameters(self, no_notify)
             if vv.minZoom == 0.:
                 vv.setDefaultMinZoom(self)
+            if volume.is_zarr:
+                volume.setCallback(self.zarrFutureDoneCallback)
         # print("pv set updata frag views")
         pv.updateFragmentViews()
         # print("set vol views")
@@ -2526,6 +2552,7 @@ class MainWindow(QMainWindow):
         self.import_nrrd_action.setEnabled(False)
         self.import_ppm_action.setEnabled(False)
         self.import_tiffs_action.setEnabled(False)
+        self.attach_zarr_action.setEnabled(False)
         self.enableWidgetsIfActiveFragment()
         self.drawSlices()
         self.app.processEvents()
@@ -2549,6 +2576,7 @@ class MainWindow(QMainWindow):
         self.import_ppm_action.setEnabled(True)
         self.import_obj_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
+        self.attach_zarr_action.setEnabled(True)
         # self.export_mesh_action.setEnabled(project_view.mainActiveFragmentView() is not None)
         # self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
         self.enableWidgetsIfActiveFragment()
@@ -2648,3 +2676,33 @@ class MainWindow(QMainWindow):
             return
         self.project_view.project.setVoxelSizeUm(size)
         self.drawSlices()
+
+    # called by self.zarr_timer
+    def zarrTimerCallback(self):
+        self.drawSlices()
+
+    # This function slows down the pace of redraws 
+    # initiated by zarr threads.
+    # This function is called from within drawSlice when the user is
+    # using the mouse or keyboard to pan the view.  
+    def zarrResetActiveTimer(self):
+        if self.zarr_timer.isActive():
+            self.zarr_timer.start(500)
+
+    # This receives the "emit" from zarrFutureDoneCallback;
+    # it calls a one-shot timer with a delay of 100 msec
+    # (0.1 seconds).  The delay is to allow multiple callbacks
+    # to be consolidated
+    def zarrSlot(self, key):
+        if not self.zarr_timer.isActive():
+            self.zarr_timer.start(100)
+
+    # This is called from KhartesThreadedLRUCache whenever
+    # a thread has finished loading a chunk.  This callback
+    # is called from within that thread; the "emit" is used to
+    # pass the callback to the Qt GUI thread.  Khartes code 
+    # is in general not thread-safe, so it should be 
+    # called only from within the Qt GUI thread.
+    def zarrFutureDoneCallback(self, key):
+        self.zarr_signal.emit(key)
+
