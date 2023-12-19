@@ -520,7 +520,7 @@ class CachedZarrVolume():
             err = f"Failed to read input directory {ddir}\n  specified in {filename}"
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
-        max_mem_gb = 5
+        max_mem_gb = 8
         klru = KhartesThreadedLRUCache(array.store, max_size=max_mem_gb*2**30)
         zdata = zarr.open(klru, mode="r")
 
@@ -627,6 +627,8 @@ class CachedZarrVolume():
     def getSlice(self, axis, ijkt, direction):
         """ijkt are the coordinates of the center point in transposed space
         """
+        # it, jt, kt are the coordinates of the center point
+        # in the untransposed grid
         (it, jt, kt) = self.transposedIjkToIjk(ijkt, direction)
         islice = slice(
             max(0, it - self.max_width), 
@@ -644,12 +646,20 @@ class CachedZarrVolume():
             None,
         )
 
-        if axis == 1:
-            return self.data[kt, jslice, islice]
-        elif axis == 2:
-            return self.data[kslice, jt, islice]
-        elif axis == 0:
-            return self.data[kslice, jslice, it].T
+        if direction == 0:
+            if axis == 1:
+                return self.data[kt, jslice, islice].T
+            elif axis == 0:
+                return self.data[kslice, jt, islice].T
+            elif axis == 2:
+                return self.data[kslice, jslice, it]
+        else:
+            if axis == 1:
+                return self.data[kt, jslice, islice]
+            elif axis == 2:
+                return self.data[kslice, jt, islice]
+            elif axis == 0:
+                return self.data[kslice, jslice, it].T
         raise ValueError
 
     def ijIndexesInPlaneOfSlice(self, axis):
@@ -659,6 +669,12 @@ class CachedZarrVolume():
         inds = self.ijIndexesInPlaneOfSlice(axis)
         x, y = ijkt[inds[0]], ijkt[inds[1]]
         return (min(x, self.max_width), min(y, self.max_width))
+
+    def ijCornerInPlaneOfSlice(self, axis, ijkt):
+        zij = self.ijInPlaneOfSlice(axis, ijkt)
+        inds = self.ijIndexesInPlaneOfSlice(axis)
+        rij = (ijkt[inds[0]], ijkt[inds[1]])
+        return(rij[0]-zij[0], rij[1]-zij[1])
 
     def getSlices(self, ijkt, direction):
         depth = self.getSlice(2, ijkt, direction)

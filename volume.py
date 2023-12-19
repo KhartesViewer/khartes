@@ -578,6 +578,9 @@ class Volume():
         vol.error = err
         return vol
 
+    def setImmediateDataMode(self, flag):
+        pass
+
     # return size of data in bytes
     def dataSize(self):
         if self.data_header is None:
@@ -1001,6 +1004,9 @@ class Volume():
     def ijInPlaneOfSlice(self, axis, ijkt):
         inds = self.ijIndexesInPlaneOfSlice(axis)
         return(ijkt[inds[0]], ijkt[inds[1]])
+
+    def ijCornerInPlaneOfSlice(self, axis, ijkt):
+        return (0,0)
 
     def globalSlicePositionAlongAxis(self, axis, ijkt, direction):
         gi,gj,gk = self.transposedIjkToGlobalPosition(ijkt, direction)

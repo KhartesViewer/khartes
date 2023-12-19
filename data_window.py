@@ -992,7 +992,7 @@ class DataWindow(QLabel):
         gxyz = self.volume_view.transposedIjkToGlobalPosition(self.volume_view.ijktf)
         gaxis = self.volume_view.globalAxisFromTransposedAxis(self.axis)
         return gxyz[gaxis]
-    
+
     def autoInterpolate(self):
         if self.bounding_nodes is None:
             return
@@ -1028,13 +1028,19 @@ class DataWindow(QLabel):
         ijo0 = ij0
         ijo1 = ij1
         z = self.getZoom()
+        # vol = volume.volume
+        # vol.setImmediateDataMode(True)
         slc = volume.getSlice(self.axis, volume.ijktf)
+        # vol.setImmediateDataMode(False)
         sw = slc.shape[1]
         sh = slc.shape[0]
+        cij = volume.volume.ijCornerInPlaneOfSlice(self.axis, volume.ijktf)
+        s0 = cij
+        s1 = (s0[0]+sw,s0[1]+sh)
         margin = 32
         ij0m = (ij0[0]-margin,ij0[1]-margin)
         ij1m = (ij1[0]+margin,ij1[1]+margin)
-        ri = Utils.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
+        ri = Utils.rectIntersection((ij0m,ij1m), (s0,s1))
         if ri is None:
             return
         ij0 = ri[0]
@@ -1049,7 +1055,7 @@ class DataWindow(QLabel):
             return
         if jmin < ij0[1] or jmax >= ij1[1]:
             return
-        st = ST((slc[int(ij0[1]):int(ij1[1]),int(ij0[0]):int(ij1[0])]).astype(np.float64)/65535.)
+        st = ST((slc[int(ij0[1]-s0[1]):int(ij1[1]-s0[1]),int(ij0[0]-s0[0]):int(ij1[0]-s0[0])]).astype(np.float64)/65535.)
         print ("st created", st.image.shape)
         st.computeEigens()
         '''
@@ -1121,20 +1127,29 @@ class DataWindow(QLabel):
         ijo0 = ij0
         ijo1 = ij1
         z = self.getZoom()
+        # vol = volume.volume
+        # vol.setImmediateDataMode(True)
         slc = volume.getSlice(self.axis, volume.ijktf)
+        # vol.setImmediateDataMode(False)
         sw = slc.shape[1]
         sh = slc.shape[0]
+        cij = volume.volume.ijCornerInPlaneOfSlice(self.axis, volume.ijktf)
+        s0 = cij
+        s1 = (s0[0]+sw,s0[1]+sh)
         margin = 32
         ij0m = (ij0[0]-margin,ij0[1]-margin)
         ij1m = (ij1[0]+margin,ij1[1]+margin)
-        ri = Utils.rectIntersection((ij0m,ij1m), ((0,0),(sw,sh)))
+        # print("s0,s1",s0,s1)
+        ri = Utils.rectIntersection((ij0m,ij1m), (s0,s1))
         if ri is None:
             return
+        # print("ri",ri)
         ij0 = ri[0]
         ij1 = ri[1]
         ri = Utils.rectIntersection((ij0,ij1), ((ij[0]-500,ij[1]-500),(ij[0]+500,ij[1]+500)))
         if ri is None:
             return
+        # print("ri",ri)
         ij0 = ri[0]
         ij1 = ri[1]
         # print("autosegment", ij, sign, ij0, ij1)
@@ -1142,7 +1157,7 @@ class DataWindow(QLabel):
             return
         if ij[1] < ij0[1] or ij[1] >= ij1[1]:
             return
-        st = ST((slc[int(ij0[1]):int(ij1[1]),int(ij0[0]):int(ij1[0])]).astype(np.float64)/65535.)
+        st = ST((slc[int(ij0[1]-s0[1]):int(ij1[1]-s0[1]),int(ij0[0]-s0[0]):int(ij1[0]-s0[0])]).astype(np.float64)/65535.)
         # print ("st created", st.image.shape)
         st.computeEigens()
         # print ("eigens computed")
@@ -1165,11 +1180,13 @@ class DataWindow(QLabel):
         if y is None:
             print("no y values")
             return
+        # print("pts", y.shape)
         # pts = st.sparse_result(dij, min_delta_shift, min_delta, sign, 5.)
         pts = st.sparse_result(y, min_delta_shift, min_delta)
         if pts is None:
             print("no points")
             return
+        # print("sparse pts", pts.shape)
         # print (len(pts),"points returned")
         pts[:,0] += ij0[0]
         pts[:,1] += ij0[1]
@@ -1178,6 +1195,7 @@ class DataWindow(QLabel):
         self.window.setLiveZsurfUpdate(False)
         for pt in pts:
             # pt = (dpt[0]+ij0[0], dpt[1]+ij0[1])
+            # print("   ", pt)
             if pt[0] < ijo0[0] or pt[0] >= ijo1[0] or pt[1] < ijo0[1] or pt[1] >= ijo1[1]:
                 break
             tijk = self.ijToTijk(pt)
