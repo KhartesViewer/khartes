@@ -296,6 +296,27 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             self.future_done_callback(key)
 
 
+class ZarrLevel():
+    def __init__(self, array, path, scale, max_mem_gb):
+        # print("zl array", array, scale, max_mem_gb)
+        # TODO: need to make sure max_mem_gb is big enough
+        # to hold at least 8 chunks
+        klru = KhartesThreadedLRUCache(
+                array.store, max_size=int(max_mem_gb*2**30))
+        self.klru = klru
+        self.data = zarr.open(klru, mode="r")
+        if path != "":
+            self.data = self.data[path]
+        print("zl array", array, scale, max_mem_gb, self.data)
+        self.scale = scale
+
+    def setCallback(self, cb):
+        self.klru.future_done_callback = cb
+
+    def setImmediateDataMode(self, flag):
+        self.klru.setImmediateDataMode(flag)
+
+
 class CachedZarrVolume():
     """An interface to cached volume data stored on disk as .tif files
     but not fully loaded into memory.
@@ -325,14 +346,12 @@ class CachedZarrVolume():
         self.error = "no error message set"
         self.active_project_views = set()
         self.from_vc_render = False
-        self.processing = False
+        self.levels = []
+        self.max_mem_gb = 8
 
     @property
     def shape(self):
         return self.data.shape
-
-    def setImmediateDataMode(self, flag):
-        self.klru.setImmediateDataMode(flag)
     
     def trshape(self, direction):
         shape = self.shape
@@ -553,7 +572,7 @@ class CachedZarrVolume():
             try:
                 with open(filename, "r") as infile:
                     header = json.load(infile)
-                    print("json", header)
+                    # print("json", header)
             except:
                 with open(filename, "r") as infile:
                     # old format
@@ -561,12 +580,12 @@ class CachedZarrVolume():
                     for line in infile:
                         key, value = line.split("\t")
                         header[key] = value
-                    print("old format", header)
+                    # print("old format", header)
             tiff_directory = header.get("tiff_dir", None)
             zarr_directory = header.get("zarr_dir", None)
-            max_width = int(header.get("max_width", "0"))
+            max_width = int(header.get("max_width", 0))
         except Exception as e:
-            err = f"Failed to read input file {filename} ({e})"
+            err = f"Failed to read input file {filename} (error {e})"
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
         if tiff_directory is None and zarr_directory is None:
@@ -578,12 +597,15 @@ class CachedZarrVolume():
         volume.data_header = header
         volume.max_width = max_width
         volume.path = filename
-        _, volume.name = os.path.split(filename)
+        # _, volume.name = os.path.split(filename)
+        _, name = os.path.split(filename)
+        if name.endswith(".volzarr") and len(name) > 8:
+            name = name[:-8]
+        volume.name = name
         volume.version = float(header.get("khartes_version", 0.0))
         volume.created = header.get("khartes_created", "")
         volume.modified = header.get("khartes_modified", "")
         volume.from_vc_render = False
-        volume.valid = True
 
         # These are set in common for all zarr arrays:  they always start
         # at the global origin with no stepping.
@@ -603,11 +625,11 @@ class CachedZarrVolume():
                 print(f"Loading zarr directory {ddir}")
                 array = load_zarr(ddir)
         except Exception as e:
-            err = f"Failed to read input directory {ddir}\n  specified in {filename}"
+            err = f"Failed to read input directory {ddir}\n  specified in {filename} (error {e})"
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
-        max_mem_gb = 8
-        klru = KhartesThreadedLRUCache(array.store, max_size=max_mem_gb*2**30)
+        '''
+        klru = KhartesThreadedLRUCache(array.store, max_size=self.max_mem_gb*2**30)
         zdata = zarr.open(klru, mode="r")
 
         # if zdata is a zarr group rather than a zarr array
@@ -621,17 +643,147 @@ class CachedZarrVolume():
             zdata = zdata['0']
         volume.data = zdata
         volume.klru = klru
+        '''
 
+        # TODO: is volume.max_mem_gb the right value to use?
+        if isinstance(array, zarr.hierarchy.Group):
+            volume.setLevelsFromHierarchy(array, volume.max_mem_gb)
+        else:
+            volume.setLevelFromArray(array, volume.max_mem_gb)
+
+        if len(volume.levels) < 1:
+            err = f"Problem parsing zdata from input directory {ddir}"
+            print(err)
+            return CachedZarrVolume.createErrorVolume(err)
+
+        print("len levels", len(volume.levels))
+
+        volume.data = volume.levels[0].data
+
+        volume.valid = True
         volume.trdatas = []
         volume.trdatas.append(TransposedDataView(volume.data, 0))
         volume.trdatas.append(TransposedDataView(volume.data, 1))
         volume.sizes = tuple(int(size) for size in volume.data.shape)
         return volume
 
+    def setLevelFromArray(self, array, max_mem_gb):
+        level = ZarrLevel(array, "", 1., max_mem_gb)
+        self.levels.append(level)
+
+    def parseMetadata(self, hier):
+        adict = hier.attrs.asdict()
+        if "multiscales" not in adict:
+            print("'multiscales' missing from metadata")
+            return None
+        ms = adict["multiscales"]
+        if not isinstance(ms, list):
+            print("'multiscales' in metadata is not a list")
+            return None
+        if len(ms) < 1:
+            print("'multiscales' in metadata is a zero-length list")
+            return None
+        ms0 = ms[0]
+        if not isinstance(ms0, dict):
+            print("multiscales[0] is not a dict")
+            return None
+        if "datasets" not in ms0:
+            print("'datasets' missing from multiscales[0]")
+            return None
+        ds = ms0["datasets"]
+        if not isinstance(ds, list):
+            print("datasets is not a list")
+            return None
+        return ds
+
+    def parseLevelMetadata(self, lmd):
+        if not isinstance(lmd, dict):
+            print("lmd is not a dict")
+            return None
+        if "path" not in lmd:
+            print("'path' not in lmd")
+            return None
+        path = lmd['path']
+        if "coordinateTransformations" not in lmd:
+            print("'coordinateTransformations' not in lmd")
+            return None
+        xfms = lmd["coordinateTransformations"]
+        scales = None
+        for xfm in xfms:
+            if not isinstance(xfm, dict):
+                continue
+            if "scale" not in xfm:
+                continue
+            scales = xfm["scale"]
+            break
+        if scales is None:
+            print("Could not find 'scale'")
+            return None
+        if not isinstance(scales, list):
+            print("'scale' is not a list")
+            return None
+        if len(scales) != 3:
+            print("'scale' is wrong length")
+            return None
+        scale = 0.
+        for s in scales:
+            if scale == 0.:
+                scale = s
+            elif s != scale:
+                print("scales are inconsistent")
+                return None
+
+        return (path, scale)
+
+    def setLevelsFromHierarchy(self, hier, max_mem_gb):
+        # divide metadata into parts, one per level
+        # special case if only one level in hierarchy
+
+        # for each array in hierarchy, parse level metadata
+        # make sure scale is correct
+        # calculate local max_mem_gb
+        # create and add level
+        metadata = self.parseMetadata(hier)
+        if metadata is None:
+            print("Problem parsing metadata")
+            return
+        expected_scale = 1.
+        expected_path_int = 0
+        max_gb = .5*max_mem_gb
+        for i, lmd in enumerate(metadata):
+            info = self.parseLevelMetadata(lmd)
+            if info is None:
+                print(f"Problem parsing level {i} metadata")
+                return
+            path, scale = info
+            try:
+               path_int = int(path)
+            except:
+                print(f"Level {i}: path {path} is not an integer")
+                return
+            if path_int != expected_path_int:
+                print(f"Level {i} expected path {expected_path_int}, got {path}")
+                return
+            if scale != expected_scale:
+                print(f"Level {i} expected scale {expected_scale}, got {scale}")
+                return
+            level = ZarrLevel(hier, path, scale, max_gb)
+            self.levels.append(level)
+            expected_scale *= 2.
+            expected_path_int += 1
+            max_gb *= .5
+
+    def setImmediateDataMode(self, flag):
+        # self.klru.setImmediateDataMode(flag)
+        for level in self.levels:
+            level.setImmediateDataMode(flag)
+
     def setCallback(self, cb):
         print("setting callback")
         # self.klru.before_callback = cb
-        self.klru.future_done_callback = cb
+        # self.klru.future_done_callback = cb
+        for level in self.levels:
+            level.setCallback(cb)
 
     def dataSize(self):
         """Size of the whole dataset in bytes
