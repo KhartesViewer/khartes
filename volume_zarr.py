@@ -6,6 +6,7 @@ import time
 import pathlib
 import re
 import queue
+import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from utils import Utils
@@ -396,7 +397,83 @@ class CachedZarrVolume():
 
     # TODO: createFromZarr and createFromTiffs share a lot of code!
     @staticmethod
+    def createFromDataStore(
+            project,
+            ds_directory,
+            ds_directory_name,
+            name,
+            # max_width=150,
+            max_width=240,
+        ):
+        """
+        Generates a new volume object from a zarr directory
+        """
+        tdir = pathlib.Path(ds_directory)
+        if not tdir.is_dir():
+            err = f"{tdir} is not a directory"
+            print(err)
+            return CachedZarrVolume.createErrorVolume(err)
+
+        output_filename = name
+        if not output_filename.endswith(".volzarr"):
+            output_filename += ".volzarr"
+        filepath = os.path.join(project.volumes_path, output_filename)
+        if os.path.exists(filepath):
+            err = f"{filepath} already exists"
+            print(err)
+            return CachedZarrVolume.createErrorVolume(err)
+
+        timestamp = Utils.timestamp()
+        header = {
+            "khartes_version": "1.0",
+            "khartes_created": timestamp,
+            "khartes_modified": timestamp,
+            ds_directory_name: str(ds_directory),
+            "max_width": max_width,
+        }
+        # Write out the project file
+        with open(filepath, "w") as outfile:
+            # for key, value in header.items():
+            #     outfile.write(f"{key}\t{value}\n")
+            json.dump(header, outfile, indent=4)
+
+        volume = CachedZarrVolume.loadFile(filepath)
+        # print("about to set callback")
+        project.addVolume(volume)
+        return volume
+
+    @staticmethod
     def createFromZarr(
+            project,
+            zarr_directory,
+            name,
+            max_width=240,
+        ):
+        return CachedZarrVolume.createFromDataStore(
+                project,
+                zarr_directory,
+                "zarr_dir",
+                name,
+                max_width)
+
+    @staticmethod
+    def createFromTiffs(
+            project,
+            tiff_directory,
+            name,
+            max_width=240,
+        ):
+        return CachedZarrVolume.createFromDataStore(
+                project,
+                tiff_directory,
+                "tiff_dir",
+                name,
+                max_width)
+
+    '''
+    # TODO: createFromZarr and createFromTiffs share a lot of code!
+    @staticmethod
+    def createFromZarrOld(
             project,
             zarr_directory,
             name,
@@ -441,7 +518,7 @@ class CachedZarrVolume():
 
 
     @staticmethod
-    def createFromTiffs(
+    def createFromTiffsOld(
             project, 
             tiff_directory, 
             name,
@@ -481,25 +558,34 @@ class CachedZarrVolume():
         volume = CachedZarrVolume.loadFile(filepath)
         project.addVolume(volume)
         return volume
+    '''
 
     @staticmethod
     def loadFile(filename):
         try:
-            header = {}
-            with open(filename, "r") as infile:
-                for line in infile:
-                    key, value = line.split("\t")
-                    header[key] = value
+            try:
+                with open(filename, "r") as infile:
+                    header = json.load(infile)
+                    print("json", header)
+            except:
+                with open(filename, "r") as infile:
+                    # old format
+                    header = {}
+                    for line in infile:
+                        key, value = line.split("\t")
+                        header[key] = value
+                    print("old format", header)
             tiff_directory = header.get("tiff_dir", None)
             zarr_directory = header.get("zarr_dir", None)
-            max_width = int(header["max_width"])
+            max_width = int(header.get("max_width", "0"))
         except Exception as e:
-            err = f"Failed to read input file {filename}"
+            err = f"Failed to read input file {filename} ({e})"
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
         if tiff_directory is None and zarr_directory is None:
             err = f"Input file {filename} does not specify a data store"
             print(err)
+            return CachedZarrVolume.createErrorVolume(err)
 
         volume = CachedZarrVolume()
         volume.data_header = header
