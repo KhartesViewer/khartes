@@ -192,10 +192,13 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             self.immediate_data_mode = flag
 
     def __getitem__(self, key):
+        print("getitem", key)
         try:
             # first try to obtain the value from the cache
             with self._mutex:
+                print("about to get value", key)
                 value = self._values_cache[key]
+                print("got value", key)
                 # cache hit if no KeyError is raised
                 self.hits += 1
                 # treat the end as most recently used
@@ -211,6 +214,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             # the data has been read.
             # wait_for_data = False means submit the request
             # to the thread pool.
+            print("got key error", key)
             wait_for_data = False
             if self.immediate_data_mode:
                 wait_for_data = True
@@ -224,6 +228,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                 if parts[-1][0] == '.':
                     wait_for_data = True
             raise_error = False
+            print("w",wait_for_data,"re",raise_error,key)
             with self._mutex:
                 # check whether
                 # key is known to correspond to an all-zeros volume,
@@ -232,29 +237,35 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                     # this tells the caller to treat the current
                     # chunk as all zeros
                     # raise KeyError(key)
+                    print("zv", key in self.zero_vols, "sub", key in self.submitted, key)
                     raise_error = True
                 if not raise_error and not wait_for_data:
                     # the add() is done here, instead of below,
                     # where the request is submitted, because here
                     # the add() operation is protected by the _mutex
+                    print("submitted", key)
                     self.submitted.add(key)
                 # print("submitted",self.submitted)
             if raise_error:
+                print("raising error", key)
                 raise KeyError(key)
             print("nsz miss", wait_for_data, key)
             if wait_for_data:  # read the value immediately
                 value = self.getValue(key)
+                print("waited for data", key)
                 self.cacheValue(key, value)
                 return value
             else:  # submit to the thread pool a request to read the value
+                print("submitting thread", key)
                 future = self.executor.submit(self.getValue, key)
                 future.add_done_callback(lambda x: self.processValue(key, x))
+                print("raising error 2", key)
                 raise KeyError(key)
 
     def getValue(self, key):
-        # print("getValue", key)
+        print("getValue", key)
         value = self._store[key]
-        # print("  found", key)
+        print("  found", key)
         return value
 
     def cacheValue(self, key, value):
@@ -270,14 +281,14 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
     # This is called when the thread reports that it has
     # completed the getValue (disk read) operation
     def processValue(self, key, future):
-        # print("pv", key)
+        print("pv", key)
         with self._mutex:
             self.submitted.discard(key)
             # print("pv submitted", self.submitted)
         try:
             # get the result
             value = future.result()
-            # print("pv got value")
+            print("pv got value")
         except KeyError:
             # KeyError implies that the data store has no file
             # corresponding to this key, meaning that the data
@@ -285,7 +296,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             # The "return" statement below means that this 
             # KeyError will be relayed to the caller, who will
             # know what it means (chunk is all zeros).
-            # print("pv key error", key)
+            print("pv key error", key)
             with self._mutex:
                 self.zero_vols.add(key)
             if self.future_done_callback is not None:
