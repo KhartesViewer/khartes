@@ -470,7 +470,9 @@ class VolumeView():
 
     # call after direction is set
     def getDefaultZoom(self, window):
+        self.volume.setImmediateDataMode(True)
         depth, xline, inline = self.getSlices((0,0,0))
+        self.volume.setImmediateDataMode(False)
         minzoom = 0.
         for sh,sz in zip(
               [depth.shape, xline.shape, inline.shape],

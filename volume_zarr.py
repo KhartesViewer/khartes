@@ -241,6 +241,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                 # print("submitted",self.submitted)
             if raise_error:
                 raise KeyError(key)
+            print("nsz miss", wait_for_data, key)
             if wait_for_data:  # read the value immediately
                 value = self.getValue(key)
                 self.cacheValue(key, value)
