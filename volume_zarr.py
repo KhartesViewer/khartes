@@ -192,6 +192,19 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         with self._mutex:
             self.immediate_data_mode = flag
 
+    def __contains__(self, key):
+        try:
+            # In threaded mode, self[key] will raise an exception
+            # if the chunk doesn't exist on disk, or if the
+            # chunk has already been submitted on a thread.
+            # If the chunk had not been previously submitted,
+            # it will be submitted first, and then the exception will
+            # be raised.
+            _ = self[key]
+            return True
+        except KeyError:
+            return False
+
     def __getitem__(self, key):
         try:
             # first try to obtain the value from the cache
