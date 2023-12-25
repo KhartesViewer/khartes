@@ -470,10 +470,12 @@ class VolumeView():
 
     # call after direction is set
     def getDefaultZoom(self, window):
-        depth, xline, inline = self.getSlices((0,0,0))
+        # depth, xline, inline = self.getSlices((0,0,0))
+        depth_shape, xline_shape, inline_shape = self.getSliceShapes()
         minzoom = 0.
         for sh,sz in zip(
-              [depth.shape, xline.shape, inline.shape],
+              # [depth.shape, xline.shape, inline.shape],
+              [depth_shape, xline_shape, inline_shape],
               [window.depth.size(), window.xline.size(), window.inline.size()]):
             # print(sh,sz)
             shx = sh[1]
@@ -553,8 +555,14 @@ class VolumeView():
     def getSlice(self, axis, ijkt):
         return self.volume.getSlice(axis, ijkt, self.direction)
 
+    def paintSlice(self, out, axis, ijkt, zoom):
+        return self.volume.paintSlice(out, axis, ijkt, zoom, self.direction)
+
     def getSlices(self, ijkt):
         return self.volume.getSlices(ijkt, self.direction)
+
+    def getSliceShapes(self):
+        return self.volume.getSliceShapes(self.direction)
 
 
 class Volume():
@@ -998,6 +1006,18 @@ class Volume():
         else: # inline
             return self.trdatas[direction][:,:,it]
 
+    def getSliceShape(self, axis, direction):
+        shape = self.trdatas[direction].shape
+        if axis == 2: # depth
+            return shape[1],shape[2]
+        elif axis == 1: # xline
+            return shape[0],shape[2]
+        else: # inline
+            return shape[0],shape[1]
+
+    def paintSlice(self, out, axis, ijkt, zoom, direction):
+        return False
+
     def ijIndexesInPlaneOfSlice(self, axis):
         return ((1,2), (0,2), (0,1))[axis]
 
@@ -1027,3 +1047,8 @@ class Volume():
 
         return (depth, xline, inline)
 
+    def getSliceShapes(self, direction):
+        depth = self.getSliceShape(2, direction)
+        xline = self.getSliceShape(1, direction)
+        inline = self.getSliceShape(0, direction)
+        return (depth, xline, inline)
