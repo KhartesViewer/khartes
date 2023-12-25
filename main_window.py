@@ -887,6 +887,8 @@ class MainWindow(QMainWindow):
         # is this needed?
         self.volumes_model = VolumesModel(None, self)
         self.tiff_loader = TiffLoader(self)
+        self.zarr_key = ""
+        self.current_zarr_key = ""
         self.zarr_loader = ZarrLoader(self)
         self.zarr_timer = QTimer()
         self.zarr_timer.setSingleShot(True)
@@ -2679,7 +2681,10 @@ class MainWindow(QMainWindow):
 
     # called by self.zarr_timer
     def zarrTimerCallback(self):
+        self.current_zarr_key = self.zarr_key
         self.drawSlices()
+        # self.setStatusText(self.zarr_key)
+        self.current_zarr_key = ""
 
     # This function slows down the pace of redraws 
     # initiated by zarr threads.
@@ -2703,6 +2708,9 @@ class MainWindow(QMainWindow):
     # pass the callback to the Qt GUI thread.  Khartes code 
     # is in general not thread-safe, so it should be 
     # called only from within the Qt GUI thread.
-    def zarrFutureDoneCallback(self, key):
-        self.zarr_signal.emit(key)
+    def zarrFutureDoneCallback(self, key, has_data):
+        # print(key, has_data)
+        self.zarr_key = key
+        if has_data:
+            self.zarr_signal.emit(key)
 

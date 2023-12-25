@@ -8,7 +8,8 @@ import re
 import queue
 import json
 from concurrent.futures import ThreadPoolExecutor
-from threading import Lock
+import cv2
+from scipy import ndimage
 from utils import Utils
 
 CHUNK_SIZE = 500
@@ -137,12 +138,141 @@ class TransposedDataView():
         elif self.direction == 1:
             return (shape[1], shape[0], shape[2])
 
-    def __getitem__(self, key):
+    # Two steps:
+    # First, select the data from the original data cube
+    # (need to transpose the selection into global coordinates
+    # to do this);
+    # Second, transpose the results (which follow the global
+    # data axes) back to the transposed axes.
+    # In step one, make sure that axes are not squeezed out,
+    # because that would cause the transpose to fail
+    def __getitem__(self, selection):
+        # transpose selection to global axes
+        if self.direction == 0:
+            s2, s0, s1 = selection
+        elif self.direction == 1:
+            s1, s0, s2 = selection
+
+        # convert integer selections into slices;
+        # data[] will "squeeze" (remove)
+        # all integer selections, which would
+        # cause the transpose to fail because the array
+        # would have fewer dimensions than expected
+        alls = []
+        # print(type(s0),type(s1),type(s2))
+        for s in (s0,s1,s2):
+            if isinstance(s, int):
+                alls.append(slice(s,s+1))
+            else:
+                alls.append(s)
+
+        result = self.data[alls[0],alls[1],alls[2]]
+        if len(result.shape) == 1:
+            # Fancy-indexing collapses the shape, so we don't need to transpose
+            return result
+        # print("ar", alls, result.shape)
+        # transpose the result back to the transposed axes
+        if self.direction == 0:
+            result = result.transpose(2, 0, 1)
+        elif self.direction == 1:
+            result = result.transpose(1, 0, 2)
+        # squeeze away any axes of size 1
+        result = np.squeeze(result)
+        return result
+
+    # OBSOLETE
+    # Two steps:
+    # First, select the data from the original data cube
+    # (need to transpose the selection into global coordinates
+    # to do this);
+    # Second, transpose the results (which follow the global
+    # data axes) back to a data set with transposed axes.
+    # The second step is complicated because the result of step 1
+    # may be of a lower dimension than the data cube, so need
+    # to restore the missing dimension before transposing
+    def __getitem__old_(self, selection):
+        '''
+        if self.direction == 0:
+            xslice, zslice, yslice = key
+        elif self.direction == 1:
+            yslice, zslice, xslice = key
+        '''
+        '''
+        # 0 zslice
+        # 1 yslice
+        # 2 xslice
         if self.direction == 0:
             xslice, zslice, yslice = key
         elif self.direction == 1:
             yslice, zslice, xslice = key
         result = self.data[zslice, yslice, xslice]
+        '''
+        if self.direction == 0:
+            s2, s0, s1 = selection
+        elif self.direction == 1:
+            s1, s0, s2 = selection
+        result = self.data[s0, s1, s2]
+
+        '''
+        if self.direction == 0:
+            tras = (2, 0, 1)
+        elif self.direction == 1:
+            tras = (1, 0, 2)
+        '''
+       
+        # print("rs", rs, "s", s0, s1, s2)
+        if len(result.shape) == 1:
+            # Fancy-indexing collapses the shape, so we don't need to transpose
+            return result
+        elif len(result.shape) == 2:
+            # Lost an axis due to one of the selections
+            # being a single int (it was squeezed); need to put the axis 
+            # back (unsqueeze it) so that
+            # the 3D transposes below work correctly
+            saxes = [i for i in range(3) if isinstance((s0,s1,s2)[i], int)]
+            # tras = [tras[i] for i in range(3) if not isinstance((s0,s1,s2)[i], int)]
+            result = np.expand_dims(result, saxes)
+            '''
+            if isinstance(s0, int):
+                result = result.reshape((1,rs[0],rs[1]))
+                print("s0", result.shape)
+            elif isinstance(s1, int):
+                result = result.reshape((rs[0],1,rs[1]))
+                print("s1", result.shape)
+            elif isinstance(s2, int):
+                result = result.reshape((rs[0],rs[1],1))
+                print("s2", result.shape)
+            '''
+
+        # print("tras", tras)
+        # result = result.transpose(*tras)
+        if self.direction == 0:
+            result = result.transpose(2, 0, 1)
+        elif self.direction == 1:
+            result = result.transpose(1, 0, 2)
+        '''
+        rs = []
+        for n in result.shape:
+            if n != 1:
+                rs.append(n)
+        result = result.reshape(rs)
+        '''
+        # squeeze the axis that was unsqueezed previously
+        result = np.squeeze(result)
+        return result
+
+        # return result
+        # TODO:
+        # Need to do transpose (based on direction)
+        # before calling self.data[], because after
+        # call, the result might be flattened along one
+        # more dimension
+        # if self.direction == 0:
+        #     return self.data[xslice,zslice,yslice]
+        # else:
+        #     return self.data[yslice,zslice,xslice]
+        '''
+        print(key, result.shape)
         if len(result.shape) == 1:
             # Fancy-indexing collapses the shape, so we don't need to transpose
             return result
@@ -150,6 +280,8 @@ class TransposedDataView():
             return result.transpose(2, 0, 1)
         elif self.direction == 1:
             return result.transpose(1, 0, 2)
+        '''
+
 '''
 LRU (least-recently-used) cache based on the version
 in https://github.com/zarr-developers/zarr-python.
@@ -177,6 +309,10 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         self.callback_called = False
         self.zero_vols = set()
         self.submitted = set()
+        # non-zero misses: that is, misses due to 
+        # key not being in the cache, and not being
+        # in the list of empty chunks
+        self.nz_misses = 0
         self.immediate_data_mode = False
         self.executor = ThreadPoolExecutor(max_workers=4)
         # This is a dubious thing to do from a coding standpoint,
@@ -247,6 +383,8 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                     # chunk as all zeros
                     # raise KeyError(key)
                     raise_error = True
+                if key not in self.zero_vols:
+                    self.nz_misses += 1
                 if not raise_error and not wait_for_data:
                     # the add() is done here, instead of below,
                     # where the request is submitted, because here
@@ -302,27 +440,38 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             with self._mutex:
                 self.zero_vols.add(key)
             if self.future_done_callback is not None:
-                self.future_done_callback(key)
+                self.future_done_callback(key, False)
             return
         self.cacheValue(key, value)
         if self.future_done_callback is not None:
-            self.future_done_callback(key)
+            self.future_done_callback(key, True)
 
 
 class ZarrLevel():
-    def __init__(self, array, path, scale, max_mem_gb):
+    def __init__(self, array, path, scale, ilevel, max_mem_gb):
         # print("zl array", array, scale, max_mem_gb)
         # TODO: need to make sure max_mem_gb is big enough
         # to hold at least 8 chunks
         klru = KhartesThreadedLRUCache(
                 array.store, max_size=int(max_mem_gb*2**30))
         self.klru = klru
+        self.ilevel = ilevel
         self.data = zarr.open(klru, mode="r")
         if path != "":
             self.data = self.data[path]
         print("zl array", array, scale, max_mem_gb, self.data)
         self.scale = scale
+        self.trdatas = []
+        self.trdatas.append(TransposedDataView(self.data, 0))
+        self.trdatas.append(TransposedDataView(self.data, 1))
 
+    # The callback takes 2 arguments: key (a string) and
+    # has_data (a bool).  key is the key of the chunk that
+    # the thread was reading.  has_data is set to True if the
+    # chunk contains data (i.e. there is a corresponding file)
+    # and false if the chunk is all zeros (there is no
+    # corresponding file).
+    # The return value, if any, of the callback is ignored.
     def setCallback(self, cb):
         self.klru.future_done_callback = cb
 
@@ -452,9 +601,10 @@ class CachedZarrVolume():
         }
         # Write out the project file
         with open(filepath, "w") as outfile:
-            # for key, value in header.items():
-            #     outfile.write(f"{key}\t{value}\n")
-            json.dump(header, outfile, indent=4)
+            # TODO: switch from old format to json
+            for key, value in header.items():
+                outfile.write(f"{key}\t{value}\n")
+            # json.dump(header, outfile, indent=4)
 
         volume = CachedZarrVolume.loadFile(filepath)
         # print("about to set callback")
@@ -681,7 +831,7 @@ class CachedZarrVolume():
         return volume
 
     def setLevelFromArray(self, array, max_mem_gb):
-        level = ZarrLevel(array, "", 1., max_mem_gb)
+        level = ZarrLevel(array, "", 1., 0, max_mem_gb)
         self.levels.append(level)
 
     def parseMetadata(self, hier):
@@ -763,6 +913,12 @@ class CachedZarrVolume():
         expected_scale = 1.
         expected_path_int = 0
         max_gb = .5*max_mem_gb
+        # create this solely for the purpose of
+        # getting the chunk size
+        level0 = ZarrLevel(hier, '0', 1., 0, 0)
+        chunk = level0.data.chunks
+        # print(chunk)
+        min_max_gb = 3*16*2*chunk[0]*chunk[1]*chunk[2]/(2**30)
         for i, lmd in enumerate(metadata):
             info = self.parseLevelMetadata(lmd)
             if info is None:
@@ -780,7 +936,9 @@ class CachedZarrVolume():
             if scale != expected_scale:
                 print(f"Level {i} expected scale {expected_scale}, got {scale}")
                 return
-            level = ZarrLevel(hier, path, scale, max_gb)
+            max_gb = max(max_gb, min_max_gb)
+            print("mmg", i, max_gb)
+            level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb))
             self.levels.append(level)
             expected_scale *= 2.
             expected_path_int += 1
@@ -820,7 +978,10 @@ class CachedZarrVolume():
         the corners of the dataset.
         """
         gmin = np.array([0, 0, 0], dtype=np.int32)
-        gmax = np.array(self.sizes, dtype=np.int32) - 1
+        # gmax = np.array(self.sizes, dtype=np.int32) - 1
+        sizes = list(self.sizes)
+        sizes.reverse()
+        gmax = np.array(sizes, dtype=np.int32) - 1
         return np.array((gmin, gmax))
 
     def loadData(self, project_view):
@@ -828,7 +989,9 @@ class CachedZarrVolume():
 
     def unloadData(self, project_view):
         self.active_project_views.discard(project_view)
-        self.data.store.invalidate()
+        # self.data.store.invalidate()
+        for level in self.levels:
+            level.data.store.invalidate()
 
     def createTransposedData(self):
         pass
@@ -875,7 +1038,106 @@ class CachedZarrVolume():
         else:
             return (0,2,1)[axis]
 
+    def getSliceShape(self, axis, direction):
+        shape = self.trdatas[direction].shape
+        if len(self.levels) == 1:
+            sz = self.max_width*2
+            return sz, sz
+        if axis == 2: # depth
+            return shape[1],shape[2]
+        elif axis == 1: # xline
+            return shape[0],shape[2]
+        else: # inline
+            return shape[0],shape[1]
+
     def getSlice(self, axis, ijkt, direction):
+        data = self.trdatas[direction]
+        it,jt,kt = ijkt
+        slices = []
+        slices.append(slice(
+            max(0, it - self.max_width), 
+            min(data.shape[2], it + self.max_width + 1),
+            None,
+        ))
+        slices.append(slice(
+            max(0, jt - self.max_width), 
+            min(data.shape[1], jt + self.max_width + 1),
+            None,
+        ))
+        slices.append(slice(
+            max(0, kt - self.max_width), 
+            min(data.shape[0], kt + self.max_width + 1),
+            None,
+        ))
+        slices[axis] = ijkt[axis]
+        # print(data.shape, axis, ijkt, direction, slices)
+        result = data[slices[2],slices[1],slices[0]]
+        return result
+
+    def getSliceInRange(self, data, islice, jslice, k, axis):
+        # data = self.trdatas[direction]
+        il, jl = self.ijIndexesInPlaneOfSlice(axis)
+        slices = [0]*3
+        slices[axis] = k
+        slices[il] = islice
+        slices[jl] = jslice
+        result = data[slices[2],slices[1],slices[0]]
+        return result
+
+    # OBSOLETE
+    def getSliceTry1(self, axis, ijkt, direction):
+        data = self.trdatas[direction]
+        it,jt,kt = ijkt
+        slices = []
+        slices.append(slice(
+            max(0, it - self.max_width), 
+            min(data.shape[2], it + self.max_width + 1),
+            None,
+        ))
+        slices.append(slice(
+            max(0, jt - self.max_width), 
+            min(data.shape[1], jt + self.max_width + 1),
+            None,
+        ))
+        slices.append(slice(
+            max(0, kt - self.max_width), 
+            min(data.shape[0], kt + self.max_width + 1),
+            None,
+        ))
+        slices[axis] = ijkt[axis]
+        # print(data.shape, axis, ijkt, direction, slices)
+        result = data[slices[2],slices[1],slices[0]]
+        '''
+        if direction == 0:
+            # gdata[j,k,i]
+            # a0: gdata[j,i]  T
+            # a1: gdata[k,i]  T
+            # a2: gdata[j,k]
+            if axis == 0: # gaxis 1  
+                result = result.T
+            elif axis == 1: # gaxis 2
+                result = result.T
+        elif direction == 1:
+            # gdata[j,i,k]
+            # a0: gdata[j,i]  T
+            # a1: gdata[i,k]
+            # a2: gdata[j,k]
+            if axis == 0: # gaxis 0
+                result = result.T
+        '''
+        return result
+
+    '''
+        key = i,j,k
+        if self.direction == 0:
+            s0, s2, s1 = key
+        elif self.direction == 1:
+            s1, s2, s0 = key
+        result = self.data[s2, s1, s0]
+    '''
+
+    # OBSOLETE
+    def getSliceOrig(self, axis, ijkt, direction):
         """ijkt are the coordinates of the center point in transposed space
         """
         # it, jt, kt are the coordinates of the center point
@@ -897,21 +1159,309 @@ class CachedZarrVolume():
             None,
         )
 
+        gaxis = self.globalAxisFromTransposedAxis(axis, direction)
+
+        '''
         if direction == 0:
-            if axis == 1:
+            if gaxis == 2:   # axis 1 gaxis 2
                 return self.data[kt, jslice, islice].T
-            elif axis == 0:
+            elif gaxis == 1: # axis 0 gaxis 1
                 return self.data[kslice, jt, islice].T
-            elif axis == 2:
+            elif gaxis == 0: # axis 2 gaxis 0
                 return self.data[kslice, jslice, it]
         else:
-            if axis == 1:
+            if gaxis == 2:   # axis 1 gaxis 2
                 return self.data[kt, jslice, islice]
-            elif axis == 2:
+            elif gaxis == 1: # axis 2 gaxis 1
                 return self.data[kslice, jt, islice]
-            elif axis == 0:
+            elif gaxis == 0: # axis 0 gaxis 0
                 return self.data[kslice, jslice, it].T
-        raise ValueError
+        '''
+        odata = None
+        if gaxis == 0:   # axis 2 gaxis 0
+            odata = self.data[kslice, jslice, it].T
+        elif gaxis == 1: # axis 0 gaxis 1
+            odata = self.data[kslice, jt, islice]
+        elif gaxis == 2: # axis 1 gaxis 2
+            odata = self.data[kt, jslice, islice]
+        else:
+            raise ValueError
+
+        if direction == 0:
+            odata = odata.T
+        elif direction != 1:
+            raise ValueError
+
+        return odata
+
+    # returns True if out has been completely painted,
+    # False otherwise
+    def paintLevel(self, out, axis, oijkt, zoom, direction, level, draw):
+        # if not draw:
+        #     return True
+        # mask = (out == 0).astype(np.uint8)
+        mask = (out == 0)
+        msum = mask.sum()
+        if msum == 0: # no zeros
+            return True
+        if msum != out.shape[0]*out.shape[1]: # some but not all zeros
+            # dilate the mask by one pixel
+            # to avoid small black lines from appearing
+            # (source unknown!) during loading
+            kernel = np.ones((3,3),dtype=np.bool_)
+            mask = ndimage.binary_dilation(mask, kernel)
+            pass
+
+        '''
+        if not mask.any():
+            return True
+        if not mask.all():
+            kernel = np.ones((3,3),dtype=np.bool_)
+            mask = ndimage.binary_dilation(mask, kernel)
+        '''
+        # print(mask.shape, mask.dtype)
+        # kernel = np.ones((3,3),dtype=np.bool_)
+        # kernel = np.ones((3,3),mask.dtype)
+        # mask = cv2.dilate(mask, kernel, iterations=1)
+        # print("mask", mask.shape)
+        # print("  mk", mask.sum())
+        # print("level", level.ilevel, end='\r')
+        scale = level.scale
+        data = level.trdatas[direction]
+
+        z = zoom*scale
+        it,jt,kt = oijkt
+        iscale = int(scale)
+        it = it//iscale
+        jt = jt//iscale
+        kt = kt//iscale
+        ijkt = (it,jt,kt)
+        wh,ww = out.shape
+        whw = ww//2
+        whh = wh//2
+        il, jl = self.ijIndexesInPlaneOfSlice(axis)
+        fi, fj = ijkt[il], ijkt[jl]
+        # slice width, height
+        sw = data.shape[il]
+        sh = data.shape[jl]
+        # print("sw,sh",z,il,jl,fi,fj,sw,sh)
+        zsw = max(int(z*sw), 1)
+        zsh = max(int(z*sh), 1)
+
+        # all coordinates below are in drawing window coordinates,
+        # unless specified otherwise
+        # location of upper left corner of data slice:
+        ax1 = int(whw-z*fi)
+        ay1 = int(whh-z*fj)
+        # location of lower right corner of data slice:
+        ax2 = ax1+zsw
+        ay2 = ay1+zsh
+        # locations of upper left and lower right corners of drawing window
+        bx1 = 0
+        by1 = 0
+        bx2 = ww
+        by2 = wh
+        ri = Utils.rectIntersection(
+                ((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
+        misses0 = level.klru.nz_misses
+        if ri is not None:
+            # upper left and lower right corners of intersected rectangle
+            (x1,y1),(x2,y2) = ri
+            # corners of windowed data slice, in
+            # data slice coordinates
+            x1s = int((x1-ax1)/z)
+            y1s = int((y1-ay1)/z)
+            x2s = int((x2-ax1)/z)
+            y2s = int((y2-ay1)/z)
+            # print(sw,sh,ww,wh)
+            # print(x1,y1,x2,y2)
+            # print(x1s,y1s,x2s,y2s)
+            slc = self.getSliceInRange(data,
+                    slice(x1s,x2s), slice(y1s,y2s), ijkt[axis], 
+                    axis)
+            # print(slc.shape)
+            # resize windowed data slice to its size in drawing
+            # window coordinates
+            # zslc = cv2.resize(slc[y1s:y2s,x1s:x2s], (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+            zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+            # paste resized data slice into the intersection window
+            # in the drawing window
+            # print("mask, out", mask.shape, out.shape, out[mask].shape, zslc.shape)
+            if draw:
+                buf = np.zeros_like(out)
+                buf[y1:y2, x1:x2] = zslc
+                # if scale == 1.:
+                #     buf[buf != 0] = 24000
+                # if level.ilevel != 2:
+                #     buf[buf != 0] = 48000 - level.ilevel*5000
+                out[mask] = buf[mask]
+            # out[mask][y1:y2, x1:x2] = zslc
+        misses1 = level.klru.nz_misses
+            
+        # if misses0 = misses1, this means that there were no
+        # klru cache misses during the call to getSliceInRange
+        # return False
+        # print("  ms",misses0,misses1)
+        return misses0 == misses1
+
+    def paintSlice(self, out, axis, ijkt, zoom, direction):
+        level = self.levels[0]
+        if len(self.levels) == 1:
+            return False
+        if len(self.levels) > 1:
+            for i in range(len(self.levels)):
+                level = self.levels[i]
+                lzoom = 1./level.scale
+                if lzoom < 2*zoom:
+                    # print("breaking", i, zoom, lzoom)
+                    # print("level", i, end='\r')
+                    # print("level", i)
+                    break
+
+        draw = True
+        # print("** axis",axis, out.shape, i)
+        start = i
+        for i in range(start,len(self.levels)):
+            level = self.levels[i]
+            # print("level", i, draw)
+            result = self.paintLevel(out, axis, ijkt, zoom, direction, level, draw)
+            if result:
+                break
+                # draw = False
+
+        for level in self.levels:
+            n = len(level.klru._values_cache)
+            if level.ilevel == start:
+                print('*', end='')
+            print(n, end=' ')
+        print(end='\r')
+
+        return True
+
+    def paintSliceOld(self, out, axis, ijkt, zoom, direction):
+
+        if len(self.levels) == 1:
+            return False
+
+        # These may change depending on which resolution
+        # level is used
+        z = zoom
+        it,jt,kt = ijkt
+
+        level = self.levels[0]
+        if len(self.levels) > 1:
+            for i in range(len(self.levels)):
+                level = self.levels[i]
+                lzoom = 1./level.scale
+                if lzoom < 2*zoom:
+                    # print("breaking", i, zoom, lzoom)
+                    print("level", i, end='\r')
+                    break
+
+        scale = level.scale
+        z *= scale
+        iscale = int(scale)
+        it = it//iscale
+        jt = jt//iscale
+        kt = kt//iscale
+        ijkt = (it,jt,kt)
+        data = level.trdatas[direction]
+
+        wh,ww = out.shape
+        whw = ww//2
+        whh = wh//2
+        il, jl = self.ijIndexesInPlaneOfSlice(axis)
+        fi, fj = ijkt[il], ijkt[jl]
+        # slice width, height
+        sw = data.shape[il]
+        sh = data.shape[jl]
+        # print("sw,sh",z,il,jl,fi,fj,sw,sh)
+        zsw = max(int(z*sw), 1)
+        zsh = max(int(z*sh), 1)
+
+        # all coordinates below are in drawing window coordinates,
+        # unless specified otherwise
+        # location of upper left corner of data slice:
+        ax1 = int(whw-z*fi)
+        ay1 = int(whh-z*fj)
+        # location of lower right corner of data slice:
+        ax2 = ax1+zsw
+        ay2 = ay1+zsh
+        # locations of upper left and lower right corners of drawing window
+        bx1 = 0
+        by1 = 0
+        bx2 = ww
+        by2 = wh
+        ri = Utils.rectIntersection(
+                ((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
+        if ri is not None:
+            # upper left and lower right corners of intersected rectangle
+            (x1,y1),(x2,y2) = ri
+            # corners of windowed data slice, in
+            # data slice coordinates
+            x1s = int((x1-ax1)/z)
+            y1s = int((y1-ay1)/z)
+            x2s = int((x2-ax1)/z)
+            y2s = int((y2-ay1)/z)
+            # print(sw,sh,ww,wh)
+            # print(x1,y1,x2,y2)
+            # print(x1s,y1s,x2s,y2s)
+            slc = self.getSliceInRange(data,
+                    slice(x1s,x2s), slice(y1s,y2s), ijkt[axis], 
+                    axis)
+            # print(slc.shape)
+            # resize windowed data slice to its size in drawing
+            # window coordinates
+            # zslc = cv2.resize(slc[y1s:y2s,x1s:x2s], (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+            zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+            # paste resized data slice into the intersection window
+            # in the drawing window
+            out[y1:y2, x1:x2] = zslc
+            
+        return True
+
+
+    # OBSOLETE
+    def paintSliceOld(self, out, axis, ijkt, zoom, direction):
+
+        return False
+
+        gijk = self.transposedIjkToIjk(ijkt, direction)
+        gaxis = self.globalAxisFromTransposedAxis(axis, direction)
+        ww = out.shape[1]
+        wh = out.shape[0]
+        whw = ww//2
+        whh = wh//2
+
+        '''
+        dshape = self.data.shape
+        if gaxis == 0:
+            sshape = [dshape[1], dshape[0]]
+        elif gaxis == 1:
+            sshape = [dshape[0], dshape[2]]
+        elif gaxis == 2:
+            sshape = [dshape[1], dshape[2]]
+        else:
+            raise ValueError
+
+        if direction == 0:
+            sshape = [sshape[1], sshape[0]]
+        elif direction != 1:
+            raise ValueError
+        '''
+
+        il, jl = self.ijIndexesInPlaneOfSlice(gaxis)
+        dshape = self.data.shape
+        dshape.reverse()
+        sshape = [dshape[il], dshape[jl]]
+        '''
+        if direction == 0:
+            sshape = [sshape[1], sshape[0]]
+        elif direction != 1:
+            raise ValueError
+        '''
+
+        return False
 
     def ijIndexesInPlaneOfSlice(self, axis):
         return ((1,2), (0,2), (0,1))[axis]
@@ -932,6 +1482,12 @@ class CachedZarrVolume():
         xline = self.getSlice(1, ijkt, direction)
         inline = self.getSlice(0, ijkt, direction)
 
+        return (depth, xline, inline)
+
+    def getSliceShapes(self, direction):
+        depth = self.getSliceShape(2, direction)
+        xline = self.getSliceShape(1, direction)
+        inline = self.getSliceShape(0, direction)
         return (depth, xline, inline)
 
 class Loader():
