@@ -238,8 +238,8 @@ class ProjectView:
         if self.cur_volume != volume:
             if self.cur_volume is not None:
                 self.cur_volume.unloadData(self)
-            if self.cur_volume_view is not None:
-                self.cur_volume_view.trdata = None
+            # if self.cur_volume_view is not None:
+            #     self.cur_volume_view.trdata = None
             if volume is not None:
                 volume.loadData(self)
         self.cur_volume = volume

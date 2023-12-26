@@ -234,10 +234,13 @@ class ZarrLoader(QMainWindow):
         volume_name = self.name
         project = self.main_window.project_view.project
         main_window = self.main_window
+        main_window.app.processEvents()
+        loading = main_window.showLoading()
         if self.directory_has_tiffs:
             new_volume = CachedZarrVolume.createFromTiffs(project, pdir, volume_name)
         else:
             new_volume = CachedZarrVolume.createFromZarr(project, pdir, volume_name)
+        loading = None
 
         if new_volume is None or not new_volume.valid:
             err_msg = ""
