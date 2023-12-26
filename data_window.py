@@ -1471,8 +1471,6 @@ into and out of the viewing plane.
         out = np.zeros((wh,ww), dtype=np.uint16)
         paint_result = volume.paintSlice(
                 out, self.axis, volume.ijktf, self.getZoom())
-        # if paint_result:
-        #     self.setStatusTextFromMousePosition()
 
         if not paint_result:
             slc = volume.getSlice(self.axis, volume.ijktf)
@@ -1690,15 +1688,6 @@ into and out of the viewing plane.
             pts = frag.getPointsOnSlice(self.axis, self.positionOnAxis())
             # working is an array of bools, one per pt
             working = frag.workingVpoints()
-            '''
-            working_bools = working[working_list]
-            working_pts = pts[working_bools]
-            non_working_pts = pts[~working_bools]
-            llen = len(pts)
-            wlen = len(working_pts)
-            all_working = (wlen == llen)
-            no_working = (wlen == 0)
-            '''
             (has_working, has_non_working) = frag.hasWorkingNonWorking()
             all_working = not has_non_working
             none_working = not has_working

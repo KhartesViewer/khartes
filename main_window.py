@@ -887,8 +887,6 @@ class MainWindow(QMainWindow):
         # is this needed?
         self.volumes_model = VolumesModel(None, self)
         self.tiff_loader = TiffLoader(self)
-        self.zarr_key = ""
-        self.current_zarr_key = ""
         self.zarr_loader = ZarrLoader(self)
         self.zarr_timer = QTimer()
         self.zarr_timer.setSingleShot(True)
@@ -2438,12 +2436,13 @@ class MainWindow(QMainWindow):
 
     def setVolume(self, volume, no_notify=False):
         pv = self.project_view
-        if volume is not None and volume.data is None:
+        if volume is not None and (volume.data is None or volume.is_zarr):
             loading = self.showLoading()
 
         self.volumes_table.model().beginResetModel()
         pv.setCurrentVolume(volume, no_notify)
         self.volumes_table.model().endResetModel()
+        self.app.processEvents()
         vv = None
         if volume is not None:
             vv = pv.cur_volume_view
@@ -2681,10 +2680,7 @@ class MainWindow(QMainWindow):
 
     # called by self.zarr_timer
     def zarrTimerCallback(self):
-        self.current_zarr_key = self.zarr_key
         self.drawSlices()
-        # self.setStatusText(self.zarr_key)
-        self.current_zarr_key = ""
 
     # This function slows down the pace of redraws 
     # initiated by zarr threads.
@@ -2710,7 +2706,6 @@ class MainWindow(QMainWindow):
     # called only from within the Qt GUI thread.
     def zarrFutureDoneCallback(self, key, has_data):
         # print(key, has_data)
-        self.zarr_key = key
         if has_data:
             self.zarr_signal.emit(key)
 

@@ -142,7 +142,7 @@ class TransposedDataView():
     # First, select the data from the original data cube
     # (need to transpose the selection into global coordinates
     # to do this);
-    # Second, transpose the results (which follow the global
+    # Second, transpose the results (which are aligned with the global
     # data axes) back to the transposed axes.
     # In step one, make sure that axes are not squeezed out,
     # because that would cause the transpose to fail
@@ -180,107 +180,6 @@ class TransposedDataView():
         result = np.squeeze(result)
         return result
 
-    # OBSOLETE
-    # Two steps:
-    # First, select the data from the original data cube
-    # (need to transpose the selection into global coordinates
-    # to do this);
-    # Second, transpose the results (which follow the global
-    # data axes) back to a data set with transposed axes.
-    # The second step is complicated because the result of step 1
-    # may be of a lower dimension than the data cube, so need
-    # to restore the missing dimension before transposing
-    def __getitem__old_(self, selection):
-        '''
-        if self.direction == 0:
-            xslice, zslice, yslice = key
-        elif self.direction == 1:
-            yslice, zslice, xslice = key
-        '''
-        '''
-        # 0 zslice
-        # 1 yslice
-        # 2 xslice
-        if self.direction == 0:
-            xslice, zslice, yslice = key
-        elif self.direction == 1:
-            yslice, zslice, xslice = key
-        result = self.data[zslice, yslice, xslice]
-        '''
-        if self.direction == 0:
-            s2, s0, s1 = selection
-        elif self.direction == 1:
-            s1, s0, s2 = selection
-        result = self.data[s0, s1, s2]
-
-        '''
-        if self.direction == 0:
-            tras = (2, 0, 1)
-        elif self.direction == 1:
-            tras = (1, 0, 2)
-        '''
-       
-        # print("rs", rs, "s", s0, s1, s2)
-        if len(result.shape) == 1:
-            # Fancy-indexing collapses the shape, so we don't need to transpose
-            return result
-        elif len(result.shape) == 2:
-            # Lost an axis due to one of the selections
-            # being a single int (it was squeezed); need to put the axis 
-            # back (unsqueeze it) so that
-            # the 3D transposes below work correctly
-            saxes = [i for i in range(3) if isinstance((s0,s1,s2)[i], int)]
-            # tras = [tras[i] for i in range(3) if not isinstance((s0,s1,s2)[i], int)]
-            result = np.expand_dims(result, saxes)
-            '''
-            if isinstance(s0, int):
-                result = result.reshape((1,rs[0],rs[1]))
-                print("s0", result.shape)
-            elif isinstance(s1, int):
-                result = result.reshape((rs[0],1,rs[1]))
-                print("s1", result.shape)
-            elif isinstance(s2, int):
-                result = result.reshape((rs[0],rs[1],1))
-                print("s2", result.shape)
-            '''
-
-        # print("tras", tras)
-        # result = result.transpose(*tras)
-        if self.direction == 0:
-            result = result.transpose(2, 0, 1)
-        elif self.direction == 1:
-            result = result.transpose(1, 0, 2)
-        '''
-        rs = []
-        for n in result.shape:
-            if n != 1:
-                rs.append(n)
-        result = result.reshape(rs)
-        '''
-        # squeeze the axis that was unsqueezed previously
-        result = np.squeeze(result)
-        return result
-
-        # return result
-        # TODO:
-        # Need to do transpose (based on direction)
-        # before calling self.data[], because after
-        # call, the result might be flattened along one
-        # more dimension
-        # if self.direction == 0:
-        #     return self.data[xslice,zslice,yslice]
-        # else:
-        #     return self.data[yslice,zslice,xslice]
-        '''
-        print(key, result.shape)
-        if len(result.shape) == 1:
-            # Fancy-indexing collapses the shape, so we don't need to transpose
-            return result
-        if self.direction == 0:
-            return result.transpose(2, 0, 1)
-        elif self.direction == 1:
-            return result.transpose(1, 0, 2)
-        '''
 
 '''
 LRU (least-recently-used) cache based on the version
@@ -450,8 +349,6 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
 class ZarrLevel():
     def __init__(self, array, path, scale, ilevel, max_mem_gb):
         # print("zl array", array, scale, max_mem_gb)
-        # TODO: need to make sure max_mem_gb is big enough
-        # to hold at least 8 chunks
         klru = KhartesThreadedLRUCache(
                 array.store, max_size=int(max_mem_gb*2**30))
         self.klru = klru
@@ -639,96 +536,6 @@ class CachedZarrVolume():
                 name,
                 max_width)
 
-    '''
-    # TODO: createFromZarr and createFromTiffs share a lot of code!
-    @staticmethod
-    def createFromZarrOld(
-            project,
-            zarr_directory,
-            name,
-            # max_width=150,
-            max_width=240,
-        ):
-        """
-        Generates a new volume object from a zarr directory
-        """
-        tdir = pathlib.Path(zarr_directory)
-        if not tdir.is_dir():
-            err = f"{tdir} is not a directory"
-            print(err)
-            return CachedZarrVolume.createErrorVolume(err)
-
-        output_filename = name
-        if not output_filename.endswith(".volzarr"):
-            output_filename += ".volzarr"
-        filepath = os.path.join(project.volumes_path, output_filename)
-        if os.path.exists(filepath):
-            err = f"{filepath} already exists"
-            print(err)
-            return CachedZarrVolume.createErrorVolume(err)
-
-        timestamp = Utils.timestamp()
-        header = {
-            "khartes_version": "1.0",
-            "khartes_created": timestamp,
-            "khartes_modified": timestamp,
-            "zarr_dir": zarr_directory,
-            "max_width": max_width,
-        }
-        # Write out the project file
-        with open(filepath, "w") as outfile:
-            for key, value in header.items():
-                outfile.write(f"{key}\t{value}\n")
-
-        volume = CachedZarrVolume.loadFile(filepath)
-        # print("about to set callback")
-        project.addVolume(volume)
-        return volume
-
-
-    @staticmethod
-    def createFromTiffsOld(
-            project, 
-            tiff_directory, 
-            name,
-            max_width=240,
-        ):
-        """
-        Generates a new volume object from a directory of TIF files.
-        """
-        tdir = pathlib.Path(tiff_directory)
-        if not tdir.is_dir():
-            err = f"{tdir} is not a directory"
-            print(err)
-            return CachedZarrVolume.createErrorVolume(err)
-        
-        output_filename = name
-        if not output_filename.endswith(".volzarr"):
-            output_filename += ".volzarr"
-        filepath = os.path.join(project.volumes_path, output_filename)
-        if os.path.exists(filepath):
-            err = f"{filepath} already exists"
-            print(err)
-            return CachedZarrVolume.createErrorVolume(err)
-        
-        timestamp = Utils.timestamp()
-        header = {
-            "khartes_version": "1.0",
-            "khartes_created": timestamp,
-            "khartes_modified": timestamp,
-            "tiff_dir": tiff_directory,
-            "max_width": max_width,
-        }
-        # Write out the project file
-        with open(filepath, "w") as outfile:
-            for key, value in header.items():
-                outfile.write(f"{key}\t{value}\n")
-        
-        volume = CachedZarrVolume.loadFile(filepath)
-        project.addVolume(volume)
-        return volume
-    '''
-
     @staticmethod
     def loadFile(filename):
         try:
@@ -791,22 +598,6 @@ class CachedZarrVolume():
             err = f"Failed to read input directory {ddir}\n  specified in {filename} (error {e})"
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
-        '''
-        klru = KhartesThreadedLRUCache(array.store, max_size=self.max_mem_gb*2**30)
-        zdata = zarr.open(klru, mode="r")
-
-        # if zdata is a zarr group rather than a zarr array
-        # (as is the case if the input is an OME directory),
-        # look for '0', which by convention is the 
-        # highest-resolution data array in the OME hierarchy, and 
-        # set zdata to point to this array.  Note that this is NOT
-        # taking advantage of the multi-resolution data
-        # in the OME directory!  That is yet to be coded...
-        if isinstance(zdata, zarr.hierarchy.Group):
-            zdata = zdata['0']
-        volume.data = zdata
-        volume.klru = klru
-        '''
 
         # TODO: is volume.max_mem_gb the right value to use?
         if isinstance(array, zarr.hierarchy.Group):
@@ -945,14 +736,11 @@ class CachedZarrVolume():
             max_gb *= .5
 
     def setImmediateDataMode(self, flag):
-        # self.klru.setImmediateDataMode(flag)
         for level in self.levels:
             level.setImmediateDataMode(flag)
 
     def setCallback(self, cb):
         print("setting callback")
-        # self.klru.before_callback = cb
-        # self.klru.future_done_callback = cb
         for level in self.levels:
             level.setCallback(cb)
 
@@ -978,7 +766,6 @@ class CachedZarrVolume():
         the corners of the dataset.
         """
         gmin = np.array([0, 0, 0], dtype=np.int32)
-        # gmax = np.array(self.sizes, dtype=np.int32) - 1
         sizes = list(self.sizes)
         sizes.reverse()
         gmax = np.array(sizes, dtype=np.int32) - 1
@@ -1084,116 +871,6 @@ class CachedZarrVolume():
         result = data[slices[2],slices[1],slices[0]]
         return result
 
-    # OBSOLETE
-    def getSliceTry1(self, axis, ijkt, direction):
-        data = self.trdatas[direction]
-        it,jt,kt = ijkt
-        slices = []
-        slices.append(slice(
-            max(0, it - self.max_width), 
-            min(data.shape[2], it + self.max_width + 1),
-            None,
-        ))
-        slices.append(slice(
-            max(0, jt - self.max_width), 
-            min(data.shape[1], jt + self.max_width + 1),
-            None,
-        ))
-        slices.append(slice(
-            max(0, kt - self.max_width), 
-            min(data.shape[0], kt + self.max_width + 1),
-            None,
-        ))
-        slices[axis] = ijkt[axis]
-        # print(data.shape, axis, ijkt, direction, slices)
-        result = data[slices[2],slices[1],slices[0]]
-        '''
-        if direction == 0:
-            # gdata[j,k,i]
-            # a0: gdata[j,i]  T
-            # a1: gdata[k,i]  T
-            # a2: gdata[j,k]
-            if axis == 0: # gaxis 1  
-                result = result.T
-            elif axis == 1: # gaxis 2
-                result = result.T
-        elif direction == 1:
-            # gdata[j,i,k]
-            # a0: gdata[j,i]  T
-            # a1: gdata[i,k]
-            # a2: gdata[j,k]
-            if axis == 0: # gaxis 0
-                result = result.T
-        '''
-        return result
-
-    '''
-        key = i,j,k
-        if self.direction == 0:
-            s0, s2, s1 = key
-        elif self.direction == 1:
-            s1, s2, s0 = key
-        result = self.data[s2, s1, s0]
-    '''
-
-    # OBSOLETE
-    def getSliceOrig(self, axis, ijkt, direction):
-        """ijkt are the coordinates of the center point in transposed space
-        """
-        # it, jt, kt are the coordinates of the center point
-        # in the untransposed grid
-        (it, jt, kt) = self.transposedIjkToIjk(ijkt, direction)
-        islice = slice(
-            max(0, it - self.max_width), 
-            min(self.data.shape[2], it + self.max_width + 1),
-            None,
-        )
-        jslice = slice(
-            max(0, jt - self.max_width), 
-            min(self.data.shape[1], jt + self.max_width + 1),
-            None,
-        )
-        kslice = slice(
-            max(0, kt - self.max_width), 
-            min(self.data.shape[0], kt + self.max_width + 1),
-            None,
-        )
-
-        gaxis = self.globalAxisFromTransposedAxis(axis, direction)
-
-        '''
-        if direction == 0:
-            if gaxis == 2:   # axis 1 gaxis 2
-                return self.data[kt, jslice, islice].T
-            elif gaxis == 1: # axis 0 gaxis 1
-                return self.data[kslice, jt, islice].T
-            elif gaxis == 0: # axis 2 gaxis 0
-                return self.data[kslice, jslice, it]
-        else:
-            if gaxis == 2:   # axis 1 gaxis 2
-                return self.data[kt, jslice, islice]
-            elif gaxis == 1: # axis 2 gaxis 1
-                return self.data[kslice, jt, islice]
-            elif gaxis == 0: # axis 0 gaxis 0
-                return self.data[kslice, jslice, it].T
-        '''
-        odata = None
-        if gaxis == 0:   # axis 2 gaxis 0
-            odata = self.data[kslice, jslice, it].T
-        elif gaxis == 1: # axis 0 gaxis 1
-            odata = self.data[kslice, jt, islice]
-        elif gaxis == 2: # axis 1 gaxis 2
-            odata = self.data[kt, jslice, islice]
-        else:
-            raise ValueError
-
-        if direction == 0:
-            odata = odata.T
-        elif direction != 1:
-            raise ValueError
-
-        return odata
-
     # returns True if out has been completely painted,
     # False otherwise
     def paintLevel(self, out, axis, oijkt, zoom, direction, level, draw):
@@ -1212,20 +889,6 @@ class CachedZarrVolume():
             mask = ndimage.binary_dilation(mask, kernel)
             pass
 
-        '''
-        if not mask.any():
-            return True
-        if not mask.all():
-            kernel = np.ones((3,3),dtype=np.bool_)
-            mask = ndimage.binary_dilation(mask, kernel)
-        '''
-        # print(mask.shape, mask.dtype)
-        # kernel = np.ones((3,3),dtype=np.bool_)
-        # kernel = np.ones((3,3),mask.dtype)
-        # mask = cv2.dilate(mask, kernel, iterations=1)
-        # print("mask", mask.shape)
-        # print("  mk", mask.sum())
-        # print("level", level.ilevel, end='\r')
         scale = level.scale
         data = level.trdatas[direction]
 
@@ -1282,7 +945,6 @@ class CachedZarrVolume():
             # print(slc.shape)
             # resize windowed data slice to its size in drawing
             # window coordinates
-            # zslc = cv2.resize(slc[y1s:y2s,x1s:x2s], (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
             zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
             # paste resized data slice into the intersection window
             # in the drawing window
@@ -1295,12 +957,10 @@ class CachedZarrVolume():
                 # if level.ilevel != 2:
                 #     buf[buf != 0] = 48000 - level.ilevel*5000
                 out[mask] = buf[mask]
-            # out[mask][y1:y2, x1:x2] = zslc
         misses1 = level.klru.nz_misses
             
         # if misses0 = misses1, this means that there were no
         # klru cache misses during the call to getSliceInRange
-        # return False
         # print("  ms",misses0,misses1)
         return misses0 == misses1
 
@@ -1337,131 +997,6 @@ class CachedZarrVolume():
         print(end='\r')
 
         return True
-
-    def paintSliceOld(self, out, axis, ijkt, zoom, direction):
-
-        if len(self.levels) == 1:
-            return False
-
-        # These may change depending on which resolution
-        # level is used
-        z = zoom
-        it,jt,kt = ijkt
-
-        level = self.levels[0]
-        if len(self.levels) > 1:
-            for i in range(len(self.levels)):
-                level = self.levels[i]
-                lzoom = 1./level.scale
-                if lzoom < 2*zoom:
-                    # print("breaking", i, zoom, lzoom)
-                    print("level", i, end='\r')
-                    break
-
-        scale = level.scale
-        z *= scale
-        iscale = int(scale)
-        it = it//iscale
-        jt = jt//iscale
-        kt = kt//iscale
-        ijkt = (it,jt,kt)
-        data = level.trdatas[direction]
-
-        wh,ww = out.shape
-        whw = ww//2
-        whh = wh//2
-        il, jl = self.ijIndexesInPlaneOfSlice(axis)
-        fi, fj = ijkt[il], ijkt[jl]
-        # slice width, height
-        sw = data.shape[il]
-        sh = data.shape[jl]
-        # print("sw,sh",z,il,jl,fi,fj,sw,sh)
-        zsw = max(int(z*sw), 1)
-        zsh = max(int(z*sh), 1)
-
-        # all coordinates below are in drawing window coordinates,
-        # unless specified otherwise
-        # location of upper left corner of data slice:
-        ax1 = int(whw-z*fi)
-        ay1 = int(whh-z*fj)
-        # location of lower right corner of data slice:
-        ax2 = ax1+zsw
-        ay2 = ay1+zsh
-        # locations of upper left and lower right corners of drawing window
-        bx1 = 0
-        by1 = 0
-        bx2 = ww
-        by2 = wh
-        ri = Utils.rectIntersection(
-                ((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
-        if ri is not None:
-            # upper left and lower right corners of intersected rectangle
-            (x1,y1),(x2,y2) = ri
-            # corners of windowed data slice, in
-            # data slice coordinates
-            x1s = int((x1-ax1)/z)
-            y1s = int((y1-ay1)/z)
-            x2s = int((x2-ax1)/z)
-            y2s = int((y2-ay1)/z)
-            # print(sw,sh,ww,wh)
-            # print(x1,y1,x2,y2)
-            # print(x1s,y1s,x2s,y2s)
-            slc = self.getSliceInRange(data,
-                    slice(x1s,x2s), slice(y1s,y2s), ijkt[axis], 
-                    axis)
-            # print(slc.shape)
-            # resize windowed data slice to its size in drawing
-            # window coordinates
-            # zslc = cv2.resize(slc[y1s:y2s,x1s:x2s], (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
-            zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
-            # paste resized data slice into the intersection window
-            # in the drawing window
-            out[y1:y2, x1:x2] = zslc
-            
-        return True
-
-
-    # OBSOLETE
-    def paintSliceOld(self, out, axis, ijkt, zoom, direction):
-
-        return False
-
-        gijk = self.transposedIjkToIjk(ijkt, direction)
-        gaxis = self.globalAxisFromTransposedAxis(axis, direction)
-        ww = out.shape[1]
-        wh = out.shape[0]
-        whw = ww//2
-        whh = wh//2
-
-        '''
-        dshape = self.data.shape
-        if gaxis == 0:
-            sshape = [dshape[1], dshape[0]]
-        elif gaxis == 1:
-            sshape = [dshape[0], dshape[2]]
-        elif gaxis == 2:
-            sshape = [dshape[1], dshape[2]]
-        else:
-            raise ValueError
-
-        if direction == 0:
-            sshape = [sshape[1], sshape[0]]
-        elif direction != 1:
-            raise ValueError
-        '''
-
-        il, jl = self.ijIndexesInPlaneOfSlice(gaxis)
-        dshape = self.data.shape
-        dshape.reverse()
-        sshape = [dshape[il], dshape[jl]]
-        '''
-        if direction == 0:
-            sshape = [sshape[1], sshape[0]]
-        elif direction != 1:
-            raise ValueError
-        '''
-
-        return False
 
     def ijIndexesInPlaneOfSlice(self, axis):
         return ((1,2), (0,2), (0,1))[axis]
