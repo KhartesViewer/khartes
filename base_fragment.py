@@ -247,28 +247,6 @@ class BaseFragmentView:
             return
         pts3d = self.fpoints[:,:3]
         return BaseFragment.pointNormals(pts3d, trgls)
-        '''
-        # if self.tri is None or len(self.tri.simplices) == 0:
-        #     return None
-        # zpts = self.fpoints[:,2]
-        # pts3d = np.append(self.tri.points, zpts.reshape(-1,1), axis=1)
-        pts3d = self.fpoints[:,:3]
-        # print("n",self.tri.points.shape, zpts.shape, pts3d.shape)
-        v0 = trgls[:,0]
-        v1 = trgls[:,1]
-        v2 = trgls[:,2]
-        d01 = pts3d[v1] - pts3d[v0]
-        d02 = pts3d[v2] - pts3d[v0]
-        n3d = np.cross(d01, d02)
-        ptn3d = np.zeros((len(pts3d), 3), np.float32)
-        ptn3d[v0] += n3d
-        ptn3d[v1] += n3d
-        ptn3d[v2] += n3d
-        l2 = np.sqrt(np.sum(ptn3d*ptn3d, axis=1)).reshape(-1,1)
-        l2[l2==0] = 1.
-        ptn3d /= l2
-        return ptn3d
-        '''
 
     def moveAlongNormalsSign(self):
         return 1.

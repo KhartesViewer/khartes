@@ -57,15 +57,6 @@ class FragmentsModel(QtCore.QAbstractTableModel):
         oflags = super(FragmentsModel, self).flags(index)
         if col == 0:
             nflags = Qt.ItemNeverHasChildren
-            '''
-            row = index.row()
-            fragments = self.project_view.fragments
-            fragment = list(fragments.keys())[row]
-            fragment_view = fragments[fragment]
-            if self.project_view.cur_volume_view.direction == fragment.direction:
-                nflags |= Qt.ItemIsUserCheckable
-                nflags |= Qt.ItemIsEnabled
-            '''
             nflags |= Qt.ItemIsUserCheckable
             nflags |= Qt.ItemIsEnabled
             return nflags
@@ -264,19 +255,9 @@ class Fragment(BaseFragment):
     def __init__(self, name, direction):
         super(Fragment, self).__init__(name)
         self.direction = direction
-        # self.color = QColor("green")
-        # self.color = QColor()
-        # self.cvcolor = (0,0,0,0)
-        # self.name = name
         self.params = {}
         # fragment points in global coordinates
-        # self.gpoints = np.zeros((0,3), dtype=np.int32)
         self.gpoints = np.zeros((0,3), dtype=np.float32)
-        # self.valid = False
-        # self.created = Utils.timestamp()
-        # self.modified = Utils.timestamp()
-        # self.project = None
-        # self.no_mesh = False
 
     def createView(self, project_view):
         return FragmentView(project_view, self)
@@ -286,7 +267,6 @@ class Fragment(BaseFragment):
         frag.setColor(self.color, no_notify=True)
         frag.gpoints = np.copy(self.gpoints)
         frag.valid = True
-        # frag.no_mesh = self.no_mesh
         return frag
 
     def toDict(self):
@@ -323,20 +303,6 @@ class Fragment(BaseFragment):
         file = path / (stem + ".json")
         print("writing to",file)
         file.write_text(info_txt, encoding="utf8")
-
-    # notify_count = 0
-
-    '''
-    def notifyModified(self, tstamp=""):
-        if tstamp == "":
-            tstamp = Utils.timestamp()
-        self.modified = tstamp
-        # print("fragment",self.name,"modified", tstamp)
-        # if Fragment.notify_count > 0:
-        #     print(asdf)
-        # Fragment.notify_count += 1
-        self.project.notifyModified(tstamp)
-    '''
 
     def createErrorFragment(err):
         frag = Fragment("", -1)
@@ -416,15 +382,6 @@ class Fragment(BaseFragment):
     # performs an in-place sort of the list
     def sortFragmentList(frags):
         frags.sort(key=lambda f: f.name)
-
-    '''
-    def setColor(self, qcolor, no_notify=False):
-        self.color = qcolor
-        rgba = qcolor.getRgbF()
-        self.cvcolor = [int(65535*c) for c in rgba] 
-        if not no_notify:
-            self.notifyModified()
-    '''
 
     def minRoundness(self):
         return Fragment.min_roundness
@@ -958,53 +915,6 @@ class Fragment(BaseFragment):
 
         return err
 
-    '''
-    # return empty string for success, non-empty error string on error
-    def saveAsObjMesh(self, filename, infill):
-        print("saom", filename, infill)
-        err = ""
-
-        gpoints = np.copy(self.gpoints)
-        print("saom gpoints before", len(gpoints))
-        newgps = self.createInfillPoints(infill)
-        gpoints = np.append(gpoints, newgps, axis=0)
-        print("saom gpoints after", len(gpoints))
-        tgps = Volume.globalIjksToTransposedGlobalIjks(gpoints, self.direction)
-        try:
-            # triangulate the new gpoints
-            tri = Delaunay(tgps[:,0:2])
-        except QhullError as err:
-            err = "saom: triangulation error: %s"%err
-            err = err.splitlines()[0]
-            print(err)
-            return err
-
-        bads = self.badBorderTrgls(tri, self.badTrglsByNormal(tri, tgps))
-        badlist = bads.tolist()
-
-        try:
-            of = filename.open("w")
-        except Exception as e:
-            err = "Could not open %s: %s"%(str(filename), e)
-            print(err)
-            return err
-
-        print("# khartes .obj file", file=of)
-        print("#", file=of)
-
-        # for gpt in tgps:
-        for gpt in gpoints:
-            print("v %d %d %d"%(gpt[0],gpt[1],gpt[2]), file=of)
-        for i,trg in enumerate(tri.simplices):
-            if i in badlist:
-                continue
-            print("f %d %d %d"%(trg[0]+1,trg[1]+1,trg[2]+1), file=of)
-            # try reversing index order:
-            # print("f %d %d %d"%(trg[1]+1,trg[0]+1,trg[2]+1), file=of)
-
-        return err
-    '''
-
 
 class FragmentView(BaseFragmentView):
 
@@ -1016,15 +926,7 @@ class FragmentView(BaseFragmentView):
 
     def __init__(self, project_view, fragment):
         super(FragmentView, self).__init__(project_view, fragment)
-        # self.project_view = project_view
-        # self.fragment = fragment
-        # cur_volume_view holds the volume associated
-        # with current zsurf and ssurf
-        # self.cur_volume_view = None
-        # self.visible = True
-        # self.active = False
         self.tri = None
-        # self.sqcm = 0.
         self.line = None
         self.lineAxis = -1
         self.lineAxisPosition = 0
@@ -1044,15 +946,6 @@ class FragmentView(BaseFragmentView):
         # direction
         self.vpoints = np.zeros((0,4), dtype=np.float32)
 
-    '''
-    def notifyModified(self, tstamp=""):
-        if tstamp == "":
-            tstamp = Utils.timestamp()
-        self.modified = tstamp
-        # print("fragment view", self.fragment.name,"modified", tstamp)
-        self.project_view.notifyModified(tstamp)
-    '''
-
     def calculateSqCm(self):
         # project_view is None if self.fragment is a working fragment
         # of a TrglFragment
@@ -1065,29 +958,6 @@ class FragmentView(BaseFragmentView):
         sqcm = BaseFragment.calculateSqCm(pts, simps, voxel_size_um)
         self.sqcm = sqcm
 
-    def oldCalculateSqCm(self):
-        if self.tri is None:
-            self.sqcm = 0.
-            return 0.
-        pts = self.fragment.gpoints
-        simps = self.tri.simplices
-        # need astype, otherwise does integer arithmetic,
-        # which overflows and goes negative at 2^31
-        v0 = pts[simps[:,0]].astype(np.float64)
-        v1 = pts[simps[:,1]].astype(np.float64)
-        v2 = pts[simps[:,2]].astype(np.float64)
-        v01 = v1-v0
-        v02 = v2-v0
-        norm = np.cross(v01, v02)
-        normsq = np.sum(norm*norm, axis=1)
-        voxel_size_um = self.project_view.project.voxel_size_um
-        # if np.isnan(np.sum(np.sqrt(normsq))):
-        #     print("problem", normsq, norm)
-        area_sq_mm_trg = np.sum(np.sqrt(normsq))*voxel_size_um*voxel_size_um/(2*1000000)
-        self.sqcm = area_sq_mm_trg/100.
-        # print(self.fragment.name, self.sqcm, "sq cm")
-        return self.sqcm
-
     def clearCaches(self):
         self.oldzs = None
         self.oldtri = None
@@ -1097,35 +967,12 @@ class FragmentView(BaseFragmentView):
         self.prevZslice = -1
         self.prevZslicePts = None
 
-    '''
-    def setVolumeView(self, vol_view):
-        if vol_view == self.cur_volume_view:
-            return
-        self.cur_volume_view = vol_view
-        if vol_view is not None:
-            self.setLocalPoints(False)
-    '''
-
     def aligned(self):
         if self.cur_volume_view is None:
             return False
         if self.cur_volume_view.direction != self.fragment.direction:
             return False
         return True
-
-    '''
-    def activeAndAligned(self):
-        if not self.active:
-            return False
-        return self.aligned()
-    '''
-
-    '''
-    # direction is not used here, but this notifies fragment view
-    # to recompute things
-    def setVolumeViewDirection(self, direction):
-        self.setLocalPoints(False)
-    '''
 
     # recursion_ok determines whether to call setLocalPoints in
     # "echo" fragments.  But this is safe to call only if all
@@ -1279,9 +1126,6 @@ class FragmentView(BaseFragmentView):
     def hideSkinnyTriangles(self):
         return FragmentView.hide_skinny_triangles
 
-    # def minRoundness(self):
-    #     return FragmentView.min_roundness
-
     def interpAndFilter(self, interp_method, tri):
         # print("wrapper", self.hideSkinnyTriangles())
         def interp(pts):
@@ -1322,11 +1166,7 @@ class FragmentView(BaseFragmentView):
         timer.time("triangulate")
         if not do_update:
             return
-        '''
-        changed_pts_idx = np.zeros((0,), dtype=np.int32)
-        added_trgls_idx = np.zeros((0,), dtype=np.int32)
-        deleted_trgls_idx = np.zeros((0,), dtype=np.int32)
-        '''
+
         # If changed_rect is set to a rectangle rather than
         # None, it will be used as the bounds of the area
         # to be updated.
@@ -1432,163 +1272,6 @@ class FragmentView(BaseFragmentView):
             if not Utils.rectIsValid(changed_rect):
                 return
 
-
-            # TODO Old code; delete once new code is verified
-            """
-
-            # print("diffing")
-            oldpts = oldtri.points
-            newpts = self.tri.points
-            # if points were added or deleted, look for changed
-            # trgls rather than the added/deleted point
-            if len(oldpts) == len(newpts):
-                # print("a0")
-                # print(self.fpoints.shape, self.oldzs.shape, oldpts.shape, newpts.shape)
-                # idx = (newpts[:,None]!=oldpts).any(-1).all(1)
-                # changed_pts_idx = idx.nonzero()[0]
-                changed_pts_idx = Utils.setDiff2DIndex(newpts, oldpts)
-                # print("a1", changed_pts_idx.shape)
-                # deleted_pts_idx = (oldpts[:,None]!=newpts).any(-1).all(1)
-                # if len(nz) > 0:
-                #     print("pts changed", nz)
-                #     print(newpts[idx])
-                if len(changed_pts_idx) == 0:
-                    newzs = self.fpoints[:,2]
-                    oldzs = self.oldzs
-                    idx = (newzs!=oldzs)
-                    changed_pts_idx = idx.nonzero()[0]
-                    # nz = idx.nonzero()[0]
-                    # if len(nz) > 0:
-                    #     print("zs changed", nz)
-                    #     print(newzs[idx])
-
-            # print("b")
-            # For each simplex (triangle), sort the point
-            # indices in ascending order, so that old and new
-            # triangulations can more easily be compared.
-            # NOTE that the sorting means that the resulting
-            # triangles may not have the correct orientation
-            oldtris = np.sort(oldtri.simplices)
-            newtris = np.sort(self.tri.simplices)
-            # For each triangle, replace each point index by the
-            # point xy values.  The xy values, rather than the indices,
-            # will be used to compare triangulations, because
-            # the indices will change whenever a point is deleted.
-            oldtrixys = oldtri.points[oldtris].reshape(-1,6)
-            newtrixys = self.tri.points[newtris].reshape(-1,6)
-            # print("trixy", oldtris.shape, oldtri.points[oldtri.simplices].shape, oldtrixys.shape)
-            # print(oldtri.simplices[:5])
-            # print(oldtris[:5])
-            # print(self.tri.simplices[:5])
-            # print(newtris[:5])
-            # idx = (newtris[:,None]!=oldtris).any(-1).all(1)
-            # NOTE that this is an index into newtris
-            # added_trgls_idx = idx.nonzero()[0]
-            # added_trgls_idx = Utils.setDiff2DIndex(newtris, oldtris)
-            added_trgls_idx = Utils.setDiff2DIndex(newtrixys, oldtrixys)
-            # print("d", added_trgls_idx.shape)
-            # idx = (oldtris[:,None]!=newtris).any(-1).all(1)
-            # NOTE that this is an index into oldtris
-            # and that oldtris uses old vertex numbering
-            # deleted_trgls_idx = idx.nonzero()[0]
-            # deleted_trgls_idx = Utils.setDiff2DIndex(oldtris, newtris)
-            deleted_trgls_idx = Utils.setDiff2DIndex(oldtrixys, newtrixys)
-            # print("f", deleted_trgls_idx.shape)
-            # if len(nz) > 0:
-            # print("idx sum", np.sum(idx))
-            #     print("tris changed", nz)
-            #     print(newtris[idx])
-
-            print("changes", self.fragment.name, len(added_trgls_idx), len(deleted_trgls_idx), len(changed_pts_idx))
-            '''
-            If more than one point changed, recompute everywhere!
-            If one point changed in x,y, or z and trgls did
-            not, update neighborhood only.  (point, surrounding
-            trgls, and trgls surrounding the vertices of these
-            trgls).
-            If trgls changed, updated neighborhoods of old and
-            new triangle.
-            '''
-            if len(added_trgls_idx) == 0 and len(deleted_trgls_idx) == 0 and len(changed_pts_idx) == 1:
-                node_idx = changed_pts_idx[0]
-                # print("node",node_idx,"changed")
-                nidxs = self.nodeNeighbors(self.tri, node_idx)
-                # print("neighbors", nidxs)
-                nnidxs = self.nodesNeighbors(self.tri, nidxs)
-                # print("next neighbors", nnidxs)
-                (ominx, ominy), (omaxx, omaxy) = self.nodesBoundingBox(oldtri, nnidxs)
-                # print("o",ominx, ominy, omaxx, omaxy)
-                (nminx, nminy), (nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nnidxs)
-                # print("n",nminx, nminy, nmaxx, nmaxy)
-                minx = min(ominx, nminx)
-                miny = min(ominy, nminy)
-                maxx = max(omaxx, nmaxx)
-                maxy = max(omaxy, nmaxy)
-                changed_rect = (minx, miny), (maxx, maxy)
-                print("v changed_rect", changed_rect)
-
-            elif len(changed_pts_idx) <= 1 and (len(added_trgls_idx) > 0 or len(deleted_trgls_idx) > 0):
-                # print(oldtri.simplices[:5])
-                # print(oldtris[:5])
-                # print(oldtrixys[:5].round(decimals=3))
-                # print(deleted_trgls_idx[:5])
-                # print(oldtris[deleted_trgls_idx[:5]])
-                # print(self.tri.simplices[:5])
-                # print(newtris[:5])
-                # print(newtrixys[:5].round(decimals=3))
-                # print(added_trgls_idx[:5])
-                # print(newtris[added_trgls_idx[:5]])
-
-                print("t0",len(changed_pts_idx), len(added_trgls_idx), len(deleted_trgls_idx))
-                # print(np.sort(oldtris[deleted_trgls_idx], axis=0))
-                # print(sorted(oldtris[deleted_trgls_idx].tolist()))
-                # print(sorted(newtris[added_trgls_idx].tolist()))
-                # print(oldtri.simplices[deleted_trgls_idx])
-                # print(oldtris[deleted_trgls_idx])
-                # print(deleted_trgls_idx)
-                # print(np.sort(newtris[added_trgls_idx], axis=0))
-                ovrts = self.trglsNeighborsVertices(oldtri, deleted_trgls_idx)
-                nvrts = self.trglsNeighborsVertices(self.tri, added_trgls_idx)
-                # print(len(ovrts), len(nvrts))
-                if len(nvrts) > 0:
-                    (nminx, nminy), (nmaxx, nmaxy) = self.nodesBoundingBox(self.tri, nvrts)
-                    # print("n", nminx, nminy, nmaxx, nmaxy)
-                if len(ovrts) > 0:
-                    (ominx, ominy), (omaxx, omaxy) = self.nodesBoundingBox(oldtri, ovrts)
-                    # print("o", ominx, ominy, omaxx, omaxy)
-                if len(ovrts) == 0:
-                    minx = nminx
-                    miny = nminy
-                    maxx = nmaxx
-                    maxy = nmaxy
-                elif len(nvrts) == 0:
-                    minx = ominx
-                    miny = ominy
-                    maxx = omaxx
-                    maxy = omaxy
-                else:
-                    minx = min(ominx, nminx)
-                    miny = min(ominy, nminy)
-                    maxx = max(omaxx, nmaxx)
-                    maxy = max(omaxy, nmaxy)
-                if len(changed_pts_idx) == 1:
-                    node_idx = changed_pts_idx[0]
-                    nidxs = self.nodeNeighbors(self.tri, node_idx)
-                    nnidxs = self.nodesNeighbors(self.tri, nidxs)
-                    (vminx, vminy), (vmaxx, vmaxy) = self.nodesBoundingBox(self.tri, nnidxs)
-                    # print("v", vminx, vminy, vmaxx, vmaxy)
-                    minx = min(minx, vminx)
-                    miny = min(miny, vminy)
-                    maxx = max(maxx, vmaxx)
-                    maxy = max(maxy, vmaxy)
-                changed_rect = (minx, miny), (maxx, maxy)
-                print("t changed_rect", changed_rect)
-            elif len(changed_pts_idx) == 0 and len(added_trgls_idx) == 0 and len(deleted_trgls_idx) == 0:
-                # self.oldzs = None
-                print("found 0 0 0")
-                return
-            """
-
             if changed_rect is not None:
                 (minx, miny), (maxx, maxy) = changed_rect
                 if minx >= maxx or miny >= maxy:
@@ -1606,19 +1289,6 @@ class FragmentView(BaseFragmentView):
                     maxy = int(min(maxy+1, nj))
                     changed_rect = (minx, miny), (maxx, maxy)
 
-        '''
-        if self.tri is not None:
-            minx, miny, maxx, maxy = self.nodesBoundingBox(self.tri, None)
-            nk,nj,ni = self.cur_volume_view.trshape
-            # if self.fragment.direction != self.cur_volume_view.direction:
-            if not self.aligned():
-                ni,nj,nk = nk,nj,ni
-            minx = int(max(minx-1, 0))
-            miny = int(max(miny-1, 0))
-            maxx = int(min(maxx+1, ni))
-            maxy = int(min(maxy+1, nj))
-            frag_rect = (minx, miny, maxx, maxy)
-        '''
         '''
         if changed_rect is None and frag_rect is not None:
             print("frag rect", frag_rect)
@@ -1915,145 +1585,6 @@ class FragmentView(BaseFragmentView):
             self.prevZslice = vaxisPosition
             self.prevZslicePts = pts
             return pts
-            
-            
-
-    # TODO: can be deleted
-
-    # returns zsurf points, as array of [ipos, jpos] values
-    # for the slice with the given axis and axis position
-    # (axis and position relative to volume-view axes)
-    def old_getZsurfPoints(self, vaxis, vaxisPosition):
-        if self.zsurf is None:
-            return
-        # if self.fragment.direction == self.cur_volume_view.direction:
-        if self.aligned():
-            nk,nj,ni = self.cur_volume_view.trshape
-            if vaxis == 0:
-                ivec = np.arange(nj)
-                jvec = self.zsurf[:,vaxisPosition]
-                pts = np.array((ivec,jvec)).transpose()
-                # print(pts.shape)
-                pts = pts[~np.isnan(pts[:,1])]
-                # print(pts.shape)
-                return pts
-            elif vaxis == 1:
-                ivec = np.arange(ni)
-                jvec = self.zsurf[vaxisPosition, :]
-                # print(self.cur_volume_view.trdata.shape, pts.shape, self.zsurf.shape)
-                # print(pts.shape)
-                pts = np.array((ivec,jvec)).transpose()
-                pts = pts[~np.isnan(pts[:,1])]
-                return pts
-            else:
-                # The so-called z slice is a relatively expensive
-                # operation, and should not be performed unless "z"
-                # or the zsurf has changed.  So cache the results.
-                if self.prevZslicePts is not None and self.prevZslice == vaxisPosition:
-                    return self.prevZslicePts
-                # timer = Utils.Timer(False)
-                # pts = np.indices((nj, ni))
-                # timer.time(" indices")
-                # print(pts.shape, self.zsurf.shape)
-                frag_rect = self.computeFragRect()
-                if frag_rect is not None:
-                    minx, miny, maxx, maxy = frag_rect
-                    # print(self.fragment.name,minx,miny,maxx,maxy)
-                    nx = maxx-minx
-                    ny = maxy-miny
-                    # pts = np.indices((nx, ny))
-                    pts = np.indices((ny, nx))
-                    pts[0,:,:] += int(miny)
-                    pts[1,:,:] += int(minx)
-                    # print("shape pts",pts.shape)
-                    # print(pts.shape, nx, ny)
-                    # pts = pts[:, np.rint(self.zsurf[minx:maxx,miny:maxy])==vaxisPosition].transpose()
-                    pts = pts[:, np.rint(self.zsurf[miny:maxy,minx:maxx])==vaxisPosition].transpose()
-                    # pts = pts.transpose()
-                    # print("shape pts",pts.shape)
-                    # if len(pts) == 0:
-                    #     return None
-                    pts = pts[:,(1,0)]
-                    # print("len pts",len(pts), pts.shape)
-                else:
-                    pts = None
-                # rint = np.rint(self.zsurf)
-                # rint = self.zsurf.astype(np.int32)
-                # timer.time(" rint")
-                # ptb = (rint == vaxisPosition)
-                # timer.time(" bool")
-                # pts = pts[:, ptb]
-                # timer.time(" select")
-                # pts = pts.transpose()
-                # timer.time(" transpose")
-                # print(pts.shape)
-                # pts = pts[:,(1,0)]
-                # timer.time(" pts swap")
-                # print(pts.shape)
-                self.prevZslice = vaxisPosition
-                self.prevZslicePts = pts
-                return pts
-        else:
-            vnk,vnj,vni = self.cur_volume_view.trshape
-            fni,fnj,fnk = vnk,vnj,vni
-            if vaxis == 0: # faxis = 2
-                # The so-called z slice is a relatively expensive
-                # operation, and should not be performed unless "z"
-                # or the zsurf has changed.  So cache the results.
-                if self.prevZslicePts is not None and self.prevZslice == vaxisPosition:
-                    return self.prevZslicePts
-                frag_rect = self.computeFragRect()
-                '''
-                if frag_rect is not None:
-                    minx, miny, maxx, maxy = frag_rect
-                    print(self.fragment.name,minx,miny,maxx,maxy)
-                '''
-                if frag_rect is not None:
-                    minx, miny, maxx, maxy = frag_rect
-                    # print(self.fragment.name,minx,miny,maxx,maxy)
-                    nx = maxx-minx
-                    ny = maxy-miny
-                    # pts = np.indices((nx, ny))
-                    pts = np.indices((ny, nx))
-                    pts[0,:,:] += int(miny)
-                    pts[1,:,:] += int(minx)
-                    # print("shape pts",pts.shape)
-                    # print(pts.shape, nx, ny)
-                    # pts = pts[:, np.rint(self.zsurf[minx:maxx,miny:maxy])==vaxisPosition].transpose()
-                    pts = pts[:, np.rint(self.zsurf[miny:maxy,minx:maxx])==vaxisPosition].transpose()
-                    # pts = pts.transpose()
-                    # print("shape pts",pts.shape)
-                    # if len(pts) == 0:
-                    #     return None
-                    # pts = pts[:,(1,0)]
-                    # print("len pts",len(pts), pts.shape)
-                else:
-                    pts = None
-                '''
-                pts = np.indices((fnj, fni))
-                print(fni,fnj,fnk)
-                # print(self.cur_volume_view.trshape, pts.shape, self.zsurf.shape)
-                pts = pts[:, np.rint(self.zsurf)==vaxisPosition].transpose()
-                # print(pts.shape)
-                # print(pts)
-                '''
-                self.prevZslice = vaxisPosition
-                self.prevZslicePts = pts
-                return pts
-            if vaxis == 1: # faxis = 1
-                ivec = np.arange(fni)
-                jvec = self.zsurf[vaxisPosition, :]
-                pts = np.array((jvec,ivec)).transpose()
-                pts = pts[~np.isnan(pts[:,0])]
-                return pts
-            else: # faxis = 0
-                ivec = np.arange(fnj)
-                jvec = self.zsurf[:,vaxisPosition]
-                pts = np.array((jvec,ivec)).transpose()
-                # print(pts.shape)
-                pts = pts[~np.isnan(pts[:,0])]
-                # print(pts.shape)
-                return pts
 
     def triangulate(self):
         self.tri = None
@@ -2062,7 +1593,6 @@ class FragmentView(BaseFragmentView):
         if self.fpoints.shape[0] <= 1:
             return
 
-       
         # check if points all lie on the same line, parallel
         # to one of the axes
         iuniques = len(np.unique(self.fpoints[:,0]))
@@ -2116,76 +1646,12 @@ class FragmentView(BaseFragmentView):
             print("qhull error", str(err))
             self.tri = None
 
-    def triangulate_old(self):
-        nppoints = self.fpoints[:,0:2]
-        if self.fpoints.shape[0] == 0:
-            self.tri = None
-            self.line = None
-            self.lineAxis = -1
-            return
-
-        try:
-            self.line = None
-            self.lineAxis = -1
-            # Mathematicians hate this trick!
-            # For certain positions of points (for instance,
-            # if four or more points lie on the
-            # circumference of a circle), Delaunay
-            # triangulation has a non-unique solution.
-            # When successive calls to Delaunay() return
-            # different (yet still valid) triangulations of the
-            # same points, this can force an unnecessary and
-            # time-consuming recomputation of zsurf.  To make
-            # non-unique solutions less likely, shift each point
-            # by a tiny but determinate (non-random) amount, based on
-            # the point's location (can't use the index, because indices
-            # change whenever a point is deleted).
-            # Side effect: self.tri.points is based on shifted_nppoints
-            # rather than on nppoints (fpoints), which may cause unexpected
-            # behavior in code that is unaware of this shift.
-            shifted_nppoints = nppoints.copy().astype(dtype=np.float64)
-            # ind = np.arange(shifted_nppoints.shape[0], dtype=np.int32)
-            ind = (nppoints[:,0]*1019+nppoints[:,1]*1013).astype(np.int64)
-            eps = 1./(1024*1024)
-            # 503, 509, 1013 and 1019 are prime
-            shifted_nppoints[:,0] += eps*np.remainder(ind, 503)
-            shifted_nppoints[:,1] += eps*np.remainder(ind, 509)
-
-            self.tri = Delaunay(shifted_nppoints)
-            # Can't do this!  self.tri.points cannot be reset
-            # self.tri.points = nppoints
-        except QhullError as err:
-            # print("qhull error")
-            self.tri = None
-            if self.fpoints.shape[0] > 1:
-                # self.fpoints is addressed by:
-                # pts[pt #, (i,j,depth)]
-                self.lineAxis = -1
-                iuniques = len(np.unique(self.fpoints[:,0]))
-                juniques = len(np.unique(self.fpoints[:,1]))
-                if iuniques == 1 and juniques > 1:
-                    # points share a common i value
-                    self.lineAxis = 0
-                elif juniques == 1 and iuniques > 1:
-                    # points share a common j value
-                    self.lineAxis = 1
-                if self.lineAxis >= 0:
-                    self.lineAxisPosition = int(self.fpoints[0,self.lineAxis])
-                    self.line = self.fpoints[:, (1-self.lineAxis, 2, 3)]
-                    # print("sl1",self.line)
-                    self.line = self.line[self.line[:,0].argsort()]
-                    # print(self.lineAxis, self.lineAxisPosition)
-                    # print(self.fpoints)
-                    # print("sl1",self.line)
-
-
     def getPointsOnSlice(self, axis, i):
         # matches = self.vpoints[(self.vpoints[:, axis] == i)]
         matches = self.vpoints[(self.vpoints[:, axis] >= i-.5) & (self.vpoints[:, axis] < i+.5)]
         return matches
 
     def vijkToFijk(self, vijk):
-        # if self.cur_volume_view.direction == self.fragment.direction:
         if self.aligned():
             fijk = vijk
         else:
@@ -2193,7 +1659,6 @@ class FragmentView(BaseFragmentView):
         return fijk
 
     def fijkToVijk(self, fijk):
-        # if self.cur_volume_view.direction == self.fragment.direction:
         if self.aligned():
             vijk = fijk
         else:
@@ -2239,12 +1704,6 @@ class FragmentView(BaseFragmentView):
         self.setLocalPoints(True, False)
 
     def workingTrgls(self):
-        '''
-        if self.tri is None or len(self.tri.simplices) == 0:
-            return None
-        else:
-            return self.tri.simplices
-        '''
         return self.working_trgls
 
     def hasWorkingNonWorking(self):
@@ -2263,57 +1722,6 @@ class FragmentView(BaseFragmentView):
         if self.tri is None:
             return None
         return self.tri.simplices
-
-    '''
-    def normals(self):
-        self.triangulate()
-        trgls = self.trgls()
-        if trgls is None:
-            return
-        # if self.tri is None or len(self.tri.simplices) == 0:
-        #     return None
-        # zpts = self.fpoints[:,2]
-        # pts3d = np.append(self.tri.points, zpts.reshape(-1,1), axis=1)
-        pts3d = self.fpoints[:3]
-        # print("n",self.tri.points.shape, zpts.shape, pts3d.shape)
-        trgl
-        v0 = trgls[:,0]
-        v1 = trgls[:,1]
-        v2 = trgls[:,2]
-        d01 = pts3d[v1] - pts3d[v0]
-        d02 = pts3d[v2] - pts3d[v0]
-        n3d = np.cross(d01, d02)
-        ptn3d = np.zeros((len(pts3d), 3), np.float32)
-        ptn3d[v0] += n3d
-        ptn3d[v1] += n3d
-        ptn3d[v2] += n3d
-        l2 = np.sqrt(np.sum(ptn3d*ptn3d, axis=1)).reshape(-1,1)
-        l2[l2==0] = 1.
-        ptn3d /= l2
-        return ptn3d
-
-    def moveAlongNormals(self, step):
-        ns = self.normals()
-        if ns is None:
-            print("No normals found")
-            return
-        # print("man", self.fpoints.shape, ns.shape)
-        # fpoints has 4 elements; the 4th is the index
-        self.fpoints[:, :3] += step*ns
-        self.fragment.gpoints = self.cur_volume_view.volume.transposedIjksToGlobalPositions(self.fpoints, self.fragment.direction)
-        self.fragment.notifyModified()
-        self.setLocalPoints(True)
-
-    def moveInK(self, step):
-        # if len(self.fpoints) > 0:
-        #     print("before", self.fragment.gpoints[0], self.fpoints[0])
-        self.fpoints[:,2] += step
-        self.fragment.gpoints = self.cur_volume_view.volume.transposedIjksToGlobalPositions(self.fpoints, self.fragment.direction)
-        # if len(self.fpoints) > 0:
-        #     print("after", self.fragment.gpoints[0], self.fpoints[0])
-        self.fragment.notifyModified()
-        self.setLocalPoints(True)
-    '''
 
     # return True if succeeds, False if fails
     def movePoint(self, index, new_vijk):
