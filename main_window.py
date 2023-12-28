@@ -470,10 +470,10 @@ class TrackingCursorsVisibleCheckBox(QCheckBox):
         # so no use to check it
         # self.setChecked(state)
         self.stateChanged.connect(self.onStateChanged)
-        self.name = "tracking_cursors"
-        self.class_name = "show"
-        self.setChecked(main_window.draw_settings[self.name][self.class_name])
-        main_window.draw_settings_widgets[self.name][self.class_name] = self
+        self.setting = "tracking_cursors"
+        self.param = "show"
+        self.setChecked(main_window.draw_settings[self.setting][self.param])
+        main_window.draw_settings_widgets[self.setting][self.param] = self
 
     def onStateChanged(self, s):
         # self.main_window.setVolBoxesVisible(s==Qt.Checked)
@@ -544,13 +544,13 @@ class ShiftClicksSpinBox(QSpinBox):
     def __init__(self, main_window, parent=None):
         super(ShiftClicksSpinBox, self).__init__(parent)
         self.main_window = main_window
-        self.name = "shift_clicks"
-        self.class_name = "count"
+        self.setting = "shift_clicks"
+        self.param = "count"
         self.setMinimum(0)
         self.setMaximum(2)
-        self.setValue(main_window.draw_settings[self.name][self.class_name])
+        self.setValue(main_window.draw_settings[self.setting][self.param])
         self.valueChanged.connect(self.onValueChanged, Qt.QueuedConnection)
-        main_window.draw_settings_widgets[self.name][self.class_name] = self
+        main_window.draw_settings_widgets[self.setting][self.param] = self
 
     def onValueChanged(self, value):
         self.main_window.setShiftClicksCount(value)
@@ -563,16 +563,16 @@ class WidthSpinBox(QSpinBox):
     def __init__(self, main_window, name, parent=None):
         super(WidthSpinBox, self).__init__(parent)
         self.main_window = main_window
-        self.name = name
-        self.class_name = "width"
+        self.setting = name
+        self.param = "width"
         self.setMinimum(0)
         self.setMaximum(10)
-        self.setValue(main_window.draw_settings[self.name][self.class_name])
+        self.setValue(main_window.draw_settings[self.setting][self.param])
         self.valueChanged.connect(self.onValueChanged, Qt.QueuedConnection)
-        main_window.draw_settings_widgets[self.name][self.class_name] = self
+        main_window.draw_settings_widgets[self.setting][self.param] = self
 
     def onValueChanged(self, value):
-        self.main_window.setDrawSettingsValue(self.name, self.class_name, value)
+        self.main_window.setDrawSettingsValue(self.setting, self.param, value)
         self.lineEdit().deselect()
 
     def updateValue(self, value):
@@ -582,22 +582,22 @@ class OpacitySpinBox(QDoubleSpinBox):
     def __init__(self, main_window, name, parent=None):
         super(OpacitySpinBox, self).__init__(parent)
         self.main_window = main_window
-        self.name = name
-        self.class_name = "opacity"
+        self.setting = name
+        self.param = "opacity"
         self.setMinimum(0.0)
         self.setMaximum(1.0)
         self.setDecimals(1)
         self.setSingleStep(0.1)
-        self.setValue(main_window.draw_settings[name][self.class_name])
+        self.setValue(main_window.draw_settings[name][self.param])
         self.valueChanged.connect(self.onValueChanged, Qt.QueuedConnection)
-        main_window.draw_settings_widgets[self.name][self.class_name] = self
+        main_window.draw_settings_widgets[self.setting][self.param] = self
 
     def onValueChanged(self, value):
         rvalue = round(value*10)/10.
         if rvalue != value:
             # print("rvalue",rvalue,"!=","value",value)
             self.setValue(rvalue)
-        self.main_window.setDrawSettingsValue(self.name, self.class_name, rvalue)
+        self.main_window.setDrawSettingsValue(self.setting, self.param, rvalue)
         self.lineEdit().deselect()
 
     def updateValue(self, value):
@@ -607,15 +607,15 @@ class ApplyOpacityCheckBox(QCheckBox):
     def __init__(self, main_window, name, enabled, parent=None):
         super(ApplyOpacityCheckBox, self).__init__(parent)
         self.main_window = main_window
-        self.name = name
-        self.class_name = "apply_opacity"
-        self.setChecked(main_window.draw_settings[self.name][self.class_name])
+        self.setting = name
+        self.param = "apply_opacity"
+        self.setChecked(main_window.draw_settings[self.setting][self.param])
         self.setEnabled(enabled)
         self.stateChanged.connect(self.onStateChanged)
-        main_window.draw_settings_widgets[self.name][self.class_name] = self
+        main_window.draw_settings_widgets[self.setting][self.param] = self
 
     def onStateChanged(self, s):
-        self.main_window.setDrawSettingsValue(self.name, self.class_name, s==Qt.Checked)
+        self.main_window.setDrawSettingsValue(self.setting, self.param, s==Qt.Checked)
 
     def updateValue(self, value):
         self.setChecked(value)
@@ -1185,10 +1185,10 @@ class MainWindow(QMainWindow):
 
     def setDrawSettingsToDefaults(self):
         ndict = {}
-        for key,value in self.draw_settings_defaults.items():
-            if key in ["tracking_cursors", "shift_clicks"]:
+        for param,value in self.draw_settings_defaults.items():
+            if param in ["tracking_cursors", "shift_clicks"]:
                 continue
-            self.draw_settings[key] = copy.deepcopy(value)
+            self.draw_settings[param] = copy.deepcopy(value)
         # self.draw_settings = copy.deepcopy(MainWindow.draw_settings_defaults)
         self.updateDrawSettingsWidgets()
         self.settingsSaveDrawSettings()
@@ -1200,12 +1200,12 @@ class MainWindow(QMainWindow):
         self.drawSlices()
 
     def updateDrawSettingsWidgets(self):
-        for class_name, class_dict in self.draw_settings.items():
-            for name, value in class_dict.items():
-                dc = self.draw_settings_widgets.get(class_name, None)
+        for setting_name, setting in self.draw_settings.items():
+            for param, value in setting.items():
+                dc = self.draw_settings_widgets.get(param, None)
                 if dc is None: 
                     continue
-                widget = dc.get(name, None)
+                widget = dc.get(param, None)
                 if not isinstance(widget, QWidget):
                     continue
                 widget.updateValue(value)
