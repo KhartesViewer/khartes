@@ -77,7 +77,6 @@ def load_tif(path):
             new_indices.append(new_index)
         images.indices = new_indices
         images.shape=(maxy+1,maxx+1,maxz+1)
-        # images.shape=(maxz+1,maxx+1,maxy+1)
         store = images.aszarr(axestiled={0: 1, 1: 2, 2: 0}, fillvalue=0)
 
     stack_array = zarr.open(store, mode="r")
@@ -136,10 +135,8 @@ class TransposedDataView():
         shape = self.data.shape
         if self.direction == 0:
             return (shape[2], shape[0], shape[1])
-            # return (shape[1], shape[0], shape[2])
         elif self.direction == 1:
             return (shape[1], shape[0], shape[2])
-            # return (shape[2], shape[0], shape[1])
 
     # Two steps:
     # First, select the data from the original data cube
@@ -157,8 +154,8 @@ class TransposedDataView():
             s1, s0, s2 = selection
 
         # convert integer selections into slices;
-        # data[] will "squeeze" (remove)
-        # all integer selections, which would
+        # the data[] call "squeezes" (removes)
+        # all axes that have integer selections, which would
         # cause the transpose to fail because the array
         # would have fewer dimensions than expected
         alls = []
@@ -262,7 +259,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             # Note that this blocks the calling program until
             # the data has been read.
             # wait_for_data = False means submit the request
-            # to the thread pool.
+            # to the thread pool, then return.
             wait_for_data = False
             if self.immediate_data_mode:
                 wait_for_data = True
@@ -283,7 +280,6 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                 if key in self.zero_vols or key in self.submitted:
                     # this tells the caller to treat the current
                     # chunk as all zeros
-                    # raise KeyError(key)
                     raise_error = True
                 if key not in self.zero_vols:
                     self.nz_misses += 1
@@ -293,7 +289,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                     # the add() operation is protected by the _mutex
                     self.submitted.add(key)
                 # print("submitted",self.submitted)
-            # the "if wait_for_data" clause ignores whether
+            # the "if wait_for_data" clause below ignores whether
             # raise_error has been set.  This is intentional;
             # if wait_for_data is set, hand all control to
             # the getValue call, and let it decide for 
@@ -318,7 +314,8 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
     def cacheValue(self, key, value):
         with self._mutex:
             self.misses += 1
-            # need to check if key is not in the cache, as it may have been cached
+            # need to check if key is not in the cache, as it 
+            # may have been cached
             # while we were retrieving the value from the store
             if key not in self._values_cache:
                 # print("pv caching",key)
@@ -424,10 +421,8 @@ class CachedZarrVolume():
         shape = self.shape
         if direction == 0:
             return (shape[2], shape[0], shape[1])
-            # return (shape[1], shape[0], shape[2])
         else:
             return (shape[1], shape[0], shape[2])
-            # return (shape[2], shape[0], shape[1])
 
     @staticmethod
     def createErrorVolume(error):
@@ -477,7 +472,6 @@ class CachedZarrVolume():
             ds_directory,
             ds_directory_name,
             name,
-            # max_width=150,
             max_width=240,
         ):
         """
@@ -830,6 +824,7 @@ class CachedZarrVolume():
         arr = []
         for i in range(3):
             # Note we reverse the indices here
+            # because arr is in ijk order, but shape is in kji order
             arr.append([0, self.data.shape[2 - i]])
         return arr
 
@@ -862,6 +857,7 @@ class CachedZarrVolume():
     def getSliceBounds(self, axis, ijkt, direction):
         idxi, idxj = self.ijIndexesInPlaneOfSlice(axis)
         shape = self.trdatas[direction].shape
+        # shape is in kji order
         ni = shape[2-idxi]
         nj = shape[2-idxj]
 
@@ -946,10 +942,9 @@ class CachedZarrVolume():
         il, jl = self.ijIndexesInPlaneOfSlice(axis)
         fi, fj = ijkt[il], ijkt[jl]
         # slice width, height
+        # shape is in kji order 
         sw = data.shape[2-il]
         sh = data.shape[2-jl]
-        # sw = data.shape[il]
-        # sh = data.shape[jl]
         # print("sw,sh",z,il,jl,fi,fj,sw,sh)
         # print(axis, scale, sw, sh)
         zsw = max(int(z*sw), 1)
@@ -980,31 +975,6 @@ class CachedZarrVolume():
             cx2 = int(whw+z*(bsx2-fi))
             cy2 = int(whh+z*(bsy2-fj))
         # print("c", ((cx1,cy1),(cx2,cy2)))
-
-        '''
-        # max_width is used if the zarr data set is single-resolution
-        # rather than multi-resolution; in this case only  a limited
-        # window of the data should be shown, to avoid loading a
-        # huge number of chunks whenever the user zooms out.
-        if max_width > 0:
-            # mx1 etc specify the corners of the limited
-            # data window; note that these may actually lie
-            # outside of the data slice
-            mx1 = int(whw-z*max_width)
-            my1 = int(whh-z*max_width)
-            mx2 = int(whw+z*max_width)
-            my2 = int(whh+z*max_width)
-            # perform an intersection to find the part of the
-            # data window that lies inside the data slice
-            ri = Utils.rectIntersection(
-                    ((ax1,ay1),(ax2,ay2)), ((mx1,my1),(mx2,my2)))
-            if ri is None:
-                return True
-            # cx1 etc are the lower left corner of the limited
-            # data window, which has been intersected with the
-            # rectangle of the original data slice
-            (cx1,cy1),(cx2,cy2) = ri
-        '''
 
         # locations of upper left and lower right corners of drawing window
         bx1 = 0
@@ -1098,19 +1068,6 @@ class CachedZarrVolume():
 
     def ijIndexesInPlaneOfSlice(self, axis):
         return ((1,2), (0,2), (0,1))[axis]
-
-    '''
-    def ijInPlaneOfSlice(self, axis, ijkt):
-        inds = self.ijIndexesInPlaneOfSlice(axis)
-        x, y = ijkt[inds[0]], ijkt[inds[1]]
-        return (min(x, self.max_width), min(y, self.max_width))
-
-    def ijCornerInPlaneOfSlice(self, axis, ijkt):
-        zij = self.ijInPlaneOfSlice(axis, ijkt)
-        inds = self.ijIndexesInPlaneOfSlice(axis)
-        rij = (ijkt[inds[0]], ijkt[inds[1]])
-        return(rij[0]-zij[0], rij[1]-zij[1])
-    '''
 
     def getSlices(self, ijkt, direction):
         depth = self.getSlice(2, ijkt, direction)

@@ -417,25 +417,7 @@ class CursorModeButton(QPushButton):
         super(CursorModeButton, self).__init__("", parent)
         self.main_window = main_window
         self.setCheckable(True)
-        '''
-        self.cross = QIcon(QCursor(Qt.CrossCursor).pixmap())
-        self.arrow = QIcon(QCursor(Qt.ArrowCursor).pixmap())
-        self.cross = self.style().standardIcon(QStyle.SP_MessageBoxCritical)
-        self.arrow = self.style().standardIcon(QStyle.SP_MessageBoxWarning)
-        '''
-        '''
-        self.cross = QIcon(QPixmap(":/crosshair.svg"))
-        svgr = QSvgRenderer(":/crosshair.svg")
-        image = QImage(64,64,QImage.Format_ARGB32)
-        image.fill(0x00000000)
-        svgr.render(QPainter(image))
-        pixmap = QPixmap.fromImage(image)
-        self.cross = QIcon(pixmap)
-        '''
-        # path = QApplication.applicationDirPath()
-        # path = QApplication.applicationDirPath()
         args = QCoreApplication.arguments()
-        # path = os.path.dirname(os.path.realpath(sys.argv[0]))
         path = os.path.dirname(os.path.realpath(args[0]))
         # print("path is", path, args[0])
         # crosshair.svg is from https://iconduck.com/icons/14824/crosshair
@@ -2684,6 +2666,9 @@ class MainWindow(QMainWindow):
 
     # This function slows down the pace of redraws 
     # initiated by zarr threads.
+    # This needs to be done when the user is panning the
+    # view, in order to keep the thread-initiated redraws
+    # from slowing down the pans.
     # This function is called from within drawSlice when the user is
     # using the mouse or keyboard to pan the view.  
     def zarrResetActiveTimer(self):
@@ -2702,8 +2687,9 @@ class MainWindow(QMainWindow):
     # a thread has finished loading a chunk.  This callback
     # is called from within that thread; the "emit" is used to
     # pass the callback to the Qt GUI thread.  Khartes code 
-    # is in general not thread-safe, so it should be 
-    # called only from within the Qt GUI thread.
+    # is in general not thread-safe, this "emit" technique is
+    # used to ensure that khartes code is called only
+    # from within the Qt GUI thread.
     def zarrFutureDoneCallback(self, key, has_data):
         # print(key, has_data)
         if has_data:

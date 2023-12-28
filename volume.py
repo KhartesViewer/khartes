@@ -43,17 +43,12 @@ class ColorSelectorDelegate(QtWidgets.QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         # print("ce", index.row())
         cb = QtWidgets.QPushButton(parent)
-        # cb.setFixedWidth()
         cb.setContentsMargins(5,5,5,5)
         cb.clicked.connect(lambda d: self.onClicked(d, cb, index))
-        # self.index = index
-        # self.push_button = cb
         return cb
 
     def onClicked(self, cb_index, push_button, model_index):
-        # self.table.model().setData(model_index, combo_box.currentText(), Qt.EditRole)
         old_color = push_button.palette().color(QtGui.QPalette.Window)
-        # old_color = push_button.palette().background().color()
         new_color = QtWidgets.QColorDialog.getColor(old_color, self.table)
         # print("old_color",old_color.name(),"new_color",new_color.name())
         if new_color.isValid() and new_color != old_color:
@@ -95,8 +90,6 @@ class DirectionSelectorDelegate(QtWidgets.QStyledItemDelegate):
         cb.addItem("X")
         cb.addItem("Y")
         cb.activated.connect(lambda d: self.onActivated(d, cb, index))
-        # self.index = index
-        # self.combo_box = cb
         return cb
 
     def onActivated(self, cb_index, combo_box, model_index):
@@ -122,35 +115,6 @@ class DirectionSelectorDelegate(QtWidgets.QStyledItemDelegate):
         # print("smd", editor.currentText())
         # do nothing, since onActivated handled it
         # model.setData(index, editor.currentText(), Qt.EditRole)
-
-    # def updateEditorGeometry(self, editor, option, index):
-    #     # print("ueg")
-    #     editor.setGeometry(option.rect)
-
-
-    '''
-    void ButtonColumnDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
-{
-    QPushButton button(index.data().toString());
-    button.setGeometry(option.rect);
-    painter->save();
-    painter->translate(option.rect.topLeft());
-    button.render(painter);
-    painter->restore();
-}
-    '''
-
-    '''
-    def paint(self, painter, option, index):
-        cb = QtWidgets.QComboBox()
-        cb.addItem("X")
-        cb.addItem("Y")
-        cb.setGeometry(option.rect)
-        painter.save()
-        painter.translate(option.rect.topLeft())
-        cb.render(painter)
-        painter.restore()
-    '''
 
 class VolumesModel(QtCore.QAbstractTableModel):
     def __init__(self, project_view, main_window):
@@ -289,10 +253,7 @@ tiff files is aligned with the slice vertical axes""",
         row = index.row()
         volumes = self.project_view.volumes
         volume = list(volumes.keys())[row]
-        # volume_view = volumes[volume]
         if self.project_view.cur_volume == volume:
-            # return QtGui.QColor('lightgray')
-            # return QtGui.QColor('beige')
             return QtGui.QColor(self.main_window.highlightedBackgroundColor())
 
     def dataDisplayRole(self, index, role):
@@ -305,12 +266,6 @@ tiff files is aligned with the slice vertical axes""",
         steps = volume.gijk_steps 
         sizes = volume.sizes
         selected = (self.project_view.cur_volume == volume)
-        # if column == 0:
-        #     if selected:
-        #         return Qt.Checked
-        #     else:
-        #         return Qt.Unchecked
-        #     # return selected
         if column == 1:
             return volume.name
         elif column == 2:
@@ -382,15 +337,6 @@ tiff files is aligned with the slice vertical axes""",
         return False
 
 
-    '''
-    def setProjectView(pv):
-        self.beginResetModel()
-        project_view = pv
-        self.endResetModel()
-    '''
-
-
-
 class VolumeView():
 
     def __init__(self, project_view, volume):
@@ -451,13 +397,6 @@ class VolumeView():
             self.ijktf = (ijk[2], ijk[1], ijk[0])
         self.direction = direction
         if self.volume.data is not None:
-            '''
-            if not self.volume.is_zarr:
-                self.trdata = self.volume.trdatas[direction]
-                self.trshape = self.trdata.shape
-            else:
-                self.trshape = self.volume.trshape(direction)
-            '''
             self.trdata = self.volume.trdatas[direction]
             self.trshape = self.trdata.shape
             self.notifyModified()
@@ -466,13 +405,6 @@ class VolumeView():
             self.trdata = None
 
     def dataLoaded(self):
-        '''
-        if not self.volume.is_zarr:
-            self.trdata = self.volume.trdatas[self.direction]
-            self.trshape = self.trdata.shape
-        else:
-            self.trshape = self.volume.trshape(self.direction)
-        '''
         self.trdata = self.volume.trdatas[self.direction]
         self.trshape = self.trdata.shape
 
@@ -559,9 +491,6 @@ class VolumeView():
 
     def globalAxisFromTransposedAxis(self, axis):
         return self.volume.globalAxisFromTransposedAxis(axis, self.direction)
-
-    def getSliceHide(self, axis, ijkt):
-        return self.volume.getSliceHide(axis, ijkt, self.direction)
 
     def getSliceInRange(self, data, islice, jslice, k, axis):
         return self.volume.getSliceInRange(data, islice, jslice, k, axis)
@@ -1005,23 +934,6 @@ class Volume():
         else:
             return (0,2,1)[axis]
 
-    # it, jt, kt are ijk in transposed grid
-    # it (fast, axis 0) is inline coord
-    # jt (med, axis 1) is xline coord
-    # kt (slow, axis 2) is depth coord
-    # trdata is laid out in C style, so 
-    # value at it,ij,ik is indexed trdata[kt,jt,it]
-    def getSliceHide(self, axis, ijkt, direction):
-        (it,jt,kt) = ijkt
-        if axis == 2: # depth
-            return self.trdatas[direction][kt,:,:]
-        elif axis == 1: # xline
-            return self.trdatas[direction][:,jt,:]
-        else: # inline
-            return self.trdatas[direction][:,:,it]
-
-        return result
-
     def getSliceInRange(self, data, islice, jslice, k, axis):
         i, j = self.ijIndexesInPlaneOfSlice(axis)
         slices = [0]*3
@@ -1105,15 +1017,6 @@ class Volume():
 
     def ijIndexesInPlaneOfSlice(self, axis):
         return ((1,2), (0,2), (0,1))[axis]
-
-    '''
-    def ijInPlaneOfSlice(self, axis, ijkt):
-        inds = self.ijIndexesInPlaneOfSlice(axis)
-        return(ijkt[inds[0]], ijkt[inds[1]])
-
-    def ijCornerInPlaneOfSlice(self, axis, ijkt):
-        return (0,0)
-    '''
 
     def globalSlicePositionAlongAxis(self, axis, ijkt, direction):
         gi,gj,gk = self.transposedIjkToGlobalPosition(ijkt, direction)
