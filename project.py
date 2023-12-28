@@ -653,7 +653,7 @@ class Project:
             pv.alphabetizeVolumeViews()
 
     def addVolume(self, volume):
-        print(volume)
+        # print(volume)
         volume.setVoxelSizeUm(self.voxel_size_um)
         self.volumes.append(volume)
         for pv in self.project_views:

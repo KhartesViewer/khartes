@@ -1032,23 +1032,34 @@ class DataWindow(QLabel):
 
         ww = self.size().width()
         wh = self.size().height()
+        # ij* are corners of the viewing window, in data coordinates
         ij0 = self.xyToIj((0,0))
         ij1 = self.xyToIj((ww,wh))
         ijo0 = ij0
         ijo1 = ij1
-        z = self.getZoom()
-        # vol = volume.volume
-        # vol.setImmediateDataMode(True)
-        slc = volume.getSlice(self.axis, volume.ijktf)
-        # vol.setImmediateDataMode(False)
-        sw = slc.shape[1]
-        sh = slc.shape[0]
-        cij = volume.volume.ijCornerInPlaneOfSlice(self.axis, volume.ijktf)
-        s0 = cij
-        s1 = (s0[0]+sw,s0[1]+sh)
+        # add a margin of 32 pixels (in data coordinates)
         margin = 32
         ij0m = (ij0[0]-margin,ij0[1]-margin)
         ij1m = (ij1[0]+margin,ij1[1]+margin)
+        # z = self.getZoom()
+        # vol = volume.volume
+        # vol.setImmediateDataMode(True)
+        # slc = volume.getSlice(self.axis, volume.ijktf)
+        # vol.setImmediateDataMode(False)
+        rs = volume.getSliceBounds(self.axis, volume.ijktf)
+        if rs is None:
+            return
+        (sx1,sy1),(sx2,sy2) = rs
+        slc = volume.getSliceInRange(
+                volume.trdata, slice(sx1,sx2), slice(sy1,sy2),
+                volume.ijktf[self.axis], self.axis)
+        sw = slc.shape[1]
+        sh = slc.shape[0]
+        # cij = volume.volume.ijCornerInPlaneOfSlice(self.axis, volume.ijktf)
+        # s0 = cij
+        # s1 = (s0[0]+sw,s0[1]+sh)
+        s0 = (sx1,sy1)
+        s1 = (sx2,sy2)
         ri = Utils.rectIntersection((ij0m,ij1m), (s0,s1))
         if ri is None:
             return
@@ -1131,23 +1142,37 @@ class DataWindow(QLabel):
             return
         ww = self.size().width()
         wh = self.size().height()
+        # ij* are corners of the viewing window, in data coordinates
         ij0 = self.xyToIj((0,0))
         ij1 = self.xyToIj((ww,wh))
         ijo0 = ij0
         ijo1 = ij1
-        z = self.getZoom()
+        margin = 32
+        # add a margin of 32 pixels (in data coordinates)
+        ij0m = (ij0[0]-margin,ij0[1]-margin)
+        ij1m = (ij1[0]+margin,ij1[1]+margin)
+
+        # z = self.getZoom()
         # vol = volume.volume
         # vol.setImmediateDataMode(True)
-        slc = volume.getSlice(self.axis, volume.ijktf)
+        # slc = volume.getSlice(self.axis, volume.ijktf)
+        rs = volume.getSliceBounds(self.axis, volume.ijktf)
+        if rs is None:
+            return
+        (sx1,sy1),(sx2,sy2) = rs
+        slc = volume.getSliceInRange(
+                volume.trdata, slice(sx1,sx2), slice(sy1,sy2), 
+                volume.ijktf[self.axis], self.axis)
+        # print(volume.trdata.shape, rs, slc.shape, (ij0m,ij1m))
         # vol.setImmediateDataMode(False)
         sw = slc.shape[1]
         sh = slc.shape[0]
-        cij = volume.volume.ijCornerInPlaneOfSlice(self.axis, volume.ijktf)
-        s0 = cij
-        s1 = (s0[0]+sw,s0[1]+sh)
-        margin = 32
-        ij0m = (ij0[0]-margin,ij0[1]-margin)
-        ij1m = (ij1[0]+margin,ij1[1]+margin)
+        # cij = volume.volume.ijCornerInPlaneOfSlice(self.axis, volume.ijktf)
+        # s0 = cij
+        # s1 = (s0[0]+sw,s0[1]+sh)
+        s0 = (sx1,sy1)
+        s1 = (sx2,sy2)
+
         # print("s0,s1",s0,s1)
         ri = Utils.rectIntersection((ij0m,ij1m), (s0,s1))
         if ri is None:
@@ -1196,7 +1221,7 @@ class DataWindow(QLabel):
             print("no points")
             return
         # print("sparse pts", pts.shape)
-        # print (len(pts),"points returned")
+        print (len(pts),"points returned")
         pts[:,0] += ij0[0]
         pts[:,1] += ij0[1]
         # print("xs",pts[:,0])
@@ -1472,6 +1497,7 @@ into and out of the viewing plane.
         paint_result = volume.paintSlice(
                 out, self.axis, volume.ijktf, self.getZoom())
 
+        '''
         if not paint_result:
             slc = volume.getSlice(self.axis, volume.ijktf)
             # slice width, height
@@ -1525,6 +1551,7 @@ into and out of the viewing plane.
                 out[y1:y2, x1:x2] = zslc
     
                 timera.time("resize")
+        '''
         # timera.time("fit rect")
 
         # convert 16-bit (uint16) gray scale to 16-bit RGBX (X is like

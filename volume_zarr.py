@@ -77,6 +77,7 @@ def load_tif(path):
             new_indices.append(new_index)
         images.indices = new_indices
         images.shape=(maxy+1,maxx+1,maxz+1)
+        # images.shape=(maxz+1,maxx+1,maxy+1)
         store = images.aszarr(axestiled={0: 1, 1: 2, 2: 0}, fillvalue=0)
 
     stack_array = zarr.open(store, mode="r")
@@ -135,8 +136,10 @@ class TransposedDataView():
         shape = self.data.shape
         if self.direction == 0:
             return (shape[2], shape[0], shape[1])
+            # return (shape[1], shape[0], shape[2])
         elif self.direction == 1:
             return (shape[1], shape[0], shape[2])
+            # return (shape[2], shape[0], shape[1])
 
     # Two steps:
     # First, select the data from the original data cube
@@ -290,12 +293,17 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                     # the add() operation is protected by the _mutex
                     self.submitted.add(key)
                 # print("submitted",self.submitted)
-            if raise_error:
-                raise KeyError(key)
+            # the "if wait_for_data" clause ignores whether
+            # raise_error has been set.  This is intentional;
+            # if wait_for_data is set, hand all control to
+            # the getValue call, and let it decide for 
+            # itself whether to raise an error.
             if wait_for_data:  # read the value immediately
                 value = self.getValue(key)
                 self.cacheValue(key, value)
                 return value
+            elif raise_error:
+                raise KeyError(key)
             else:  # submit to the thread pool a request to read the value
                 future = self.executor.submit(self.getValue, key)
                 future.add_done_callback(lambda x: self.processValue(key, x))
@@ -356,7 +364,7 @@ class ZarrLevel():
         self.data = zarr.open(klru, mode="r")
         if path != "":
             self.data = self.data[path]
-        print("zl array", array, scale, max_mem_gb, self.data)
+        # print("zl array", array, scale, max_mem_gb, self.data)
         self.scale = scale
         self.trdatas = []
         self.trdatas.append(TransposedDataView(self.data, 0))
@@ -416,8 +424,10 @@ class CachedZarrVolume():
         shape = self.shape
         if direction == 0:
             return (shape[2], shape[0], shape[1])
+            # return (shape[1], shape[0], shape[2])
         else:
             return (shape[1], shape[0], shape[2])
+            # return (shape[2], shape[0], shape[1])
 
     @staticmethod
     def createErrorVolume(error):
@@ -618,7 +628,10 @@ class CachedZarrVolume():
         volume.trdatas = []
         volume.trdatas.append(TransposedDataView(volume.data, 0))
         volume.trdatas.append(TransposedDataView(volume.data, 1))
-        volume.sizes = tuple(int(size) for size in volume.data.shape)
+        volume.sizes = [int(size) for size in volume.data.shape]
+        # volume.sizes is in ijk order, volume.data.shape is in kji order 
+        volume.sizes.reverse()
+        volume.sizes = tuple(volume.sizes)
         return volume
 
     def setLevelFromArray(self, array, max_mem_gb):
@@ -728,7 +741,7 @@ class CachedZarrVolume():
                 print(f"Level {i} expected scale {expected_scale}, got {scale}")
                 return
             max_gb = max(max_gb, min_max_gb)
-            print("mmg", i, max_gb)
+            # print("mmg", i, max_gb)
             level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb))
             self.levels.append(level)
             expected_scale *= 2.
@@ -767,7 +780,8 @@ class CachedZarrVolume():
         """
         gmin = np.array([0, 0, 0], dtype=np.int32)
         sizes = list(self.sizes)
-        sizes.reverse()
+        # reverse was needed to correct bug in sizes, which is now fixed
+        # sizes.reverse()
         gmax = np.array(sizes, dtype=np.int32) - 1
         return np.array((gmin, gmax))
 
@@ -826,10 +840,14 @@ class CachedZarrVolume():
             return (0,2,1)[axis]
 
     def getSliceShape(self, axis, direction):
-        shape = self.trdatas[direction].shape
+
+        # single-resolution zarr file, not multi-resolution OME
         if len(self.levels) == 1:
-            sz = self.max_width*2
+            sz = 2*self.max_width
             return sz, sz
+
+        # OME
+        shape = self.trdatas[direction].shape
         if axis == 2: # depth
             return shape[1],shape[2]
         elif axis == 1: # xline
@@ -837,7 +855,40 @@ class CachedZarrVolume():
         else: # inline
             return shape[0],shape[1]
 
-    def getSlice(self, axis, ijkt, direction):
+    # Get bounds of slice after taking into account
+    # possible windowing (slices from single-resolution zarr 
+    # data stores are windowed in order to avoid creating
+    # a giant high-resolution slice when the user zooms out)
+    def getSliceBounds(self, axis, ijkt, direction):
+        idxi, idxj = self.ijIndexesInPlaneOfSlice(axis)
+        shape = self.trdatas[direction].shape
+        ni = shape[2-idxi]
+        nj = shape[2-idxj]
+
+        r = ((0,0),(ni,nj))
+        # single-resolution zarr file, not multi-resolution OME
+        if len(self.levels) == 1:
+            sz = self.max_width
+            i = ijkt[idxi]
+            j = ijkt[idxj]
+            rw = ((i-sz,j-sz),(i+sz,j+sz))
+            r = Utils.rectIntersection(r, rw)
+        return r
+
+    # Need data, not just direction, since data is tied to
+    # a particular level
+    def getSliceInRange(self, data, islice, jslice, k, axis):
+        i, j = self.ijIndexesInPlaneOfSlice(axis)
+        slices = [0]*3
+        slices[axis] = k
+        slices[i] = islice
+        slices[j] = jslice
+        result = data[slices[2],slices[1],slices[0]]
+        # print(islice, jslice, k, data.shape, axis, result.shape)
+        return result
+
+    # Assumes single-resolution zarr file, not multi-resolution OME
+    def getSliceHide(self, axis, ijkt, direction):
         data = self.trdatas[direction]
         it,jt,kt = ijkt
         slices = []
@@ -861,19 +912,9 @@ class CachedZarrVolume():
         result = data[slices[2],slices[1],slices[0]]
         return result
 
-    def getSliceInRange(self, data, islice, jslice, k, axis):
-        # data = self.trdatas[direction]
-        il, jl = self.ijIndexesInPlaneOfSlice(axis)
-        slices = [0]*3
-        slices[axis] = k
-        slices[il] = islice
-        slices[jl] = jslice
-        result = data[slices[2],slices[1],slices[0]]
-        return result
-
     # returns True if out has been completely painted,
     # False otherwise
-    def paintLevel(self, out, axis, oijkt, zoom, direction, level, draw):
+    def paintLevel(self, out, axis, oijkt, zoom, direction, level, draw, max_width):
         # if not draw:
         #     return True
         # mask = (out == 0).astype(np.uint8)
@@ -884,7 +925,7 @@ class CachedZarrVolume():
         if msum != out.shape[0]*out.shape[1]: # some but not all zeros
             # dilate the mask by one pixel
             # to avoid small black lines from appearing
-            # (source unknown!) during loading
+            # (cause unknown!) during loading
             kernel = np.ones((3,3),dtype=np.bool_)
             mask = ndimage.binary_dilation(mask, kernel)
             pass
@@ -905,9 +946,12 @@ class CachedZarrVolume():
         il, jl = self.ijIndexesInPlaneOfSlice(axis)
         fi, fj = ijkt[il], ijkt[jl]
         # slice width, height
-        sw = data.shape[il]
-        sh = data.shape[jl]
+        sw = data.shape[2-il]
+        sh = data.shape[2-jl]
+        # sw = data.shape[il]
+        # sh = data.shape[jl]
         # print("sw,sh",z,il,jl,fi,fj,sw,sh)
+        # print(axis, scale, sw, sh)
         zsw = max(int(z*sw), 1)
         zsh = max(int(z*sh), 1)
 
@@ -919,19 +963,68 @@ class CachedZarrVolume():
         # location of lower right corner of data slice:
         ax2 = ax1+zsw
         ay2 = ay1+zsh
+        # cx1 etc are a copy of the upper left corner of the data slice
+        (cx1,cy1),(cx2,cy2) = ((ax1,ay1),(ax2,ay2))
+        # print("fi,j", fi, fj)
+        # print("a", ((ax1,ay1),(ax2,ay2)))
+
+
+        if max_width > 0:
+            rb = self.getSliceBounds(axis, ijkt, direction)
+            # print("rb",rb)
+            if rb is None:
+                return True
+            ((bsx1,bsy1),(bsx2,bsy2)) = rb
+            cx1 = int(whw+z*(bsx1-fi))
+            cy1 = int(whh+z*(bsy1-fj))
+            cx2 = int(whw+z*(bsx2-fi))
+            cy2 = int(whh+z*(bsy2-fj))
+        # print("c", ((cx1,cy1),(cx2,cy2)))
+
+        '''
+        # max_width is used if the zarr data set is single-resolution
+        # rather than multi-resolution; in this case only  a limited
+        # window of the data should be shown, to avoid loading a
+        # huge number of chunks whenever the user zooms out.
+        if max_width > 0:
+            # mx1 etc specify the corners of the limited
+            # data window; note that these may actually lie
+            # outside of the data slice
+            mx1 = int(whw-z*max_width)
+            my1 = int(whh-z*max_width)
+            mx2 = int(whw+z*max_width)
+            my2 = int(whh+z*max_width)
+            # perform an intersection to find the part of the
+            # data window that lies inside the data slice
+            ri = Utils.rectIntersection(
+                    ((ax1,ay1),(ax2,ay2)), ((mx1,my1),(mx2,my2)))
+            if ri is None:
+                return True
+            # cx1 etc are the lower left corner of the limited
+            # data window, which has been intersected with the
+            # rectangle of the original data slice
+            (cx1,cy1),(cx2,cy2) = ri
+        '''
+
         # locations of upper left and lower right corners of drawing window
         bx1 = 0
         by1 = 0
         bx2 = ww
         by2 = wh
+        # intersection of data slice and drawing window
         ri = Utils.rectIntersection(
-                ((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
+                ((cx1,cy1),(cx2,cy2)), ((bx1,by1),(bx2,by2)))
+        # print("ri", ri)
         misses0 = level.klru.nz_misses
         if ri is not None:
             # upper left and lower right corners of intersected rectangle
             (x1,y1),(x2,y2) = ri
             # corners of windowed data slice, in
             # data slice coordinates
+            # note the use here of ax1 etc, which are the
+            # corners of the data slice, before intersection
+            # with the limited data window.
+            # These are still needed for coordinate transformations
             x1s = int((x1-ax1)/z)
             y1s = int((y1-ay1)/z)
             x2s = int((x2-ax1)/z)
@@ -966,8 +1059,12 @@ class CachedZarrVolume():
 
     def paintSlice(self, out, axis, ijkt, zoom, direction):
         level = self.levels[0]
+        draw = True
         if len(self.levels) == 1:
-            return False
+            self.paintLevel(
+                    out, axis, ijkt, zoom, direction, level, 
+                    draw, self.max_width)
+            return True
         if len(self.levels) > 1:
             for i in range(len(self.levels)):
                 level = self.levels[i]
@@ -978,13 +1075,14 @@ class CachedZarrVolume():
                     # print("level", i)
                     break
 
-        draw = True
         # print("** axis",axis, out.shape, i)
         start = i
         for i in range(start,len(self.levels)):
             level = self.levels[i]
             # print("level", i, draw)
-            result = self.paintLevel(out, axis, ijkt, zoom, direction, level, draw)
+            result = self.paintLevel(
+                    out, axis, ijkt, zoom, direction, 
+                    level, draw, 0)
             if result:
                 break
                 # draw = False
@@ -1001,6 +1099,7 @@ class CachedZarrVolume():
     def ijIndexesInPlaneOfSlice(self, axis):
         return ((1,2), (0,2), (0,1))[axis]
 
+    '''
     def ijInPlaneOfSlice(self, axis, ijkt):
         inds = self.ijIndexesInPlaneOfSlice(axis)
         x, y = ijkt[inds[0]], ijkt[inds[1]]
@@ -1011,6 +1110,7 @@ class CachedZarrVolume():
         inds = self.ijIndexesInPlaneOfSlice(axis)
         rij = (ijkt[inds[0]], ijkt[inds[1]])
         return(rij[0]-zij[0], rij[1]-zij[1])
+    '''
 
     def getSlices(self, ijkt, direction):
         depth = self.getSlice(2, ijkt, direction)
