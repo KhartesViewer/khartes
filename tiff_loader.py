@@ -686,7 +686,7 @@ class TiffLoader(QMainWindow):
 
     # Callback as specified in Volume.createFromTiffs
     def readerCallback(self, text):
-        print("rc", text)
+        print("rc", text, end='\r')
         if text.startswith("Loading"):
             self.hide()
         self.status_bar.showMessage(text)

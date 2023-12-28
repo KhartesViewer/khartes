@@ -451,22 +451,30 @@ class VolumeView():
             self.ijktf = (ijk[2], ijk[1], ijk[0])
         self.direction = direction
         if self.volume.data is not None:
+            '''
             if not self.volume.is_zarr:
                 self.trdata = self.volume.trdatas[direction]
                 self.trshape = self.trdata.shape
             else:
                 self.trshape = self.volume.trshape(direction)
+            '''
+            self.trdata = self.volume.trdatas[direction]
+            self.trshape = self.trdata.shape
             self.notifyModified()
         else:
             print("warning, VolumeView.setDirection: volume data is not loaded")
             self.trdata = None
 
     def dataLoaded(self):
+        '''
         if not self.volume.is_zarr:
             self.trdata = self.volume.trdatas[self.direction]
             self.trshape = self.trdata.shape
         else:
             self.trshape = self.volume.trshape(self.direction)
+        '''
+        self.trdata = self.volume.trdatas[self.direction]
+        self.trshape = self.trdata.shape
 
     # call after direction is set
     def getDefaultZoom(self, window):
@@ -552,8 +560,11 @@ class VolumeView():
     def globalAxisFromTransposedAxis(self, axis):
         return self.volume.globalAxisFromTransposedAxis(axis, self.direction)
 
-    def getSlice(self, axis, ijkt):
-        return self.volume.getSlice(axis, ijkt, self.direction)
+    def getSliceHide(self, axis, ijkt):
+        return self.volume.getSliceHide(axis, ijkt, self.direction)
+
+    def getSliceInRange(self, data, islice, jslice, k, axis):
+        return self.volume.getSliceInRange(data, islice, jslice, k, axis)
 
     def paintSlice(self, out, axis, ijkt, zoom):
         return self.volume.paintSlice(out, axis, ijkt, zoom, self.direction)
@@ -563,6 +574,9 @@ class VolumeView():
 
     def getSliceShapes(self):
         return self.volume.getSliceShapes(self.direction)
+
+    def getSliceBounds(self, axis, ijkt):
+        return self.volume.getSliceBounds(axis, ijkt, self.direction)
 
 
 class Volume():
@@ -727,7 +741,7 @@ class Volume():
             else:
                 fname = pattern%z
             imgf = tdir / fname
-            print(fname, imgf)
+            # print(fname, imgf)
             if callback is not None and not callback("Reading %s"%fname):
                 ofilefull.unlink(True)
                 return Volume.createErrorVolume("Cancelled by user")
@@ -997,7 +1011,7 @@ class Volume():
     # kt (slow, axis 2) is depth coord
     # trdata is laid out in C style, so 
     # value at it,ij,ik is indexed trdata[kt,jt,it]
-    def getSlice(self, axis, ijkt, direction):
+    def getSliceHide(self, axis, ijkt, direction):
         (it,jt,kt) = ijkt
         if axis == 2: # depth
             return self.trdatas[direction][kt,:,:]
@@ -1005,6 +1019,17 @@ class Volume():
             return self.trdatas[direction][:,jt,:]
         else: # inline
             return self.trdatas[direction][:,:,it]
+
+        return result
+
+    def getSliceInRange(self, data, islice, jslice, k, axis):
+        i, j = self.ijIndexesInPlaneOfSlice(axis)
+        slices = [0]*3
+        slices[axis] = k
+        slices[i] = islice
+        slices[j] = jslice
+        result = data[slices[2],slices[1],slices[0]]
+        return result
 
     def getSliceShape(self, axis, direction):
         shape = self.trdatas[direction].shape
@@ -1016,17 +1041,79 @@ class Volume():
             return shape[0],shape[1]
 
     def paintSlice(self, out, axis, ijkt, zoom, direction):
-        return False
+        data = self.trdatas[direction]
+        z = zoom
+        it,jt,kt = ijkt
+        wh,ww = out.shape
+        whw = ww//2
+        whh = wh//2
+        il, jl = self.ijIndexesInPlaneOfSlice(axis)
+        fi, fj = ijkt[il], ijkt[jl]
+        # slice width, height
+        sw = data.shape[2-il]
+        sh = data.shape[2-jl]
+        '''
+        test = self.getSliceInRange(
+                slice(0,None), slice(0,None), 0, 
+                axis, direction)
+        print(axis, data.shape, il, jl, sw, sh, test.shape)
+        '''
+        # print("sw,sh",z,il,jl,fi,fj,sw,sh)
+        zsw = max(int(z*sw), 1)
+        zsh = max(int(z*sh), 1)
+
+        # all coordinates below are in drawing window coordinates,
+        # unless specified otherwise
+        # location of upper left corner of data slice:
+        ax1 = int(whw-z*fi)
+        ay1 = int(whh-z*fj)
+        # location of lower right corner of data slice:
+        ax2 = ax1+zsw
+        ay2 = ay1+zsh
+        # print(z,ax1,ay1,ax2,ay2)
+        # locations of upper left and lower right corners of drawing window
+        bx1 = 0
+        by1 = 0
+        bx2 = ww
+        by2 = wh
+        ri = Utils.rectIntersection(
+                ((ax1,ay1),(ax2,ay2)), ((bx1,by1),(bx2,by2)))
+        if ri is not None:
+            # upper left and lower right corners of intersected rectangle
+            (x1,y1),(x2,y2) = ri
+            # corners of windowed data slice, in
+            # data slice coordinates
+            x1s = int((x1-ax1)/z)
+            y1s = int((y1-ay1)/z)
+            x2s = int((x2-ax1)/z)
+            y2s = int((y2-ay1)/z)
+            # print(sw,sh,ww,wh)
+            # print(x1,y1,x2,y2)
+            # print(x1s,y1s,x2s,y2s)
+            slc = self.getSliceInRange(data,
+                    slice(x1s,x2s), slice(y1s,y2s), ijkt[axis], 
+                    axis)
+            # print(slc.shape)
+            # resize windowed data slice to its size in drawing
+            # window coordinates
+            zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+            # paste resized data slice into the intersection window
+            # in the drawing window
+            out[y1:y2, x1:x2] = zslc
+            
+        return True
 
     def ijIndexesInPlaneOfSlice(self, axis):
         return ((1,2), (0,2), (0,1))[axis]
 
+    '''
     def ijInPlaneOfSlice(self, axis, ijkt):
         inds = self.ijIndexesInPlaneOfSlice(axis)
         return(ijkt[inds[0]], ijkt[inds[1]])
 
     def ijCornerInPlaneOfSlice(self, axis, ijkt):
         return (0,0)
+    '''
 
     def globalSlicePositionAlongAxis(self, axis, ijkt, direction):
         gi,gj,gk = self.transposedIjkToGlobalPosition(ijkt, direction)
@@ -1052,3 +1139,10 @@ class Volume():
         xline = self.getSliceShape(1, direction)
         inline = self.getSliceShape(0, direction)
         return (depth, xline, inline)
+
+    def getSliceBounds(self, axis, ijkt, direction):
+        idxi, idxj = self.ijIndexesInPlaneOfSlice(axis)
+        shape = self.trdatas[direction].shape
+        ni = shape[2-idxi]
+        nj = shape[2-idxj]
+        return ((0,0),(ni,nj))
