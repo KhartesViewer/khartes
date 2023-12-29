@@ -411,7 +411,9 @@ class CachedZarrVolume():
         self.active_project_views = set()
         self.from_vc_render = False
         self.levels = []
-        self.max_mem_gb = 8
+
+    # class member
+    max_mem_gb = 8
 
     @property
     def shape(self):
@@ -602,11 +604,10 @@ class CachedZarrVolume():
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
 
-        # TODO: is volume.max_mem_gb the right value to use?
         if isinstance(array, zarr.hierarchy.Group):
-            volume.setLevelsFromHierarchy(array, volume.max_mem_gb)
+            volume.setLevelsFromHierarchy(array, CachedZarrVolume.max_mem_gb)
         else:
-            volume.setLevelFromArray(array, volume.max_mem_gb)
+            volume.setLevelFromArray(array, CachedZarrVolume.max_mem_gb)
 
         if len(volume.levels) < 1:
             err = f"Problem parsing zdata from input directory {ddir}"
@@ -716,6 +717,7 @@ class CachedZarrVolume():
         chunk = level0.data.chunks
         # print(chunk)
         min_max_gb = 3*16*2*chunk[0]*chunk[1]*chunk[2]/(2**30)
+        print("mmg", max_mem_gb, " ", end=' ')
         for i, lmd in enumerate(metadata):
             info = self.parseLevelMetadata(lmd)
             if info is None:
@@ -735,11 +737,13 @@ class CachedZarrVolume():
                 return
             max_gb = max(max_gb, min_max_gb)
             # print("mmg", i, max_gb)
+            print(max(min_max_gb, max_gb), end=' ')
             level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb))
             self.levels.append(level)
             expected_scale *= 2.
             expected_path_int += 1
             max_gb *= .5
+        print()
 
     def setImmediateDataMode(self, flag):
         for level in self.levels:

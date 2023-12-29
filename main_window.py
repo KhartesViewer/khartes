@@ -45,6 +45,7 @@ from volume import (
         Volume, VolumesModel, 
         DirectionSelectorDelegate,
         ColorSelectorDelegate)
+from volume_zarr import CachedZarrVolume
 from ppm import Ppm
 from utils import Utils
 
@@ -553,30 +554,14 @@ class ZarrMaxWindowWidthEditor(QWidget):
         self.edit.setFixedWidth(w)
         self.edit.editingFinished.connect(self.onEditingFinished)
         self.edit.textEdited.connect(self.onTextEdited)
-        # self.setToVoxelSize()
         layout.addWidget(self.edit)
         label = QLabel("Zarr max window width")
         layout.addWidget(label)
         layout.addStretch()
         self.setting = "zarr"
         self.param = "max_window_width"
-        # self.setText(main_window.draw_settings[name][self.param])
         self.setToMaxWidth()
-        # self.valueChanged.connect(self.onValueChanged, Qt.QueuedConnection)
         main_window.draw_settings_widgets[self.setting][self.param] = self
-
-    # def onValueChanged(self, value):
-    #     self.main_window.setDrawSettingsValue(self.setting, self.param, value)
-    #     self.lineEdit().deselect()
-
-    # def updateValue(self, value):
-    #     self.setValue(value)
-
-    # def setToVoxelSize(self):
-    #     voxel_size_um = self.main_window.getVoxelSizeUm()
-    #     txt = self.floatToText(voxel_size_um)
-    #     self.edit.setText(txt)
-    #     self.onTextEdited(txt)
 
     def setToMaxWidth(self):
         zarr_max_window_width = self.main_window.draw_settings[self.setting][self.param]
@@ -613,6 +598,67 @@ class ZarrMaxWindowWidthEditor(QWidget):
         else:
             self.edit.setStyleSheet("QLineEdit { color: red }")
 
+
+class ZarrMaxCacheGb(QWidget):
+    def __init__(self, main_window, parent=None):
+        super(ZarrMaxCacheGb, self).__init__(parent)
+        self.main_window = main_window
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0,0,0,0)
+        self.setLayout(layout)
+        self.edit = QLineEdit()
+        fm = self.edit.fontMetrics()
+        w = 7*fm.width('0')
+        self.edit.setFixedWidth(w)
+        self.edit.editingFinished.connect(self.onEditingFinished)
+        self.edit.textEdited.connect(self.onTextEdited)
+        layout.addWidget(self.edit)
+        label = QLabel("Zarr cache size (Gb)")
+        layout.addWidget(label)
+        layout.addStretch()
+        self.setting = "zarr"
+        self.param = "max_cache_size_gb"
+        self.setToMaxCacheSize()
+        self.warned = False
+        main_window.draw_settings_widgets[self.setting][self.param] = self
+
+    def setToMaxCacheSize(self):
+        zarr_max_cache_size = self.main_window.draw_settings[self.setting][self.param]
+        txt = self.floatToText(zarr_max_cache_size)
+        self.edit.setText(txt)
+        self.onTextEdited(txt)
+
+    def floatToText(self, value):
+        return "%.1f"%value
+
+    def onEditingFinished(self):
+        txt = self.edit.text()
+        valid, mem_gb = self.parseText(txt)
+        print("oef", valid, mem_gb, self.warned)
+        if valid:
+            warned = self.warned
+            if not warned:
+                self.warned = True
+            self.main_window.setZarrMaxCacheSize(mem_gb, not warned)
+
+    def parseText(self, txt):
+        valid = True
+        f = 0
+        try:
+            f = float(txt)
+        except:
+            valid = False
+        if f < 2:
+            valid = False
+        return valid, f
+
+    def onTextEdited(self, txt):
+        valid, f = self.parseText(txt)
+        # print("ote", valid)
+        if valid:
+            self.edit.setStyleSheet("")
+        else:
+            self.edit.setStyleSheet("QLineEdit { color: red }")
 
 class ShiftClicksSpinBox(QSpinBox):
     def __init__(self, main_window, parent=None):
@@ -952,6 +998,7 @@ class MainWindow(QMainWindow):
         self.zarr_timer.setSingleShot(True)
         self.zarr_timer.timeout.connect(self.zarrTimerCallback)
         self.zarr_signal.connect(self.zarrSlot)
+        self.setZarrMaxCacheSize(self.draw_settings["zarr"]["max_cache_size_gb"], False)
         # self.setDrawSettingsToDefaults()
         # command line arguments
         args = QCoreApplication.arguments()
@@ -1404,6 +1451,8 @@ class MainWindow(QMainWindow):
         slices_layout.addWidget(vs)
         zmww = ZarrMaxWindowWidthEditor(self)
         slices_layout.addWidget(zmww)
+        zmcs = ZarrMaxCacheGb(self)
+        slices_layout.addWidget(zmcs)
 
         hlayout.addStretch()
         # fragment_layout = QVBoxLayout()
@@ -2753,6 +2802,13 @@ class MainWindow(QMainWindow):
             return
         self.project_view.project.setVoxelSizeUm(size)
         self.drawSlices()
+
+    def setZarrMaxCacheSize(self, size_gb, show_warning):
+        print("cache size", size_gb, show_warning)
+        self.setDrawSettingsValue("zarr", "max_cache_size_gb", size_gb)
+        CachedZarrVolume.max_mem_gb = size_gb
+        if show_warning:
+            QMessageBox.warning(self, "khartes", "This change will only apply to zarr data attached after this time.\nTo apply the change to existing data, save your project and reload it.", QMessageBox.Ok)
 
     # called by self.zarr_timer
     # IMPORTANT NOTE:
