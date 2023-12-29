@@ -24,12 +24,12 @@ class ProjectView:
 
         self.volumes = {}
         for volume in project.volumes:
-            print(volume.name)
+            # print(volume.name)
             self.addVolumeView(volume, no_notify=True)
 
         self.fragments = {}
         for fragment in project.fragments:
-            print(fragment.name)
+            # print(fragment.name)
             self.addFragmentView(fragment, no_notify=True)
 
         self.cur_volume = None
@@ -183,7 +183,7 @@ class ProjectView:
             for fv in pv.fragments.values():
                 name = fv.fragment.name
                 created = fv.fragment.created
-                print(name, created)
+                # print(name, created)
                 finfo = None
                 if name in finfos:
                     finfo = finfos[name]
