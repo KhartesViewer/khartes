@@ -540,6 +540,80 @@ class VoxelSizeEditor(QWidget):
         else:
             self.edit.setStyleSheet("QLineEdit { color: red }")
 
+class ZarrMaxWindowWidthEditor(QWidget):
+    def __init__(self, main_window, parent=None):
+        super(ZarrMaxWindowWidthEditor, self).__init__(parent)
+        self.main_window = main_window
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0,0,0,0)
+        self.setLayout(layout)
+        self.edit = QLineEdit()
+        fm = self.edit.fontMetrics()
+        w = 7*fm.width('0')
+        self.edit.setFixedWidth(w)
+        self.edit.editingFinished.connect(self.onEditingFinished)
+        self.edit.textEdited.connect(self.onTextEdited)
+        # self.setToVoxelSize()
+        layout.addWidget(self.edit)
+        label = QLabel("Zarr max window width")
+        layout.addWidget(label)
+        layout.addStretch()
+        self.setting = "zarr"
+        self.param = "max_window_width"
+        # self.setText(main_window.draw_settings[name][self.param])
+        self.setToMaxWidth()
+        # self.valueChanged.connect(self.onValueChanged, Qt.QueuedConnection)
+        main_window.draw_settings_widgets[self.setting][self.param] = self
+
+    # def onValueChanged(self, value):
+    #     self.main_window.setDrawSettingsValue(self.setting, self.param, value)
+    #     self.lineEdit().deselect()
+
+    # def updateValue(self, value):
+    #     self.setValue(value)
+
+    # def setToVoxelSize(self):
+    #     voxel_size_um = self.main_window.getVoxelSizeUm()
+    #     txt = self.floatToText(voxel_size_um)
+    #     self.edit.setText(txt)
+    #     self.onTextEdited(txt)
+
+    def setToMaxWidth(self):
+        zarr_max_window_width = self.main_window.draw_settings[self.setting][self.param]
+        txt = self.intToText(zarr_max_window_width)
+        self.edit.setText(txt)
+        self.onTextEdited(txt)
+
+    def intToText(self, value):
+        return "%d"%value
+
+    def onEditingFinished(self):
+        txt = self.edit.text()
+        valid, width = self.parseText(txt)
+        # print("oef", valid, size)
+        if valid:
+            self.main_window.setDrawSettingsValue(self.setting, self.param, width)
+
+    def parseText(self, txt):
+        valid = True
+        i = 0
+        try:
+            i = int(txt)
+        except:
+            valid = False
+        if i < 2:
+            valid = False
+        return valid, i
+
+    def onTextEdited(self, txt):
+        valid, f = self.parseText(txt)
+        # print("ote", valid)
+        if valid:
+            self.edit.setStyleSheet("")
+        else:
+            self.edit.setStyleSheet("QLineEdit { color: red }")
+
+
 class ShiftClicksSpinBox(QSpinBox):
     def __init__(self, main_window, parent=None):
         super(ShiftClicksSpinBox, self).__init__(parent)
@@ -588,7 +662,7 @@ class OpacitySpinBox(QDoubleSpinBox):
         self.setMaximum(1.0)
         self.setDecimals(1)
         self.setSingleStep(0.1)
-        self.setValue(main_window.draw_settings[name][self.param])
+        self.setValue(main_window.draw_settings[self.setting][self.param])
         self.valueChanged.connect(self.onValueChanged, Qt.QueuedConnection)
         main_window.draw_settings_widgets[self.setting][self.param] = self
 
@@ -689,6 +763,10 @@ class MainWindow(QMainWindow):
         },
         "shift_clicks": {
             "count": 1,
+        },
+        "zarr": {
+            "max_cache_size_gb": 8,
+            "max_window_width": 480,
         },
     }
 
@@ -1186,7 +1264,14 @@ class MainWindow(QMainWindow):
     def setDrawSettingsToDefaults(self):
         ndict = {}
         for param,value in self.draw_settings_defaults.items():
-            if param in ["tracking_cursors", "shift_clicks"]:
+            # if param in ["tracking_cursors", "shift_clicks"]:
+            #     continue
+            # The settings that should be reset when 
+            # setDrawSettingsToDefaults() is called all have
+            # in common that they have a param called "opacity".
+            # Settings that don't have "opacity" shouldn't be
+            # reset when this function is called
+            if "opacity" not in value:
                 continue
             self.draw_settings[param] = copy.deepcopy(value)
         # self.draw_settings = copy.deepcopy(MainWindow.draw_settings_defaults)
@@ -1317,6 +1402,8 @@ class MainWindow(QMainWindow):
         vs = VoxelSizeEditor(self)
         self.settings_voxel_size_um = vs
         slices_layout.addWidget(vs)
+        zmww = ZarrMaxWindowWidthEditor(self)
+        slices_layout.addWidget(zmww)
 
         hlayout.addStretch()
         # fragment_layout = QVBoxLayout()
@@ -2319,10 +2406,11 @@ class MainWindow(QMainWindow):
                     break
             i = (i+1)%len(spv)
             self.setVolume(list(spv.keys())[i])
+        zarr_max_width = self.draw_settings["zarr"]["max_window_width"]
         if self.volumeView().zoom == 0.:
-            self.volumeView().setDefaultParameters(self)
+            self.volumeView().setDefaultParameters(self, zarr_max_width)
         if self.volumeView().minZoom == 0.:
-            self.volumeView().setDefaultMinZoom(self)
+            self.volumeView().setDefaultMinZoom(self, zarr_max_width)
         self.drawSlices()
 
 
@@ -2424,15 +2512,15 @@ class MainWindow(QMainWindow):
         self.volumes_table.model().beginResetModel()
         pv.setCurrentVolume(volume, no_notify)
         self.volumes_table.model().endResetModel()
-        self.app.processEvents()
         vv = None
         if volume is not None:
             vv = pv.cur_volume_view
+            zarr_max_width = self.draw_settings["zarr"]["max_window_width"]
             if vv.zoom == 0.:
                 print("setting volume default parameters", volume.name)
-                vv.setDefaultParameters(self, no_notify)
+                vv.setDefaultParameters(self, zarr_max_width, no_notify)
             if vv.minZoom == 0.:
-                vv.setDefaultMinZoom(self)
+                vv.setDefaultMinZoom(self, zarr_max_width)
             if volume.is_zarr:
                 volume.setCallback(self.zarrFutureDoneCallback)
         # print("pv set updata frag views")
@@ -2442,6 +2530,12 @@ class MainWindow(QMainWindow):
         self.xline.setVolumeView(vv);
         self.inline.setVolumeView(vv);
         self.surface.setVolumeView(vv);
+        # Beware!  Events that are processed may include
+        # remnant zarr timer calls still streaming in from a previous 
+        # volume.  These  in turn call drawSlices(), which must not
+        # be called until the new volume has been fully initialized.
+        # So do not process events too early!
+        self.app.processEvents()
         # print("draw slices")
         self.drawSlices()
 
@@ -2661,7 +2755,18 @@ class MainWindow(QMainWindow):
         self.drawSlices()
 
     # called by self.zarr_timer
+    # IMPORTANT NOTE:
+    # This routine may be called long after the volume
+    # that originated the calls has been replaced by another.
+    # This is normally benign, but routines that call
+    # app.processEvents() should be aware that these timer
+    # events, which result in calls to self.drawSlices(), may be
+    # some of the events processed.
+    # So app.processEvents() should be called only if the
+    # project is in a stable state, where a call to drawSlices
+    # will not create a problem.
     def zarrTimerCallback(self):
+        # print("timer callback", int(QThread.currentThreadId()))
         self.drawSlices()
 
     # This function slows down the pace of redraws 
@@ -2691,7 +2796,7 @@ class MainWindow(QMainWindow):
     # used to ensure that khartes code is called only
     # from within the Qt GUI thread.
     def zarrFutureDoneCallback(self, key, has_data):
-        # print(key, has_data)
+        # print(key, has_data, int(QThread.currentThreadId()))
         if has_data:
             self.zarr_signal.emit(key)
 

@@ -409,9 +409,9 @@ class VolumeView():
         self.trshape = self.trdata.shape
 
     # call after direction is set
-    def getDefaultZoom(self, window):
+    def getDefaultZoom(self, window, zarr_max_width):
         # depth, xline, inline = self.getSlices((0,0,0))
-        depth_shape, xline_shape, inline_shape = self.getSliceShapes()
+        depth_shape, xline_shape, inline_shape = self.getSliceShapes(zarr_max_width)
         minzoom = 0.
         for sh,sz in zip(
               # [depth.shape, xline.shape, inline.shape],
@@ -428,17 +428,17 @@ class VolumeView():
         # print("minzoom", minzoom)
         return minzoom
 
-    def setDefaultMinZoom(self, window):
-        dzoom = self.getDefaultZoom(window)*self.volume.averageStepSize()
+    def setDefaultMinZoom(self, window, zarr_max_width):
+        dzoom = self.getDefaultZoom(window, zarr_max_width)*self.volume.averageStepSize()
         asz = self.volume.averageStepSize()
         self.minZoom = min(.05, .5*dzoom)
         self.maxZoom = 5*asz
 
     # call after direction is set
-    def setDefaultParameters(self, window, no_notify=False):
+    def setDefaultParameters(self, window, zarr_max_width, no_notify=False):
         # zoom=1 means one pixel in grid should
         # be the same size as one pixel in viewing window
-        self.zoom = self.getDefaultZoom(window)
+        self.zoom = self.getDefaultZoom(window, zarr_max_width)
         # self.minZoom = .5*self.zoom
         # self.maxZoom = 5*self.volume.averageStepSize()
         if self.volume.is_zarr:
@@ -495,17 +495,17 @@ class VolumeView():
     def getSliceInRange(self, data, islice, jslice, k, axis):
         return self.volume.getSliceInRange(data, islice, jslice, k, axis)
 
-    def paintSlice(self, out, axis, ijkt, zoom):
-        return self.volume.paintSlice(out, axis, ijkt, zoom, self.direction)
+    def paintSlice(self, out, axis, ijkt, zoom, zarr_max_width):
+        return self.volume.paintSlice(out, axis, ijkt, zoom, zarr_max_width, self.direction)
 
     def getSlices(self, ijkt):
         return self.volume.getSlices(ijkt, self.direction)
 
-    def getSliceShapes(self):
-        return self.volume.getSliceShapes(self.direction)
+    def getSliceShapes(self, zarr_max_width):
+        return self.volume.getSliceShapes(zarr_max_width, self.direction)
 
-    def getSliceBounds(self, axis, ijkt):
-        return self.volume.getSliceBounds(axis, ijkt, self.direction)
+    def getSliceBounds(self, axis, ijkt, zarr_max_width):
+        return self.volume.getSliceBounds(axis, ijkt, zarr_max_width, self.direction)
 
 
 class Volume():
@@ -943,7 +943,8 @@ class Volume():
         result = data[slices[2],slices[1],slices[0]]
         return result
 
-    def getSliceShape(self, axis, direction):
+    def getSliceShape(self, axis, zarr_max_width, direction):
+        # zarr_max_width will be ignored
         shape = self.trdatas[direction].shape
         if axis == 2: # depth
             return shape[1],shape[2]
@@ -952,7 +953,8 @@ class Volume():
         else: # inline
             return shape[0],shape[1]
 
-    def paintSlice(self, out, axis, ijkt, zoom, direction):
+    def paintSlice(self, out, axis, ijkt, zoom, zarr_max_width, direction):
+        # zarr_max_width is ignored here; it only applies to zarr volumes
         data = self.trdatas[direction]
         z = zoom
         it,jt,kt = ijkt
@@ -1037,13 +1039,14 @@ class Volume():
 
         return (depth, xline, inline)
 
-    def getSliceShapes(self, direction):
-        depth = self.getSliceShape(2, direction)
-        xline = self.getSliceShape(1, direction)
-        inline = self.getSliceShape(0, direction)
+    def getSliceShapes(self, zarr_max_width, direction):
+        depth = self.getSliceShape(2, zarr_max_width, direction)
+        xline = self.getSliceShape(1, zarr_max_width, direction)
+        inline = self.getSliceShape(0, zarr_max_width, direction)
         return (depth, xline, inline)
 
-    def getSliceBounds(self, axis, ijkt, direction):
+    def getSliceBounds(self, axis, ijkt, zarr_max_width, direction):
+        # zarr_max_width is ignored
         idxi, idxj = self.ijIndexesInPlaneOfSlice(axis)
         shape = self.trdatas[direction].shape
         ni = shape[2-idxi]
