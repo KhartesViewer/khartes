@@ -465,14 +465,12 @@ class CachedZarrVolume():
         """Does an in-place sort of a list of volumes by name"""
         vols.sort(key=lambda v: v.name)
 
-    # TODO: createFromZarr and createFromTiffs share a lot of code!
     @staticmethod
     def createFromDataStore(
             project,
             ds_directory,
             ds_directory_name,
             name,
-            max_width=240,
         ):
         """
         Generates a new volume object from a zarr directory
@@ -493,12 +491,15 @@ class CachedZarrVolume():
             return CachedZarrVolume.createErrorVolume(err)
 
         timestamp = Utils.timestamp()
+        # max_width in header will be ignored by the latest versions
+        # of khartes, but it is kept here for compatibility
+        # with older versions
         header = {
             "khartes_version": "1.0",
             "khartes_created": timestamp,
             "khartes_modified": timestamp,
             ds_directory_name: str(ds_directory),
-            "max_width": max_width,
+            "max_width": 240,
         }
         # Write out the project file
         with open(filepath, "w") as outfile:
@@ -517,28 +518,26 @@ class CachedZarrVolume():
             project,
             zarr_directory,
             name,
-            max_width=240,
         ):
         return CachedZarrVolume.createFromDataStore(
                 project,
                 zarr_directory,
                 "zarr_dir",
                 name,
-                max_width)
+                )
 
     @staticmethod
     def createFromTiffs(
             project,
             tiff_directory,
             name,
-            max_width=240,
         ):
         return CachedZarrVolume.createFromDataStore(
                 project,
                 tiff_directory,
                 "tiff_dir",
                 name,
-                max_width)
+                )
 
     @staticmethod
     def loadFile(filename):
@@ -557,7 +556,7 @@ class CachedZarrVolume():
                     # print("old format", header)
             tiff_directory = header.get("tiff_dir", None)
             zarr_directory = header.get("zarr_dir", None)
-            max_width = int(header.get("max_width", 0))
+            # max_width = int(header.get("max_width", 0))
         except Exception as e:
             err = f"Failed to read input file {filename} (error {e})"
             print(err)
@@ -569,7 +568,7 @@ class CachedZarrVolume():
 
         volume = CachedZarrVolume()
         volume.data_header = header
-        volume.max_width = max_width
+        # volume.max_width = max_width
         volume.path = filename
         # _, volume.name = os.path.split(filename)
         _, name = os.path.split(filename)
@@ -834,11 +833,11 @@ class CachedZarrVolume():
         else:
             return (0,2,1)[axis]
 
-    def getSliceShape(self, axis, direction):
+    def getSliceShape(self, axis, zarr_max_width, direction):
 
         # single-resolution zarr file, not multi-resolution OME
         if len(self.levels) == 1:
-            sz = 2*self.max_width
+            sz = zarr_max_width
             return sz, sz
 
         # OME
@@ -854,7 +853,7 @@ class CachedZarrVolume():
     # possible windowing (slices from single-resolution zarr 
     # data stores are windowed in order to avoid creating
     # a giant high-resolution slice when the user zooms out)
-    def getSliceBounds(self, axis, ijkt, direction):
+    def getSliceBounds(self, axis, ijkt, zarr_max_width, direction):
         idxi, idxj = self.ijIndexesInPlaneOfSlice(axis)
         shape = self.trdatas[direction].shape
         # shape is in kji order
@@ -864,7 +863,7 @@ class CachedZarrVolume():
         r = ((0,0),(ni,nj))
         # single-resolution zarr file, not multi-resolution OME
         if len(self.levels) == 1:
-            sz = self.max_width
+            sz = zarr_max_width//2
             i = ijkt[idxi]
             j = ijkt[idxj]
             rw = ((i-sz,j-sz),(i+sz,j+sz))
@@ -883,34 +882,9 @@ class CachedZarrVolume():
         # print(islice, jslice, k, data.shape, axis, result.shape)
         return result
 
-    # Assumes single-resolution zarr file, not multi-resolution OME
-    def getSliceHide(self, axis, ijkt, direction):
-        data = self.trdatas[direction]
-        it,jt,kt = ijkt
-        slices = []
-        slices.append(slice(
-            max(0, it - self.max_width), 
-            min(data.shape[2], it + self.max_width + 1),
-            None,
-        ))
-        slices.append(slice(
-            max(0, jt - self.max_width), 
-            min(data.shape[1], jt + self.max_width + 1),
-            None,
-        ))
-        slices.append(slice(
-            max(0, kt - self.max_width), 
-            min(data.shape[0], kt + self.max_width + 1),
-            None,
-        ))
-        slices[axis] = ijkt[axis]
-        # print(data.shape, axis, ijkt, direction, slices)
-        result = data[slices[2],slices[1],slices[0]]
-        return result
-
     # returns True if out has been completely painted,
     # False otherwise
-    def paintLevel(self, out, axis, oijkt, zoom, direction, level, draw, max_width):
+    def paintLevel(self, out, axis, oijkt, zoom, direction, level, draw, zarr_max_width):
         # if not draw:
         #     return True
         # mask = (out == 0).astype(np.uint8)
@@ -964,8 +938,8 @@ class CachedZarrVolume():
         # print("a", ((ax1,ay1),(ax2,ay2)))
 
 
-        if max_width > 0:
-            rb = self.getSliceBounds(axis, ijkt, direction)
+        if zarr_max_width > 0:
+            rb = self.getSliceBounds(axis, ijkt, zarr_max_width, direction)
             # print("rb",rb)
             if rb is None:
                 return True
@@ -1027,13 +1001,13 @@ class CachedZarrVolume():
         # print("  ms",misses0,misses1)
         return misses0 == misses1
 
-    def paintSlice(self, out, axis, ijkt, zoom, direction):
+    def paintSlice(self, out, axis, ijkt, zoom, zarr_max_width, direction):
         level = self.levels[0]
         draw = True
         if len(self.levels) == 1:
             self.paintLevel(
                     out, axis, ijkt, zoom, direction, level, 
-                    draw, self.max_width)
+                    draw, zarr_max_width)
             return True
         if len(self.levels) > 1:
             for i in range(len(self.levels)):
@@ -1050,6 +1024,7 @@ class CachedZarrVolume():
         for i in range(start,len(self.levels)):
             level = self.levels[i]
             # print("level", i, draw)
+            # zarr_max_width is set to 0 for the multi-resolution case
             result = self.paintLevel(
                     out, axis, ijkt, zoom, direction, 
                     level, draw, 0)
@@ -1076,10 +1051,10 @@ class CachedZarrVolume():
 
         return (depth, xline, inline)
 
-    def getSliceShapes(self, direction):
-        depth = self.getSliceShape(2, direction)
-        xline = self.getSliceShape(1, direction)
-        inline = self.getSliceShape(0, direction)
+    def getSliceShapes(self, zarr_max_width, direction):
+        depth = self.getSliceShape(2, zarr_max_width, direction)
+        xline = self.getSliceShape(1, zarr_max_width, direction)
+        inline = self.getSliceShape(0, zarr_max_width, direction)
         return (depth, xline, inline)
 
 class Loader():

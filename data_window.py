@@ -82,6 +82,9 @@ class DataWindow(QLabel):
     def getDrawWidth(self, name):
         return self.window.draw_settings[name]["width"]
 
+    def getZarrMaxWidth(self):
+        return self.window.draw_settings["zarr"]["max_window_width"]
+
     '''
     def getDrawOpacity(self, name):
         dsn = self.window.draw_settings[name]
@@ -1041,7 +1044,9 @@ class DataWindow(QLabel):
         margin = 32
         ij0m = (ij0[0]-margin,ij0[1]-margin)
         ij1m = (ij1[0]+margin,ij1[1]+margin)
-        rs = volume.getSliceBounds(self.axis, volume.ijktf)
+
+        zarr_max_width = self.getZarrMaxWidth()
+        rs = volume.getSliceBounds(self.axis, volume.ijktf, zarr_max_width)
         if rs is None:
             return
         (sx1,sy1),(sx2,sy2) = rs
@@ -1139,7 +1144,8 @@ class DataWindow(QLabel):
         ij0m = (ij0[0]-margin,ij0[1]-margin)
         ij1m = (ij1[0]+margin,ij1[1]+margin)
 
-        rs = volume.getSliceBounds(self.axis, volume.ijktf)
+        zarr_max_width = self.getZarrMaxWidth()
+        rs = volume.getSliceBounds(self.axis, volume.ijktf, zarr_max_width)
         if rs is None:
             return
         (sx1,sy1),(sx2,sy2) = rs
@@ -1469,8 +1475,9 @@ into and out of the viewing plane.
         whw = ww//2
         whh = wh//2
         out = np.zeros((wh,ww), dtype=np.uint16)
+        zarr_max_width = self.getZarrMaxWidth()
         paint_result = volume.paintSlice(
-                out, self.axis, volume.ijktf, self.getZoom())
+                out, self.axis, volume.ijktf, self.getZoom(), zarr_max_width)
 
         # timera.time("fit rect")
 
