@@ -763,15 +763,20 @@ class Volume():
         print(self.data.shape, self.trdatas[0].shape, self.trdatas[1].shape)
 
     def unloadData(self, project_view):
+        volume_view = project_view.volumes[self]
         self.active_project_views.discard(project_view)
         l = len(self.active_project_views)
         if l > 0:
             print("unloadData: still %d project views using this volume"%l)
             return
         print("unloading data for", self.name)
+        # These are all needed in order to remove all
+        # references to self.data, which then allows the
+        # memory to be released.
         self.data = None
         self.trdatas = None
         self.trdata = None
+        volume_view.trdata = None
 
     def loadNRRD(filename, missing_allowed=False):
         try:
