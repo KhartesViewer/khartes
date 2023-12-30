@@ -657,7 +657,8 @@ class TiffLoader(QMainWindow):
         else:
             self.main_window.setVolume(new_volume)
             vv = self.main_window.project_view.cur_volume_view
-            vv.setColor(QColor(self.color()))
+            # vv.setColor(QColor(self.color()))
+            self.main_window.setVolumeViewColor(vv, QColor(self.color()))
             # should have been hidden during readerCallback
             self.hide()
         # unset name of volume
