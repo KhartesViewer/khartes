@@ -1547,11 +1547,37 @@ class FragmentView(BaseFragmentView):
         if not self.aligned():
             faxis = 2-vaxis
             fni, fnj, fnj = vnk, vnj, vni
+        # print()
+        # print(vaxis, vaxisPosition)
         if faxis == 0 or faxis == 1:
-            if faxis == 0:
-                jvec = self.zsurf[:,vaxisPosition]
-            else:
-                jvec = self.zsurf[vaxisPosition,:]
+            vlen = self.zsurf.shape[1-faxis]
+            # Ideally, would just do:
+            #   if faxis == 0:
+            #      jvec = self.zsurf[:,vaxisPosition]
+            #   else:
+            #      jvec = self.zsurf[vaxisPosition,:]
+            # The problem is that at the edges of the fragment,
+            # zsurf may not extend all the way to the
+            # edge (not sure why, maybe something to do with
+            # moving the nodes slightly during triangulation?).
+            # So if jvec only contains nans (meaning that it
+            # is off the edge), shift vaxisPosition by 1 and -1
+            # to try to pick up the edge of the zsurf.
+            for delta in [0,-1,1]:
+                v = vaxisPosition+delta
+                if v >= vlen:
+                    continue
+                if v < 0:
+                    continue
+                if faxis == 0:
+                    jvec = self.zsurf[:,v]
+                else:
+                    jvec = self.zsurf[v,:]
+                # print(" ",delta, (~np.isnan(jvec)).sum())
+
+                # break if any non-nan points are found
+                if not np.isnan(jvec).all():
+                    break
             ivec = np.arange(len(jvec))
             pts = np.array((ivec,jvec)).transpose()
             pts = pts[~np.isnan(pts[:,1])]
