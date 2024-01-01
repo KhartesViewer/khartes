@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 from volume import Volume
 from volume_zarr import CachedZarrVolume
+import tifffile
 
 from PyQt5.QtWidgets import (
         QAction, QApplication, QAbstractItemView,
@@ -237,7 +238,20 @@ class ZarrLoader(QMainWindow):
         main_window.app.processEvents()
         loading = main_window.showLoading()
         if self.directory_has_tiffs:
-            new_volume = CachedZarrVolume.createFromTiffs(project, pdir, volume_name)
+            tifs = list(pdir.glob("*.tif"))
+            tiff0 = tifffile.imread(tifs[0])
+            shape = tiff0.shape
+            # createFromTiffs accepts 2D and 3D TIFF files.  However,
+            # zarr data stores created from 2D TIFFs are in practice
+            # almost unusable.
+            # So if the user selects a directory with 2D TIFFs,
+            # they are redirected to the create-volume-from-tiffs
+            # option.
+            if len(shape) == 2 or (1 in shape):
+                emsg = '''This directory contains flat (2D) TIFF files.\nFiles of this type should be read using the "Create volume from TIFF files..." option.  The "Attach Zarr/OME/TIFF data store..." option expects TIFF files to be 3D (multi-layer), like those found in the volume_grid directory. '''
+                new_volume = CachedZarrVolume.createErrorVolume(emsg)
+            else:
+                new_volume = CachedZarrVolume.createFromTiffs(project, pdir, volume_name)
         else:
             new_volume = CachedZarrVolume.createFromZarr(project, pdir, volume_name)
         loading = None
