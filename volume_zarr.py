@@ -505,10 +505,10 @@ class CachedZarrVolume():
         }
         # Write out the project file
         with open(filepath, "w") as outfile:
-            # TODO: switch from old format to json
-            for key, value in header.items():
-                outfile.write(f"{key}\t{value}\n")
-            # json.dump(header, outfile, indent=4)
+            # switched from old format to json
+            # for key, value in header.items():
+            #     outfile.write(f"{key}\t{value}\n")
+            json.dump(header, outfile, indent=4)
 
         volume = CachedZarrVolume.loadFile(filepath)
         # print("about to set callback")
