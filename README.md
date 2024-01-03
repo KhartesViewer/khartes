@@ -69,8 +69,10 @@ which it does even before the first time you invoke "Save".
 
 ### Two ways to import scroll data
 
-There are two ways to import scroll data into your project.
-First a summary; the details will follow below.
+There are two ways to import scroll data into your project:
+create a data volume from scroll TIFF files, or attach
+an OME/Zarr data store.  Here are the pros and cons
+of each approach.
 
 #### 1. Use 2D TIFF files to create a data volume file
 
@@ -80,7 +82,7 @@ create a data volume, which is a file that resides in your project
 directory and that will be loaded into khartes whenever you need it.
 
 The advantages of this approach are
-* No transformation of the input TIFF data is necessary: khartes
+* No pre-conversion of the input TIFF data is necessary: khartes
 can read the TIFF files directly to create the data volume;
 * You always have your data available locally, in your project file,
 even if you no longer have access to the original TIFF files.
@@ -90,6 +92,8 @@ Some disadvantages:
 so it can be no larger than your computer has memory;
 * You need to wait for the entire data volume to be loaded
 before you can start working.
+* If you want to work outside the area of your data volume,
+you need to create another data volume.
 
 #### 2. Attach to an OME/Zarr data store
 
@@ -105,17 +109,18 @@ a data volume to load;
 RAM, since data is only loaded as needed.
 
 A couple of disadvantage:
-* You need to convert the TIFF data into the OME/Zarr format (a
-script is available for this purpose, and you only have
+* You need to convert the TIFF data into the OME/Zarr format (note
+that a
+script is available for this purpose, and that you only need
 to do this conversion once);
-* In order to access this data, you will need to
+* In order to access this data, you need to
 have the entire converrted data set available whenever you
 run khartes; this data set takes up
-about 1.2 times more space than the original TIFF files.
+about 1.2 times as much space as the original TIFF files.
 
 If you do not already have the OME/Zarr data readily
 available, and want to get started with khartes
-right away, you may continue to the next section,
+right away, you can continue to the next section,
 which explains how
 to convert the scroll TIFF files to a khartes data volume.
 
@@ -125,12 +130,12 @@ with the tutorial, you should skip
 the following section (the one on converting TIFF files to a data
 volume).
 Instead, go
-directly to the section after it, how to attach to
+directly to the section after it, on how to attach to
 an OME/Zarr data store.
 
-We strongly recommend the OME/Zarr approach, because,
+**I strongly recommend the OME/Zarr approach**, because,
 as mentioned, it lets you freely and easily
-access to the entire scroll volume.
+access the entire scroll volume.
 
 ### Converting TIFF files to khartes data volumes
 
@@ -226,12 +231,12 @@ whose name ends in `.zarr`), use the menu option
 
 If you don't already have such a data store, you can create
 one from the standard scroll TIFF files by using the script
-`scroll_to_ome.py` from the github repository
+`scroll_to_ome.py`, which is in the github repository
 https://github.com/KhartesViewer/scroll2zarr. The
 README file for the scroll2zarr repository explains all
 the possible options, but all you really need to do is run:
 
-`python scroll_to_ome.py directory-with-TIFFs destination-directory.zarr`
+`python scroll_to_ome.py`*`directory-with-TIFFs destination-directory.zarr`*
 
 This will take 8 to 24 hours, and the output directory will occupy about
 1.2 times as much space as the input TIFF files.
@@ -240,7 +245,7 @@ Once the script is done running, you will be able to
 attach to the new data store and move freely
 through the entire scroll.
 
-There is much more information about OME/Zarr data stores in
+There is more information about OME/Zarr data stores in
 the section near the end of this README entitled
 "Advanced topic: Working with OME/Zarr data stores"
 
@@ -1435,10 +1440,9 @@ with `.zarr`.  They contain multi-resolution data in the zarr
 format.
 "Multi-resolution" means that khartes can display the data
 in high resolution when zoomed in, and in low resolution when
-zoomed out.  (If only high-resolution data were available, then
-it would not be possible to show a wide-angle zoomed-out view,
-because too much high-resolution data would need to be loaded
-at once).
+zoomed out.
+These are the data stores that are created by
+the `scroll_to_ome.py` script (see below).
 
 * TIFF volumes.  In each scroll directory online, there is
 a sub-directory named `volume_grid`, which contains directories
@@ -1460,7 +1464,7 @@ able to view them in khartes.
 Like the OME/Zarr data stores, these are directories whose
 names end with `.zarr`.  Unlike the OME/Zarr data stores,
 they contain only the high-resolution scroll data.
-As already mentioned,
+As with the TIFF volumes,
 this means that if you zoom out, you will only see a limited
 window of the data, in order not to load too much high-resolution
 data at once.
@@ -1482,7 +1486,7 @@ download the repository
 https://github.com/KhartesViewer/scroll2zarr ,
 and find the script `scroll_to_ome.py`.
 
-This script takes as input the scroll TIFF files.
+This script takes the scroll TIFF files as input.
 
 The README file for the scroll2zarr repository explains
 all the options, but all you really need to do is run:
@@ -1518,11 +1522,11 @@ The larger the window, the more data you see; the trade-off
 is that a larger window consumes more memory and takes
 longer to load.
 
-The optimum value for this parameter depends a lot on
-the amount of RAM in your computer, and the speed of
+The optimum value for this parameter depends significantly on
+the amount of RAM that your computer has, and the speed of
 the drive that contains your data.
 
-If you are working with single-resolution data, it is worth
+If you are working with single-resolution data, it may be worth
 your while to experiment with this parameter.
 
 `Zarr cache size (Gb)` is a parameter used when attaching OME/Zarr
@@ -1530,17 +1534,17 @@ data stores.  You will probably never need to adjust it, but it
 is described here for completeness.
 
 **This is a very obscure topic, feel free to skip it**.
-If you are viewing an OME/Zarr data store,
-When you pan through the data, or zoom in or out, khartes
-is continually loading cubes of data from the data store into
-RAM.  At some point, in order to load in more data, old data will
-need to be ejected.
-The `Zarr cache size (Gb)` parameter is what determines how
-much data will be retained in RAM at any one time.
+When you are viewing an OME/Zarr data store,
+as you pan through the data, or zoom in or out, khartes
+is continually loading cubes ("chunks") of data from the data store into
+RAM.  At some point, in order to load in more data, old data
+needs to be ejected.
+The `Zarr cache size (Gb)` parameter determines how
+much data is retained in RAM at any one time.
 
 A couple of notes about `Zarr cache size (Gb)`:
 
-* Any change you make to this value will not affect data
+* Any change you make to this value will **not** immediately affect data
 that has already been attached; for the change to go into effect,
 you need to save and then reload the project.
 
