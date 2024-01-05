@@ -51,6 +51,8 @@ class ZarrLoader(QMainWindow):
         super(ZarrLoader, self).__init__(main_window)
 
         self.main_window = main_window
+        # a bit confusing: vc_render is the flag, vcrender is the widget
+        self.vc_render = False
         self.setStyleSheet("font-size: 12pt;")
         self.setWindowTitle("Read OME/Zarr/TIFF data store")
         vbox = QVBoxLayout()
@@ -68,9 +70,14 @@ class ZarrLoader(QMainWindow):
         self.nameedit = QLineEdit()
         self.nameedit.textChanged.connect(self.onNameEdited)
         hbox.addWidget(self.nameedit)
+        
+        self.vcrender = QCheckBox("Data is from vc_layers")
+        self.vcrender.setChecked(self.vc_render)
+        self.vcrender.clicked.connect(self.onVcrenderClicked)
         hbox.addStretch()
+        hbox.addWidget(self.vcrender)
         vbox.addLayout(hbox)
-
+        
         hbox = QHBoxLayout()
         hbox.addWidget(QLabel("Volume color:"))
         self.color_editor = ColorEdit(self)
@@ -207,6 +214,14 @@ class ZarrLoader(QMainWindow):
         self.dirbutton.setText(str(pdir))
         self.directory = pdir
         self.directory_valid = True
+
+        pv = self.main_window.project_view
+        if pv is not None:
+            cv = pv.cur_volume
+            if cv is not None:
+                self.vc_render = cv.from_vc_render
+                self.vcrender.setChecked(self.vc_render)
+        
         self.onChange()
     
     def onNameEdited(self, txt):
@@ -223,10 +238,15 @@ class ZarrLoader(QMainWindow):
 
     def color(self):
         return self.color_editor.getColor()
+
+    def onVcrenderClicked(self, s):
+        self.vc_render = self.vcrender.isChecked()
+        # self.main_window.drawSlices()
     
     def onGoButtonClicked(self, s):
         title = "Attach Zarr/OME/TIFFs"
         print(self.directory, self.name, self.color().name())
+        vcrender = self.vc_render
         old_volume = self.main_window.project_view.cur_volume
         # unloads old volume
         self.main_window.setVolume(None)
@@ -247,13 +267,14 @@ class ZarrLoader(QMainWindow):
             # So if the user selects a directory with 2D TIFFs,
             # they are redirected to the create-volume-from-tiffs
             # option.
+            # if not vcrender and (len(shape) == 2 or (1 in shape)):
             if len(shape) == 2 or (1 in shape):
                 emsg = '''This directory contains flat (2D) TIFF files.\nFiles of this type should be read using the "Create volume from TIFF files..." option.  The "Attach Zarr/OME/TIFF data store..." option expects TIFF files to be 3D (multi-layer), like those found in the volume_grid directory. '''
                 new_volume = CachedZarrVolume.createErrorVolume(emsg)
             else:
-                new_volume = CachedZarrVolume.createFromTiffs(project, pdir, volume_name)
+                new_volume = CachedZarrVolume.createFromTiffs(project, pdir, volume_name, vcrender)
         else:
-            new_volume = CachedZarrVolume.createFromZarr(project, pdir, volume_name)
+            new_volume = CachedZarrVolume.createFromZarr(project, pdir, volume_name, vcrender)
         loading = None
 
         if new_volume is None or not new_volume.valid:

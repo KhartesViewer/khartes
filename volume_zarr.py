@@ -48,7 +48,7 @@ def load_tif(path):
         # This looks like a set of z-level images
         tiffs.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
         paths = [os.path.join(path, filename) for filename in tiffs]
-        store = tifffile.imread(paths, aszarr=True)
+        store = tifffile.imread(paths, aszarr=True, fillvalue=0)
     elif all([filename.startswith("cell_yxz_") for filename in tiffs]):
         # This looks like a set of cell cuboid images
         pattern=r"cell_yxz_(\d+)_(\d+)_(\d+)"
@@ -125,14 +125,17 @@ def hashable_to_slice(item):
 
 
 class TransposedDataView():
-    def __init__(self, data, direction=0):
+    def __init__(self, data, direction=0, from_vc_render=False):
         self.data = data
+        self.from_vc_render = from_vc_render
         assert direction in [0, 1]
         self.direction = direction
 
     @property
     def shape(self):
         shape = self.data.shape
+        if self.from_vc_render:
+            shape = (shape[1],shape[0],shape[2])
         if self.direction == 0:
             return (shape[2], shape[0], shape[1])
         elif self.direction == 1:
@@ -152,6 +155,8 @@ class TransposedDataView():
             s2, s0, s1 = selection
         elif self.direction == 1:
             s1, s0, s2 = selection
+        if self.from_vc_render:
+            s1,s0,s2 = s0,s1,s2
 
         # convert integer selections into slices;
         # the data[] call "squeezes" (removes)
@@ -172,6 +177,8 @@ class TransposedDataView():
             return result
         # print("ar", alls, result.shape)
         # transpose the result back to the transposed axes
+        if self.from_vc_render:
+            result = result.transpose(1,0,2)
         if self.direction == 0:
             result = result.transpose(2, 0, 1)
         elif self.direction == 1:
@@ -352,7 +359,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
 
 
 class ZarrLevel():
-    def __init__(self, array, path, scale, ilevel, max_mem_gb):
+    def __init__(self, array, path, scale, ilevel, max_mem_gb, from_vc_render=False):
         # print("zl array", array, scale, max_mem_gb)
         klru = KhartesThreadedLRUCache(
                 array.store, max_size=int(max_mem_gb*2**30))
@@ -363,9 +370,11 @@ class ZarrLevel():
             self.data = self.data[path]
         # print("zl array", array, scale, max_mem_gb, self.data)
         self.scale = scale
+        # don't know if self.from_vc_render will ever be used
+        self.from_vc_render = from_vc_render
         self.trdatas = []
-        self.trdatas.append(TransposedDataView(self.data, 0))
-        self.trdatas.append(TransposedDataView(self.data, 1))
+        self.trdatas.append(TransposedDataView(self.data, 0, from_vc_render))
+        self.trdatas.append(TransposedDataView(self.data, 1, from_vc_render))
 
     # The callback takes 2 arguments: key (a string) and
     # has_data (a bool).  key is the key of the chunk that
@@ -417,10 +426,15 @@ class CachedZarrVolume():
 
     @property
     def shape(self):
-        return self.data.shape
+        shape = self.data.shape
+        if self.from_vc_render:
+            shape = (shape[1],shape[0],shape[2])
+        return shape
     
     def trshape(self, direction):
         shape = self.shape
+        if self.from_vc_render:
+            shape = (shape[1],shape[0],shape[2])
         if direction == 0:
             return (shape[2], shape[0], shape[1])
         else:
@@ -473,6 +487,7 @@ class CachedZarrVolume():
             ds_directory,
             ds_directory_name,
             name,
+            from_vc_render=False
         ):
         """
         Generates a new volume object from a zarr directory
@@ -500,6 +515,7 @@ class CachedZarrVolume():
             "khartes_version": "1.0",
             "khartes_created": timestamp,
             "khartes_modified": timestamp,
+            "khartes_from_vc_render": from_vc_render,
             ds_directory_name: str(ds_directory),
             "max_width": 240,
         }
@@ -520,12 +536,14 @@ class CachedZarrVolume():
             project,
             zarr_directory,
             name,
+            from_vc_render=False
         ):
         return CachedZarrVolume.createFromDataStore(
                 project,
                 zarr_directory,
                 "zarr_dir",
                 name,
+                from_vc_render
                 )
 
     @staticmethod
@@ -533,12 +551,14 @@ class CachedZarrVolume():
             project,
             tiff_directory,
             name,
+            from_vc_render=False
         ):
         return CachedZarrVolume.createFromDataStore(
                 project,
                 tiff_directory,
                 "tiff_dir",
                 name,
+                from_vc_render
                 )
 
     @staticmethod
@@ -580,7 +600,8 @@ class CachedZarrVolume():
         volume.version = float(header.get("khartes_version", 0.0))
         volume.created = header.get("khartes_created", "")
         volume.modified = header.get("khartes_modified", "")
-        volume.from_vc_render = False
+        from_vc_render = header.get("khartes_from_vc_render", False)
+        volume.from_vc_render = from_vc_render
 
         # These are set in common for all zarr arrays:  they always start
         # at the global origin with no stepping.
@@ -620,16 +641,18 @@ class CachedZarrVolume():
 
         volume.valid = True
         volume.trdatas = []
-        volume.trdatas.append(TransposedDataView(volume.data, 0))
-        volume.trdatas.append(TransposedDataView(volume.data, 1))
+        volume.trdatas.append(TransposedDataView(volume.data, 0, from_vc_render))
+        volume.trdatas.append(TransposedDataView(volume.data, 1, from_vc_render))
         volume.sizes = [int(size) for size in volume.data.shape]
         # volume.sizes is in ijk order, volume.data.shape is in kji order 
         volume.sizes.reverse()
         volume.sizes = tuple(volume.sizes)
+        if volume.from_vc_render:
+            volume.sizes = (volume.sizes[0],volume.sizes[2],volume.sizes[1])
         return volume
 
     def setLevelFromArray(self, array, max_mem_gb):
-        level = ZarrLevel(array, "", 1., 0, max_mem_gb)
+        level = ZarrLevel(array, "", 1., 0, max_mem_gb, self.from_vc_render)
         self.levels.append(level)
 
     def parseMetadata(self, hier):
@@ -713,7 +736,7 @@ class CachedZarrVolume():
         max_gb = .5*max_mem_gb
         # create this solely for the purpose of
         # getting the chunk size
-        level0 = ZarrLevel(hier, '0', 1., 0, 0)
+        level0 = ZarrLevel(hier, '0', 1., 0, 0, self.from_vc_render)
         chunk = level0.data.chunks
         # print(chunk)
         min_max_gb = 3*16*2*chunk[0]*chunk[1]*chunk[2]/(2**30)
@@ -738,7 +761,7 @@ class CachedZarrVolume():
             max_gb = max(max_gb, min_max_gb)
             # print("mmg", i, max_gb)
             print(max(min_max_gb, max_gb), end=' ')
-            level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb))
+            level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb), self.from_vc_render)
             self.levels.append(level)
             expected_scale *= 2.
             expected_path_int += 1
@@ -776,10 +799,7 @@ class CachedZarrVolume():
         the corners of the dataset.
         """
         gmin = np.array([0, 0, 0], dtype=np.int32)
-        sizes = list(self.sizes)
-        # reverse was needed to correct bug in sizes, which is now fixed
-        # sizes.reverse()
-        gmax = np.array(sizes, dtype=np.int32) - 1
+        gmax = np.array(self.sizes, dtype=np.int32) - 1
         return np.array((gmin, gmax))
 
     def loadData(self, project_view):
