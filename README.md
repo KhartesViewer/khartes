@@ -21,7 +21,7 @@ The video below gives a quick, 4-minute overview of khartes.
 ### 30-minute video
 
 This next video provides a more extensive introduction to khartes.
-It is a bit old, so the user interface it shows is a bit out
+It is older, so the user interface it shows is a bit out
 of date.  The concepts are unchanged, however.
 
 Note that the video begins with a 60-second
