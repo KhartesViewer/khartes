@@ -635,7 +635,7 @@ class CachedZarrVolume():
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
 
-        print("len levels", len(volume.levels))
+        # print("len levels", len(volume.levels))
 
         volume.data = volume.levels[0].data
 
@@ -740,7 +740,7 @@ class CachedZarrVolume():
         chunk = level0.data.chunks
         # print(chunk)
         min_max_gb = 3*16*2*chunk[0]*chunk[1]*chunk[2]/(2**30)
-        print("mmg", max_mem_gb, " ", end=' ')
+        # print("mmg", max_mem_gb, " ", end=' ')
         for i, lmd in enumerate(metadata):
             info = self.parseLevelMetadata(lmd)
             if info is None:
@@ -760,13 +760,13 @@ class CachedZarrVolume():
                 return
             max_gb = max(max_gb, min_max_gb)
             # print("mmg", i, max_gb)
-            print(max(min_max_gb, max_gb), end=' ')
+            # print(max(min_max_gb, max_gb), end=' ')
             level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb), self.from_vc_render)
             self.levels.append(level)
             expected_scale *= 2.
             expected_path_int += 1
             max_gb *= .5
-        print()
+        # print()
 
     def setImmediateDataMode(self, flag):
         for level in self.levels:
@@ -1056,12 +1056,14 @@ class CachedZarrVolume():
                 break
                 # draw = False
 
+        '''
         for level in self.levels:
             n = len(level.klru._values_cache)
             if level.ilevel == start:
                 print('*', end='')
             print(n, end=' ')
         print(end='\r')
+        '''
 
         return True
 
