@@ -10,18 +10,21 @@ pynrrd to read and write NRRD files (a data format for volume files), and OpenCV
 The main emphasis of khartes is on interactivity and a user-friendly GUI; no computer-vision or machine-learning
 algorithms are currently used.
 
-### 2-minute video
+### 4-minute video
 
-The video below gives a quick, 2-minute overview of khartes.
+The video below gives a quick, 4-minute overview of khartes.
 
 (If you click on the image below, you will be taken to vimeo.com to watch the video)
 
-[![Watch the video](https://i.vimeocdn.com/video/1703962064-7e3db7142e72fe9b85887c02bd8902a65a1a6ef9c644e3e12bb5485b3519ece3-d_640)](https://vimeo.com/849799186)
+[![Watch the video](https://i.vimeocdn.com/filter/overlay?src0=https%3A%2F%2Fi.vimeocdn.com%2Fvideo%2F1778798261-1e8c384b94e005a1b796422b72f0ae75e977affdfe987915423e6e7da03251d0-d_640&src1=http%3A%2F%2Ff.vimeocdn.com%2Fp%2Fimages%2Fcrawler_play.png)](https://vimeo.com/900481995)
 
 ### 30-minute video
 
 This next video provides a more extensive introduction to khartes.
-Note that it begins with a 60-second
+It is a bit old, so the user interface it shows is a bit out
+of date.  The concepts are unchanged, however.
+
+Note that the video begins with a 60-second
 intro sequence which contains no narration, but which quickly highlights some of khartes' features.
 After the intro, the video follows a more traditional format, with a voice-over and a demo.
 The entire video is about 30 minutes long.  There is no closed captioning, but the script for the video
