@@ -659,6 +659,7 @@ class Volume():
             ofilefull.unlink(True)
             return Volume.createErrorVolume("Cancelled by user")
         ocube = np.zeros((zsize, ysize, xsize), dtype=np.uint16)
+        first_print = True
         for i,z in enumerate(range(zrange[0], zrange[1]+1, zrange[2])):
             if pattern == "":
                 if z not in filenamedict:
@@ -700,11 +701,17 @@ class Volume():
                 err = "requested y range %d to %d is outside y range %d of image %s"%(yrange[1], iarr.shape[0]-1, fname)
                 ofilefull.unlink(True)
                 return Volume.createErrorVolume(err)
+            if iarr.dtype == np.uint8:
+                if first_print:
+                   print("tiff file is unsigned 8 bit, multiplying by 256")
+                   first_print = False
+                iarr = iarr.astype(np.uint16)
+                iarr *= 256
             ocube[i] = np.copy(
                     iarr[yrange[0]:yrange[1]+1:yrange[2], 
                         xrange[0]:xrange[1]+1:xrange[2]])
 
-        print("beginning stack")
+        print("\nbeginning stack")
         if callback is not None and not callback("Stacking images"):
             ofilefull.unlink(True)
             return Volume.createErrorVolume("Cancelled by user")
