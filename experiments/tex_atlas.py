@@ -674,9 +674,9 @@ class GLWidget(QOpenGLWidget):
         self.buildProgram()
         self.buildBuffers()
         # self.printInfo()
-        timer = QTimer(self)
-        timer.timeout.connect(self.update)
-        timer.start(20)
+        # timer = QTimer(self)
+        # timer.timeout.connect(self.update)
+        # timer.start(20)
 
     def buildProgram(self):
         self.program = QOpenGLShaderProgram()
