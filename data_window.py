@@ -1224,7 +1224,7 @@ class DataWindow(QLabel):
         self.setNearbyTiffAndNode(mxy)
         self.window.drawSlices()
 
-    def drawScaleBar(self, outrgbx):
+    def drawScaleBar(self, outrgbx, alpha=65535):
         pixPerMm = 1000./self.volume_view.volume.apparentVoxelSize
         zoom = self.getZoom()
         length = zoom*pixPerMm
@@ -1251,7 +1251,7 @@ class DataWindow(QLabel):
         wh = outrgbx.shape[0]
         ww = outrgbx.shape[1]  # get the width of the window
         y0 = wh - 10
-        color = (65535,65535,65535,65535)
+        color = (65535,65535,65535,alpha)
         text = "%g mm" % value
         text_scale = .8
         text_font = cv2.FONT_HERSHEY_PLAIN
@@ -1440,7 +1440,7 @@ into and out of the viewing plane.
         maxxy = self.ijToXy(maxij)
         return minxy, maxxy, intersects_slice
 
-    def drawTrackingCursor(self, canvas):
+    def drawTrackingCursor(self, canvas, alpha=65535):
         cw = self.window.cursor_window
         if cw is None or cw == self:
             return
@@ -1450,8 +1450,8 @@ into and out of the viewing plane.
         r = 5
         thickness = 2
         # color = self.axisColor(cw.axis)
-        white = (65535,65535,65535)
-        color = (16000,55000,16000)
+        white = (65535,65535,65535, alpha)
+        color = (16000,55000,16000, alpha)
         # cv2.circle(canvas, cxy, 2*r+1, white, thickness+2)
         cv2.circle(canvas, cxy, 2*r+1, color, thickness)
         # self.ijToTijk is a virtual function that

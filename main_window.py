@@ -49,6 +49,7 @@ from volume import (
 from volume_zarr import CachedZarrVolume
 from ppm import Ppm
 from utils import Utils
+from gl_data_window import GLDataWindow
 
 class ColorBlock(QLabel):
 
@@ -872,6 +873,8 @@ class MainWindow(QMainWindow):
 
         # z slice in data
         self.inline = DataWindow(self, 0)
+        # self.inline = GLDataWindow(self, 0)
+        # self.inline = GLDataWindow(self, 1)
 
         # y slice or x slice in data
         self.xline = DataWindow(self, 1)
