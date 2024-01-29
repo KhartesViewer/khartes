@@ -32,8 +32,60 @@ from PyQt5.QtCore import (
 
 import numpy as np
 import cv2
+from utils import Utils
 
 from data_window import DataWindow
+
+class FragmentVao:
+    def __init__(self, fragment_view, fragment_program, gl):
+        self.fragment_view = fragment_view
+        self.gl = gl
+        self.vao = None
+        self.vao_modified = ""
+        self.fragment_program = fragment_program
+        self.getVao()
+
+    def getVao(self):
+        if self.vao_modified >= self.fragment_view.modified:
+            return self.vao
+        if self.vao is None:
+            self.vao = QOpenGLVertexArrayObject()
+            self.vao.create()
+        self.vao.bind()
+
+        self.vbo = QOpenGLBuffer()
+        self.vbo.create()
+        self.vbo.bind()
+        fv = self.fragment_view
+        # copy to force compaction
+        # pts3d = fv.fpoints[:,:3].ascontiguousarray(dtype=np.float32)
+        pts3d = np.ascontiguousarray(fv.fpoints[:,:3], dtype=np.float32)
+        nbytes = pts3d.size*pts3d.itemsize
+        self.vbo.allocate(pts3d, nbytes)
+
+        vloc = self.fragment_program.attributeLocation("position")
+        f = self.gl
+        f.glVertexAttribPointer(
+                vloc,
+                pts3d.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
+                0, 0)
+        self.vbo.release()
+
+        self.ibo = QOpenGLBuffer(QOpenGLBuffer.IndexBuffer)
+        self.ibo.create()
+        self.ibo.bind()
+        # trgls = fv.trgls().ascontiguousarray(dtype=np.uint32)
+        trgls = np.ascontiguousarray(fv.trgls(), dtype=np.uint32)
+        nbytes = trgls.size*trgls.itemsize
+        self.ibo.allocate(trgls, nbytes)
+
+        self.vao_modified = Utils.timestamp()
+        self.vao.release()
+        # do not release ibo before vao is released!
+        self.ibo.release()
+
+        return self.vao
+
 
 class GLDataWindow(DataWindow):
     def __init__(self, window, axis):
@@ -57,6 +109,7 @@ class GLDataWindow(DataWindow):
 
 slice_code = {
     "name": "slice",
+
     "vertex": '''
       #version 410 core
 
@@ -68,6 +121,7 @@ slice_code = {
         ftxt = vtxt;
       }
     ''',
+
     "fragment": '''
       #version 410 core
 
@@ -89,6 +143,32 @@ slice_code = {
     ''',
 }
 
+fragment_code = {
+    "name": "fragment",
+
+    "vertex": '''
+      #version 410 core
+
+      in vec3 position;
+      void main() {
+        gl_Position = vec4(position, 1.0);
+      }
+    ''',
+
+    "fragment": '''
+      #version 410 core
+
+      uniform vec4 color;
+      out vec4 fColor;
+
+      void main()
+      {
+        fColor = color;
+      }
+    ''',
+}
+
+"""
 borders_code = {
     "name": "borders",
     "vertex": '''
@@ -111,12 +191,14 @@ borders_code = {
       }
     ''',
 }
+"""
 
 class GLDataWindowChild(QOpenGLWidget):
     def __init__(self, gldw, parent=None):
         super(GLDataWindowChild, self).__init__(parent)
         self.gldw = gldw
         self.setMouseTracking(True)
+        self.fragment_vaos = {}
 
     def dwKeyPressEvent(self, e):
         self.gldw.dwKeyPressEvent(e)
@@ -146,15 +228,22 @@ class GLDataWindowChild(QOpenGLWidget):
         # print("paintGL")
         volume_view = self.gldw.volume_view
         if volume_view is None :
-            # self.clear()
-            # if not self.has_had_volume_view:
-            #     self.resetText()
             return
         
         f = self.gl
         f.glClear(f.GL_COLOR_BUFFER_BIT)
-        self.paintSlice(volume_view)
+        self.paintSlice()
+        self.paintFragments()
         # self.paintBorders()
+
+    def paintFragments(self):
+        dw = self.gldw
+        for fv in dw.fragmentViews():
+            if fv not in self.fragment_vaos:
+                fvao = FragmentVao(fv, self.fragment_program, self.gl)
+                self.fragment_vaos[fv] = fvao
+            fvao = self.fragment_vaos[fv]
+            vao = fvao.getVao()
 
     def texFromData(self, data, qiformat):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
@@ -172,8 +261,9 @@ class GLDataWindowChild(QOpenGLWidget):
         tex.setMagnificationFilter(QOpenGLTexture.Nearest)
         return tex
 
-    def drawOverlays(self, data, volume_view):
+    def drawOverlays(self, data):
         dw = self.gldw
+        volume_view = dw.volume_view
 
         ww = dw.size().width()
         wh = dw.size().height()
@@ -254,7 +344,9 @@ class GLDataWindowChild(QOpenGLWidget):
             dw.drawTrackingCursor(data, alpha16)
                 
 
-    def paintSlice(self, volume_view):
+    def paintSlice(self):
+        dw = self.gldw
+        volume_view = dw.volume_view
         f = self.gl
         self.slice_program.bind()
 
@@ -283,7 +375,7 @@ class GLDataWindowChild(QOpenGLWidget):
         self.slice_program.setUniformValue(bloc, bunit)
 
         overlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
-        self.drawOverlays(overlay_data, volume_view)
+        self.drawOverlays(overlay_data)
         overlay_tex = self.texFromData(overlay_data, QImage.Format_RGBA64)
         oloc = self.slice_program.uniformLocation("overlay_sampler")
         if oloc < 0:
@@ -304,6 +396,7 @@ class GLDataWindowChild(QOpenGLWidget):
         self.slice_program.release()
         vaoBinder = None
 
+    '''
     def paintBorders(self):
         f = self.gl
         dw = self.gldw
@@ -363,6 +456,7 @@ class GLDataWindowChild(QOpenGLWidget):
                          self.borders_indices.size, f.GL_UNSIGNED_INT, None)
         self.slice_program.release()
         vaoBinder = None
+    '''
 
     def resizeGL(self, width, height):
         pass
@@ -404,8 +498,10 @@ class GLDataWindowChild(QOpenGLWidget):
 
     def buildPrograms(self):
         self.slice_program = self.buildProgram(slice_code)
-        self.borders_program = self.buildProgram(borders_code)
+        # self.borders_program = self.buildProgram(borders_code)
+        self.fragment_program = self.buildProgram(fragment_code)
 
+    """
     def buildBordersVao(self):
         self.borders_vao = QOpenGLVertexArrayObject()
         self.borders_vao.create()
@@ -467,12 +563,15 @@ class GLDataWindowChild(QOpenGLWidget):
         ibo.allocate(self.borders_indices, nbytes)
         vaoBinder = None
         ibo.release()
+    """
 
 
+    '''
     def fAxisColor(self, axis):
         color = self.gldw.axisColor(axis)
         fcolor = [c/65535 for c in color]
         return fcolor
+    '''
 
     def buildSliceVao(self):
         self.slice_vao = QOpenGLVertexArrayObject()
