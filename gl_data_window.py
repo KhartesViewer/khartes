@@ -1,5 +1,6 @@
 from PyQt5.QtGui import (
         QImage,
+        QMatrix4x4,
         QOpenGLVertexArrayObject,
         QOpenGLBuffer,
         QOpenGLContext,
@@ -12,6 +13,7 @@ from PyQt5.QtGui import (
         QSurfaceFormat,
         QTransform,
         QVector2D,
+        QVector4D,
         )
 
 from PyQt5.QtWidgets import (
@@ -48,22 +50,47 @@ class FragmentVao:
     def getVao(self):
         if self.vao_modified >= self.fragment_view.modified:
             return self.vao
+
+        self.fragment_program.bind()
+
         if self.vao is None:
             self.vao = QOpenGLVertexArrayObject()
             self.vao.create()
         self.vao.bind()
+        # vaoBinder = QOpenGLVertexArrayObject.Binder(self.vao)
 
         self.vbo = QOpenGLBuffer()
         self.vbo.create()
         self.vbo.bind()
         fv = self.fragment_view
-        # copy to force compaction
-        # pts3d = fv.fpoints[:,:3].ascontiguousarray(dtype=np.float32)
-        pts3d = np.ascontiguousarray(fv.fpoints[:,:3], dtype=np.float32)
+        pts3d = np.ascontiguousarray(fv.vpoints[:,:3], dtype=np.float32)
+
+        '''
+        xys_list = [
+                ((-1, +1, 0.)),
+                ((+1, -1, 0.)),
+                ((-1, -1, 0.)),
+                ((+1, +1, 0.)),
+                ]
+        pts3d = np.array(xys_list, dtype=np.float32)
+        pts3d *= .5
+        '''
+
+        # pts3d /= 3000.
+        '''
+        pts3d[:,0] -= 300
+        pts3d[:,1] -= 1200
+        pts3d[:,2] -= 300
+        pts3d /= 500.
+        '''
+        # print(pts3d.min(axis=0))
+        # print(pts3d.max(axis=0))
+
         nbytes = pts3d.size*pts3d.itemsize
         self.vbo.allocate(pts3d, nbytes)
 
         vloc = self.fragment_program.attributeLocation("position")
+        print("vloc", vloc)
         f = self.gl
         f.glVertexAttribPointer(
                 vloc,
@@ -71,16 +98,31 @@ class FragmentVao:
                 0, 0)
         self.vbo.release()
 
+        self.fragment_program.enableAttributeArray(vloc)
+
         self.ibo = QOpenGLBuffer(QOpenGLBuffer.IndexBuffer)
         self.ibo.create()
         self.ibo.bind()
-        # trgls = fv.trgls().ascontiguousarray(dtype=np.uint32)
+
         trgls = np.ascontiguousarray(fv.trgls(), dtype=np.uint32)
+
+        '''
+        indices_list = [(0,1,2), (1,0,3)]
+        # notice that indices must be uint8, uint16, or uint32
+        trgls = np.array(indices_list, dtype=np.uint32)
+        '''
+
+        self.trgl_index_size = trgls.size
+
         nbytes = trgls.size*trgls.itemsize
         self.ibo.allocate(trgls, nbytes)
 
+        print("nodes, trgls", pts3d.shape, trgls.shape)
+
         self.vao_modified = Utils.timestamp()
         self.vao.release()
+        # vaoBinder = None
+        
         # do not release ibo before vao is released!
         self.ibo.release()
 
@@ -101,9 +143,9 @@ class GLDataWindow(DataWindow):
         # super(GLDataWindow, self).drawSlice()
 
         # The next 3 lines keep the window from shrinking too much
-        img = QImage(self.size(), QImage.Format_ARGB32)
-        pixmap = QPixmap.fromImage(img)
-        self.setPixmap(pixmap)
+        # img = QImage(self.size(), QImage.Format_ARGB32)
+        # pixmap = QPixmap.fromImage(img)
+        # self.setPixmap(pixmap)
 
         self.glw.update()
 
@@ -149,9 +191,11 @@ fragment_code = {
     "vertex": '''
       #version 410 core
 
+      uniform mat4 xform;
       in vec3 position;
       void main() {
-        gl_Position = vec4(position, 1.0);
+        gl_Position = xform*vec4(position, 1.0);
+        // gl_Position = vec4(position, 1.0);
       }
     ''',
 
@@ -164,6 +208,7 @@ fragment_code = {
       void main()
       {
         fColor = color;
+        // fColor = vec4(1.,1.,0.,1.);
       }
     ''',
 }
@@ -238,12 +283,83 @@ class GLDataWindowChild(QOpenGLWidget):
 
     def paintFragments(self):
         dw = self.gldw
+        volume_view = self.gldw.volume_view
+        f = self.gl
+        xform = QMatrix4x4()
+        # xform.scale(1./12000.)
+        '''
+        pts3d[:,0] -= 300
+        pts3d[:,1] -= 1200
+        pts3d[:,2] -= 300
+        pts3d /= 500.
+        '''
+        # xform.scale(1./500.)
+        # xform.translate(-300, -1200, -300)
+        iind = dw.iIndex
+        jind = dw.jIndex
+        kind = dw.kIndex
+        zoom = dw.getZoom()
+        cijk = volume_view.ijktf
+        '''
+        xform.setRow(0, QVector4D(.002,0,0,-.6))
+        xform.setRow(1, QVector4D(0,.002,0,-2.4))
+        xform.setRow(2, QVector4D(0,0,.002,-.6))
+        '''
+        '''
+        mat = np.array((
+            (.002,0,0,-.6),
+            (0,.002,0,-2.4),
+            (0,0,.002,-.6),
+            (0,0,0,1.)
+            ))
+        '''
+        mat = np.zeros((4,4), dtype=np.float32)
+        ww = dw.size().width()
+        wh = dw.size().height()
+        wf = zoom/(.5*ww)
+        hf = zoom/(.5*wh)
+        df = 1/.5
+        mat[0][iind] = wf
+        mat[0][3] = -wf*cijk[iind]
+        mat[1][jind] = -hf
+        mat[1][3] = hf*cijk[jind]
+        mat[2][kind] = df
+        mat[2][3] = -df*cijk[kind]
+        mat[3][3] = 1.
+        xform = QMatrix4x4(mat.flatten().tolist())
+
+        '''
+        for i in range(4):
+            print(xform.row(i))
+        '''
+        self.fragment_program.bind()
+        self.fragment_program.setUniformValue("xform", xform)
         for fv in dw.fragmentViews():
+            if not fv.visible:
+                continue
+            qcolor = fv.fragment.color
+            rgba = list(qcolor.getRgbF())
+            # cvcolor = [int(65535*c) for c in rgba]
+            # cvcolor[3] = 65535
+            rgba[3] = 1.
+            # self.fragment_program.bind()
+            self.fragment_program.setUniformValue("color", *rgba)
             if fv not in self.fragment_vaos:
                 fvao = FragmentVao(fv, self.fragment_program, self.gl)
                 self.fragment_vaos[fv] = fvao
             fvao = self.fragment_vaos[fv]
             vao = fvao.getVao()
+            vao.bind()
+            # vaoBinder = QOpenGLVertexArrayObject.Binder(vao)
+            self.fragment_program.setUniformValue("xform", xform)
+
+            # print("tis", fvao.trgl_index_size)
+            f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size, 
+                             f.GL_UNSIGNED_INT, None)
+            vao.release()
+            # vaoBinder = None
+            # self.fragment_program.release()
+        self.fragment_program.release()
 
     def texFromData(self, data, qiformat):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
