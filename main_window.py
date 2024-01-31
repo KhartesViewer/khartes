@@ -866,6 +866,7 @@ class MainWindow(QMainWindow):
 
         # x slice or y slice in data
         self.depth = DataWindow(self, 2)
+        # self.depth = GLDataWindow(self, 2)
 
         # z slice in data
         self.inline = DataWindow(self, 0)
@@ -874,6 +875,7 @@ class MainWindow(QMainWindow):
 
         # y slice or x slice in data
         self.xline = DataWindow(self, 1)
+        # self.xline = GLDataWindow(self, 1)
 
         # slice of data from interpreted surface
         self.surface = SurfaceWindow(self)
@@ -887,6 +889,9 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.depth, 4, 0, 2, 2)
         grid.addWidget(self.surface, 0, 2, 4, 3)
         grid.addWidget(self.tab_panel, 4, 2, 2, 3)
+
+        for i in range(6):
+            grid.setRowStretch(i, 1)
 
         # self.edit = QPlainTextEdit(self)
         self.edit = QTextEdit(self)
