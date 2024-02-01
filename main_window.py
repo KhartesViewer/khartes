@@ -868,18 +868,29 @@ class MainWindow(QMainWindow):
         self.openhand_transparents = self.transparentSvgs(path+"/icons/openhand transparent.svg", 11)
         self.openhand_transparent = self.openhand_transparents[0]
 
-        # x slice or y slice in data
-        self.depth = DataWindow(self, 2)
-        # self.depth = GLDataWindow(self, 2)
+        case = 0
 
-        # z slice in data
-        self.inline = DataWindow(self, 0)
-        # self.inline = GLDataWindow(self, 0)
-        # self.inline = GLDataWindow(self, 1)
-
-        # y slice or x slice in data
-        self.xline = DataWindow(self, 1)
-        # self.xline = GLDataWindow(self, 1)
+        if case == 0:
+            # x slice or y slice in data
+            self.depth = DataWindow(self, 2)
+            # z slice in data
+            self.inline = DataWindow(self, 0)
+            # y slice or x slice in data
+            self.xline = DataWindow(self, 1)
+        elif case == 1:
+            # x slice or y slice in data
+            self.depth = DataWindow(self, 2)
+            # z slice in data
+            self.inline = GLDataWindow(self, 1)
+            # y slice or x slice in data
+            self.xline = DataWindow(self, 1)
+        elif case == 2:
+            # x slice or y slice in data
+            self.depth = GLDataWindow(self, 2)
+            # z slice in data
+            self.inline = GLDataWindow(self, 0)
+            # y slice or x slice in data
+            self.xline = GLDataWindow(self, 1)
 
         # slice of data from interpreted surface
         self.surface = SurfaceWindow(self)

@@ -199,6 +199,230 @@ fragment_code = {
       }
     ''',
 
+    # from https://stackoverflow.com/questions/16884423/geometry-shader-producing-gaps-between-lines/16886843
+    "geometry_orig": '''
+    #version 410 core
+
+    layout(triangles) in;
+    layout(line_strip, max_vertices = 3) out;
+
+    void emitIntersection(in vec4 a, in float distA, in vec4 b, in float distB)
+    {
+      if (sign(distA) * sign(distB) <= 0.0f && !(sign(distA) == 0 && sign(distB) == 0))
+      {
+        float fa = abs(distA);
+        float fb = abs(distB);
+        gl_Position = (fa * b + fb * a) / (fa + fb);
+        EmitVertex();
+      }
+    }
+
+    void main()
+    {
+      float dist[3];
+      for (int i=0; i<3; i++)
+        // dist[i] = dot(gl_in[i].gl_Position, plane);
+        dist[i] = gl_in[i].gl_Position.z;
+
+      // Find the smallest i where vertex i is below and vertex i+1 is above the plane.
+      ivec3 ijk = ivec3(0, 1, 2); // use swizzle to permute the indices
+      for (int i=0; i < 3 && (dist[ijk.x] > 0 || dist[ijk.y] < 0); ijk=ijk.yzx, i++);
+
+      emitIntersection(gl_in[ijk.x].gl_Position, dist[ijk.x], gl_in[ijk.y].gl_Position, dist[ijk.y]);
+      emitIntersection(gl_in[ijk.y].gl_Position, dist[ijk.y], gl_in[ijk.z].gl_Position, dist[ijk.z]);
+      emitIntersection(gl_in[ijk.z].gl_Position, dist[ijk.z], gl_in[ijk.x].gl_Position, dist[ijk.x]);
+    }
+    ''',
+
+    # modified from https://stackoverflow.com/questions/16884423/geometry-shader-producing-gaps-between-lines/16886843
+    "geometry": '''
+    #version 410 core
+
+    uniform float thickness;
+    uniform vec2 size;
+    uniform int vcount = 10;
+
+    layout(triangles) in;
+    // layout(line_strip, max_vertices = 3) out;
+    // layout(triangle_strip, max_vertices = 18) out;
+    layout(triangle_strip, max_vertices = 18) out;
+    // layout(triangle_strip, max_vertices = 4) out;
+
+    /*
+    void emitIntersection(in vec4 a, in float distA, in vec4 b, in float distB)
+    {
+      if (sign(distA) * sign(distB) <= 0.0f && !(sign(distA) == 0 && sign(distB) == 0))
+      {
+        float fa = abs(distA);
+        float fb = abs(distB);
+        gl_Position = (fa * b + fb * a) / (fa + fb);
+        EmitVertex();
+      }
+    }
+    */
+
+    void main()
+    {
+      float dist[3];
+      for (int i=0; i<3; i++)
+        // dist[i] = dot(gl_in[i].gl_Position, plane);
+        dist[i] = gl_in[i].gl_Position.z;
+      int j = 0;
+      // Have to go through nodes in the correct order.
+      // Imagine a triangle a,b,c, with distances
+      // a = -1, b = 0, c = 1.  In this case, there
+      // are two intersections: one at point b, and one on
+      // the line between a and c.
+      // All three lines (ab, bc, ca) will have intersections,
+      // with the lines ab and bc both having the same intersection,
+      // at point b.
+      // If the lines are scanned in that order, and only the first
+      // two detected intersections are stored, then the two detected
+      // intersections will both be point b!
+      // There are various ways to detect and avoid this problem,
+      // but the method below seems the least convoluted.
+      
+      // Find the smallest i where vertex i and vertex i+1 
+      // are on opposite sides of the plane
+      ivec3 ijk = ivec3(0, 1, 2); // use swizzle to permute the indices
+      for (int i=0; i < 3 && (dist[ijk.x]*dist[ijk.y] >= 0); ijk=ijk.yzx, i++);
+
+      vec4 pcs[2];
+      // int zcnt = 0;
+      for (int i=0; i<3 && j<2; ijk=ijk.yzx, i++) {
+      // for (int i=0; i<3; ijk=ijk.yzx, i++) {
+        float da = dist[ijk.x];
+        float db = dist[ijk.y];
+        // float prod = da*db;
+        if (da*db > 0 || (da == 0 && db == 0)) continue;
+        // if (prod > 0 ) continue;
+        /*
+        if (prod == 0) {
+          if (zcnt > 0) continue;
+          zcnt++;
+        }
+        */
+        vec4 pa = gl_in[ijk.x].gl_Position;
+        vec4 pb = gl_in[ijk.y].gl_Position;
+        float fa = abs(da);
+        float fb = abs(db);
+        vec4 pc = (fa * pb + fb * pa) / (fa + fb);
+        pcs[j++] = pc;
+        /*
+        if (j>0) {
+          vec4 prev = pcs[j-1];
+          vec2 norm = (pc-pcs[1]).xy;
+          norm = normalize(vec2(-norm.y, norm.x));
+          vec4 offset = thickness*vec4(norm.x/size.x, norm.y/size.y, 0., 0.);
+        }
+        */
+        // gl_Position = pc;
+        // EmitVertex();
+
+      }
+      if (j<2) return;
+      vec2 tan = (pcs[1]-pcs[0]).xy;
+      tan = normalize(tan);
+      vec2 norm = vec2(-tan.y, tan.x);
+      float xfactor = thickness/size.x;
+      float yfactor = thickness/size.y;
+      if (vcount == 18) {
+        vec4 offsets[8];
+        for (int i=0; i<8; i++) {
+          float deg = i*45;
+          float rad = radians(deg);
+          vec2 raw_offset = -cos(rad)*tan + sin(rad)*norm;
+          vec4 scaled_offset = 
+            vec4(xfactor*raw_offset.x, yfactor*raw_offset.y, 0., 0.);
+          offsets[i] = scaled_offset;
+        }
+        vec4 opts[18];
+        int i = 0;
+        opts[i++] = pcs[0];
+        opts[i++] = pcs[0]+offsets[6];
+        opts[i++] = pcs[0]+offsets[7];
+        opts[i++] = pcs[0];
+        opts[i++] = pcs[0]+offsets[0];
+        opts[i++] = pcs[0]+offsets[1];
+        opts[i++] = pcs[0];
+        opts[i++] = pcs[0]+offsets[2];
+        opts[i++] = pcs[1];
+        opts[i++] = pcs[1]+offsets[2];
+        opts[i++] = pcs[1]+offsets[3];
+        opts[i++] = pcs[1];
+        opts[i++] = pcs[1]+offsets[4];
+        opts[i++] = pcs[1]+offsets[5];
+        opts[i++] = pcs[1];
+        opts[i++] = pcs[1]+offsets[6];
+        opts[i++] = pcs[0];
+        opts[i++] = pcs[0]+offsets[6];
+        for (int i=0; i<18; i++) {
+          gl_Position = opts[i];
+          EmitVertex();
+        }
+      } else if (vcount == 10) {
+        vec4 offsets[8];
+        for (int i=0; i<8; i++) {
+          float deg = i*45;
+          float rad = radians(deg);
+          vec2 raw_offset = -cos(rad)*tan + sin(rad)*norm;
+          vec4 scaled_offset = 
+            vec4(xfactor*raw_offset.x, yfactor*raw_offset.y, 0., 0.);
+          offsets[i] = scaled_offset;
+        }
+        vec4 opts[10];
+        int i = 0;
+        opts[i++] = pcs[0]+offsets[0];
+        opts[i++] = pcs[0]+offsets[1];
+        opts[i++] = pcs[0]+offsets[7];
+        opts[i++] = pcs[0]+offsets[2];
+        opts[i++] = pcs[0]+offsets[6];
+        opts[i++] = pcs[1]+offsets[2];
+        opts[i++] = pcs[1]+offsets[6];
+        opts[i++] = pcs[1]+offsets[3];
+        opts[i++] = pcs[1]+offsets[5];
+        opts[i++] = pcs[1]+offsets[4];
+        for (int i=0; i<10; i++) {
+          gl_Position = opts[i];
+          EmitVertex();
+        }
+      } else if (vcount == 4) {
+
+          vec4 offset = vec4(xfactor*norm.x, yfactor*norm.y, 0., 0.);
+          // vec4 offset = thickness*vec4(norm.x/size.x, norm.y/size.y, 0., 0.);
+          gl_Position = pcs[0] + offset;
+          EmitVertex();
+          gl_Position = pcs[0] - offset;
+          EmitVertex();
+          gl_Position = pcs[1] + offset;
+          EmitVertex();
+          gl_Position = pcs[1] - offset;
+          EmitVertex();
+      }
+      /*
+      gl_Position = pcs[0];
+      EmitVertex();
+      gl_Position = pcs[1]+vec4(.01,0.,0.,1.);
+      EmitVertex();
+      gl_Position = pcs[0]+vec4(.01,0.,0.,1.);
+      EmitVertex();
+      gl_Position = pcs[1];
+      EmitVertex();
+      */
+
+
+      /*
+      // Find the smallest i where vertex i is below and vertex i+1 is above the plane.
+      ivec3 ijk = ivec3(0, 1, 2); // use swizzle to permute the indices
+      for (int i=0; i < 3 && (dist[ijk.x] > 0 || dist[ijk.y] < 0); ijk=ijk.yzx, i++);
+
+      emitIntersection(gl_in[ijk.x].gl_Position, dist[ijk.x], gl_in[ijk.y].gl_Position, dist[ijk.y]);
+      emitIntersection(gl_in[ijk.y].gl_Position, dist[ijk.y], gl_in[ijk.z].gl_Position, dist[ijk.z]);
+      emitIntersection(gl_in[ijk.z].gl_Position, dist[ijk.z], gl_in[ijk.x].gl_Position, dist[ijk.x]);
+      */
+    }
+    ''',
+
     "fragment": '''
       #version 410 core
 
@@ -283,7 +507,13 @@ class GLDataWindowChild(QOpenGLWidget):
 
     def paintFragments(self):
         dw = self.gldw
-        volume_view = self.gldw.volume_view
+        ww = dw.size().width()
+        wh = dw.size().height()
+        opacity = dw.getDrawOpacity("overlay")
+        apply_line_opacity = dw.getDrawApplyOpacity("line")
+        thickness = dw.getDrawWidth("line")
+        thickness = (3*thickness)//2
+        volume_view = dw.volume_view
         f = self.gl
         xform = QMatrix4x4()
         # xform.scale(1./12000.)
@@ -334,6 +564,8 @@ class GLDataWindowChild(QOpenGLWidget):
         '''
         self.fragment_program.bind()
         self.fragment_program.setUniformValue("xform", xform)
+        self.fragment_program.setUniformValue("size", dw.size())
+        self.fragment_program.setUniformValue("thickness", 1.*thickness)
         for fv in dw.fragmentViews():
             if not fv.visible:
                 continue
