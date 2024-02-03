@@ -1,11 +1,14 @@
 from PyQt5.QtGui import (
         QImage,
         QMatrix4x4,
+        QOffscreenSurface,
         QOpenGLVertexArrayObject,
         QOpenGLBuffer,
         QOpenGLContext,
         QOpenGLDebugLogger,
         QOpenGLDebugMessage,
+        QOpenGLFramebufferObject,
+        QOpenGLFramebufferObjectFormat,
         QOpenGLShader,
         QOpenGLShaderProgram,
         QOpenGLTexture,
@@ -169,17 +172,18 @@ slice_code = {
 
       uniform sampler2D base_sampler;
       uniform sampler2D overlay_sampler;
+      uniform sampler2D fragments_sampler;
       in vec2 ftxt;
       out vec4 fColor;
 
       void main()
       {
         fColor = texture(base_sampler, ftxt);
+        vec4 frColor = texture(fragments_sampler, ftxt);
+        float alpha = frColor.a;
+        fColor = (1.-alpha)*fColor + alpha*frColor;
         vec4 oColor = texture(overlay_sampler, ftxt);
-        float alpha = oColor.a;
-        // For testing:
-        // alpha = 0.;
-        // alpha = .5;
+        alpha = oColor.a;
         fColor = (1.-alpha)*fColor + alpha*oColor;
       }
     ''',
@@ -468,6 +472,10 @@ class GLDataWindowChild(QOpenGLWidget):
         self.gldw = gldw
         self.setMouseTracking(True)
         self.fragment_vaos = {}
+        # 0: asynchronous mode, 1: synch mode
+        # synch mode is much slower
+        self.logging_mode = 1
+        # self.logging_mode = 0
 
     def dwKeyPressEvent(self, e):
         self.gldw.dwKeyPressEvent(e)
@@ -476,22 +484,60 @@ class GLDataWindowChild(QOpenGLWidget):
         print("initializeGL")
         self.context().aboutToBeDestroyed.connect(self.destroyingContext)
         self.gl = self.context().versionFunctions()
+        self.main_context = self.context()
         # Note that debug logging only takes place if the
         # surface format option "DebugContext" is set
         self.logger = QOpenGLDebugLogger()
         self.logger.initialize()
-        self.logger.messageLogged.connect(self.onLogMessage)
-        # synch mode is much slower
-        self.logger.startLogging(1) # 0: asynchronous mode, 1: synch mode
+        self.logger.messageLogged.connect(lambda m: self.onLogMessage("dc", m))
+        self.logger.startLogging(self.logging_mode)
         msg = QOpenGLDebugMessage.createApplicationMessage("test debug messaging")
         self.logger.logMessage(msg)
         self.buildPrograms()
         self.buildSliceVao()
         # self.buildBordersVao()
+
+        self.createGLSurfaces()
         
         f = self.gl
         # self.gl.glClearColor(.3,.6,.3,1.)
         f.glClearColor(.6,.3,.3,1.)
+
+    def createGLSurfaces(self):
+        self.fragment_context = QOpenGLContext()
+        self.fragment_context.create()
+        self.fragment_surface = QOffscreenSurface()
+        self.fragment_surface.create()
+        # Make new context current; need to undo this
+        # before leaving the function
+        self.fragment_context.makeCurrent(self.fragment_surface)
+        # Note that debug logging only takes place if the
+        # surface format option "DebugContext" is set
+        self.frag_logger = QOpenGLDebugLogger()
+        self.frag_logger.initialize()
+        # self.frag_logger.messageLogged.connect(self.onLogMessage)
+        self.frag_logger.messageLogged.connect(lambda m: self.onLogMessage("fc", m))
+        self.frag_logger.startLogging(self.logging_mode)
+        msg = QOpenGLDebugMessage.createApplicationMessage("test debug messaging")
+        self.logger.logMessage(msg)
+        self.fragment_gl = self.fragment_context.versionFunctions()
+        self.fragment_program = self.buildProgram(fragment_code)
+        # Restore default context
+        self.makeCurrent()
+
+    def resizeGL(self, width, height):
+        # pass
+        # self.buildBordersVao()
+        # print("resize", width, height)
+        # based on https://stackoverflow.com/questions/59338015/minimal-opengl-offscreen-rendering-using-qt
+        self.fragment_context.makeCurrent(self.fragment_surface)
+        vp_size = QSize(width, height)
+        fbo_format = QOpenGLFramebufferObjectFormat()
+        fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
+        ff = self.fragment_gl
+        fbo_format.setInternalTextureFormat(ff.GL_RGBA16)
+        self.fragment_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
+        ff.glViewport(0, 0, vp_size.width(), vp_size.height())
 
     def paintGL(self):
         # print("paintGL")
@@ -502,19 +548,27 @@ class GLDataWindowChild(QOpenGLWidget):
         f = self.gl
         f.glClear(f.GL_COLOR_BUFFER_BIT)
         self.paintSlice()
-        self.paintFragments()
+        # self.paintFragments()
         # self.paintBorders()
 
-    def paintFragments(self):
+    # def paintFragments(self):
+    def drawFragments(self, fragments_overlay):
+        # change current context; undo this before
+        # leaving the function
+        self.fragment_context.makeCurrent(self.fragment_surface)
+        f = self.fragment_gl
+        f.glClear(f.GL_COLOR_BUFFER_BIT)
         dw = self.gldw
         ww = dw.size().width()
         wh = dw.size().height()
         opacity = dw.getDrawOpacity("overlay")
         apply_line_opacity = dw.getDrawApplyOpacity("line")
+        line_alpha = 1.
+        if apply_line_opacity:
+            line_alpha = opacity
         thickness = dw.getDrawWidth("line")
         thickness = (3*thickness)//2
         volume_view = dw.volume_view
-        f = self.gl
         xform = QMatrix4x4()
         # xform.scale(1./12000.)
         '''
@@ -566,16 +620,21 @@ class GLDataWindowChild(QOpenGLWidget):
         self.fragment_program.setUniformValue("xform", xform)
         self.fragment_program.setUniformValue("size", dw.size())
         self.fragment_program.setUniformValue("thickness", 1.*thickness)
+        colors = []
+        colors.append((0.,0.,0.,0.))
         for fv in dw.fragmentViews():
             if not fv.visible:
                 continue
             qcolor = fv.fragment.color
             rgba = list(qcolor.getRgbF())
-            # cvcolor = [int(65535*c) for c in rgba]
-            # cvcolor[3] = 65535
-            rgba[3] = 1.
+            # print("rgba", rgba, [65535*c for c in rgba])
+            cvcolor = [int(65535*c) for c in rgba]
+            cvcolor[3] = int(line_alpha*65535)
+            # rgba[3] = 1.
+            findex = len(colors)/65536.
+            colors.append(cvcolor)
             # self.fragment_program.bind()
-            self.fragment_program.setUniformValue("color", *rgba)
+            self.fragment_program.setUniformValue("color", findex,0.,0.,1.)
             if fv not in self.fragment_vaos:
                 fvao = FragmentVao(fv, self.fragment_program, self.gl)
                 self.fragment_vaos[fv] = fvao
@@ -592,6 +651,41 @@ class GLDataWindowChild(QOpenGLWidget):
             # vaoBinder = None
             # self.fragment_program.release()
         self.fragment_program.release()
+        # Because fragment_fbo was created with an
+        # internal texture format of RGBA16 (see the code
+        # where fragment_fbo was created), the QImage
+        # created by toImage is in QImage format 27, which is 
+        # "a premultiplied 64-bit halfword-ordered RGBA format (16-16-16-16)"
+        # The "premultiplied" means that the RGB values have already
+        # been multiplied by alpha.
+        # This comment is based on:
+        # https://doc.qt.io/qt-5/qimage.html
+        # https://doc.qt.io/qt-5/qopenglframebufferobject.html
+        im = self.fragment_fbo.toImage()
+        # print("image format, size", im.format(), im.size(), im.sizeInBytes())
+        # im.save("test.png")
+
+        # conversion to numpy array based on
+        # https://stackoverflow.com/questions/19902183/qimage-to-numpy-array-using-pyside
+        iw = im.width()
+        ih = im.height()
+        iptr = im.constBits()
+        iptr.setsize(im.sizeInBytes())
+        arr = np.frombuffer(iptr, dtype=np.uint16)
+        arr.resize(ih, iw, 4)
+        # farr = arr.flatten()
+        # am = farr.argmax()
+        # print("arr", arr.shape, arr.dtype, farr[0:16], farr[am-4:am+16])
+        # self.fragment_lines_arr = np.zeros_like(arr)
+        acolors = np.array(colors)
+        # self.fragment_lines_arr[:,:] = acolors[arr[:,:,0]]
+        fragments_overlay[:,:] = acolors[arr[:,:,0]]
+        # farr = self.fragment_lines_arr.flatten()
+        # am = farr.argmax()
+        # print("farr", farr.dtype, farr[0:16], farr[am-4:am+16])
+
+        # restore default context
+        self.makeCurrent()
 
     def texFromData(self, data, qiformat):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
@@ -722,6 +816,7 @@ class GLDataWindowChild(QOpenGLWidget):
         base_tex.bind()
         self.slice_program.setUniformValue(bloc, bunit)
 
+
         overlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawOverlays(overlay_data)
         overlay_tex = self.texFromData(overlay_data, QImage.Format_RGBA64)
@@ -733,6 +828,20 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glActiveTexture(f.GL_TEXTURE0+ounit)
         overlay_tex.bind()
         self.slice_program.setUniformValue(oloc, ounit)
+
+
+        fragments_data = np.zeros((wh,ww,4), dtype=np.uint16)
+        self.drawFragments(fragments_data)
+        fragments_tex = self.texFromData(fragments_data, QImage.Format_RGBA64)
+        floc = self.slice_program.uniformLocation("fragments_sampler")
+        if floc < 0:
+            print("couldn't get loc for fragments sampler")
+            return
+        funit = 3
+        f.glActiveTexture(f.GL_TEXTURE0+funit)
+        fragments_tex.bind()
+        self.slice_program.setUniformValue(floc, funit)
+
 
         f.glActiveTexture(f.GL_TEXTURE0)
         # base_tex.release()
@@ -806,19 +915,14 @@ class GLDataWindowChild(QOpenGLWidget):
         vaoBinder = None
     '''
 
-    def resizeGL(self, width, height):
-        pass
-        # self.buildBordersVao()
-        # print("resize", width, height)
-
     def closeEvent(self, e):
         print("glw widget close event")
 
     def destroyingContext(self):
         print("glw destroying context")
 
-    def onLogMessage(self, msg):
-        print("glw log:", msg.message())
+    def onLogMessage(self, head, msg):
+        print(head, "log:", msg.message())
 
     def buildProgram(self, sdict):
         edict = {
@@ -847,7 +951,7 @@ class GLDataWindowChild(QOpenGLWidget):
     def buildPrograms(self):
         self.slice_program = self.buildProgram(slice_code)
         # self.borders_program = self.buildProgram(borders_code)
-        self.fragment_program = self.buildProgram(fragment_code)
+        # self.fragment_program = self.buildProgram(fragment_code)
 
     """
     def buildBordersVao(self):
