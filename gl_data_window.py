@@ -41,6 +41,130 @@ from utils import Utils
 
 from data_window import DataWindow
 
+class MultiFragmentVao:
+    def __init__(self, fragment_views, fragment_program, gl):
+        self.fragment_views = set()
+        self.gl = gl
+        self.vao = None
+        self.vao_modified = ""
+        self.fragment_program = fragment_program
+        self.getVao(fragment_views)
+
+    def getVao(self, fragment_views):
+        fmod = "";
+        ptcnt = 0
+        trgcnt = 0
+        new_fvs = set()
+        # TODO: how to tell if frag visibility
+        # has been modified?
+        for fv in fragment_views:
+            if not fv.visible:
+                continue
+            lmod = fv.modified;
+            # print(fv.fragment.name, lmod)
+            if lmod > fmod:
+                fmod = lmod
+            ptcnt += len(fv.vpoints)
+            # TODO: handle fv.trgls() is None
+            trgcnt += len(fv.trgls())
+            new_fvs.add(fv)
+        # print("modified", self.vao_modified, fmod)
+        if new_fvs == self.fragment_views and self.vao_modified >= fmod:
+            return self.vao
+
+        self.fragment_views = new_fvs
+
+        self.fragment_program.bind()
+
+        if self.vao is None:
+            self.vao = QOpenGLVertexArrayObject()
+            self.vao.create()
+        self.vao.bind()
+
+        pts3d = np.zeros((ptcnt, 3), dtype=np.float32)
+        colors = np.zeros((ptcnt, 4), dtype=np.float32)
+        trgls = np.zeros((trgcnt, 3), dtype=np.uint32)
+
+        ipt = 0
+        itrg = 0
+        for fv in self.fragment_views:
+            if not fv.visible:
+                continue
+            pts = fv.vpoints
+            npts = len(pts)
+            qcolor = fv.fragment.color
+            rgba = list(qcolor.getRgbF())
+            # cvcolor = [int(65535*c) for c in rgba]
+            # cvcolor[3] = 65535
+            rgba[3] = 1.
+            colors[ipt:ipt+npts] = rgba
+            pts3d[ipt:ipt+npts] = pts[:, :3]
+            trgs = fv.trgls()
+            ntrgs = len(trgs)
+            trgls[itrg:itrg+ntrgs] = trgs + ipt
+            ipt += npts
+            itrg += ntrgs
+
+        f = self.gl
+
+        self.vbo = QOpenGLBuffer()
+        self.vbo.create()
+        self.vbo.bind()
+
+        nbytes = pts3d.size*pts3d.itemsize
+        self.vbo.allocate(pts3d, nbytes)
+
+        vloc = self.fragment_program.attributeLocation("position")
+        print("vloc", vloc)
+        f.glVertexAttribPointer(
+                vloc,
+                pts3d.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
+                0, 0)
+        self.vbo.release()
+
+        self.fragment_program.enableAttributeArray(vloc)
+
+        self.cvbo = QOpenGLBuffer()
+        self.cvbo.create()
+        self.cvbo.bind()
+
+        nbytes = colors.size*colors.itemsize
+        self.cvbo.allocate(colors, nbytes)
+
+        cloc = self.fragment_program.attributeLocation("color")
+        print("cloc", cloc)
+        f.glVertexAttribPointer(
+                cloc,
+                colors.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
+                0, 0)
+        self.cvbo.release()
+
+        self.fragment_program.enableAttributeArray(cloc)
+
+        self.ibo = QOpenGLBuffer(QOpenGLBuffer.IndexBuffer)
+        self.ibo.create()
+        self.ibo.bind()
+
+        # TODO: Need to deal with case where we have a
+        # a line, not a triangulated surface!
+
+        self.trgl_index_size = trgls.size
+
+        nbytes = trgls.size*trgls.itemsize
+        self.ibo.allocate(trgls, nbytes)
+
+        print("nodes, trgls", pts3d.shape, trgls.shape)
+
+        self.vao_modified = Utils.timestamp()
+        self.vao.release()
+        # vaoBinder = None
+        
+        # do not release ibo before vao is released!
+        self.ibo.release()
+
+        return self.vao
+
+
 class FragmentVao:
     def __init__(self, fragment_view, fragment_program, gl):
         self.fragment_view = fragment_view
@@ -107,7 +231,13 @@ class FragmentVao:
         self.ibo.create()
         self.ibo.bind()
 
-        trgls = np.ascontiguousarray(fv.trgls(), dtype=np.uint32)
+        # TODO: Need to deal with case where we have a
+        # a line, not a triangulated surface!
+        fv_trgls = fv.trgls()
+        if fv_trgls is None:
+            fv_trgls = np.zeros((0,3), dtype=np.uint32)
+        
+        trgls = np.ascontiguousarray(fv_trgls, dtype=np.uint32)
 
         '''
         indices_list = [(0,1,2), (1,0,3)]
@@ -173,6 +303,7 @@ slice_code = {
       uniform sampler2D base_sampler;
       uniform sampler2D overlay_sampler;
       uniform sampler2D fragments_sampler;
+      uniform float frag_opacity = 1.;
       in vec2 ftxt;
       out vec4 fColor;
 
@@ -180,7 +311,8 @@ slice_code = {
       {
         fColor = texture(base_sampler, ftxt);
         vec4 frColor = texture(fragments_sampler, ftxt);
-        float alpha = frColor.a;
+        // float alpha = frColor.a;
+        float alpha = frag_opacity*frColor.a;
         fColor = (1.-alpha)*fColor + alpha*frColor;
         vec4 oColor = texture(overlay_sampler, ftxt);
         alpha = oColor.a;
@@ -195,11 +327,15 @@ fragment_code = {
     "vertex": '''
       #version 410 core
 
+      in vec4 color;
+      out vec4 vcolor;
+
       uniform mat4 xform;
       in vec3 position;
       void main() {
         gl_Position = xform*vec4(position, 1.0);
         // gl_Position = vec4(position, 1.0);
+        vcolor = color;
       }
     ''',
 
@@ -245,12 +381,15 @@ fragment_code = {
     uniform float thickness;
     uniform vec2 size;
     uniform int vcount = 10;
+    in vec4 vcolor[];
+    out vec4 gcolor;
 
     layout(triangles) in;
     // layout(line_strip, max_vertices = 3) out;
     // layout(triangle_strip, max_vertices = 18) out;
     layout(triangle_strip, max_vertices = 18) out;
     // layout(triangle_strip, max_vertices = 4) out;
+
 
     /*
     void emitIntersection(in vec4 a, in float distA, in vec4 b, in float distB)
@@ -321,6 +460,7 @@ fragment_code = {
         }
         */
         // gl_Position = pc;
+        // gcolor = vcolor[0];
         // EmitVertex();
 
       }
@@ -362,6 +502,7 @@ fragment_code = {
         opts[i++] = pcs[0]+offsets[6];
         for (int i=0; i<18; i++) {
           gl_Position = opts[i];
+          gcolor = vcolor[0];
           EmitVertex();
         }
       } else if (vcount == 10) {
@@ -388,6 +529,7 @@ fragment_code = {
         opts[i++] = pcs[1]+offsets[4];
         for (int i=0; i<10; i++) {
           gl_Position = opts[i];
+          gcolor = vcolor[0];
           EmitVertex();
         }
       } else if (vcount == 4) {
@@ -395,12 +537,16 @@ fragment_code = {
           vec4 offset = vec4(xfactor*norm.x, yfactor*norm.y, 0., 0.);
           // vec4 offset = thickness*vec4(norm.x/size.x, norm.y/size.y, 0., 0.);
           gl_Position = pcs[0] + offset;
+          gcolor = vcolor[0];
           EmitVertex();
           gl_Position = pcs[0] - offset;
+          gcolor = vcolor[0];
           EmitVertex();
           gl_Position = pcs[1] + offset;
+          gcolor = vcolor[0];
           EmitVertex();
           gl_Position = pcs[1] - offset;
+          gcolor = vcolor[0];
           EmitVertex();
       }
       /*
@@ -430,12 +576,13 @@ fragment_code = {
     "fragment": '''
       #version 410 core
 
-      uniform vec4 color;
+      uniform vec4 gcolor;
+      // in vec4 gcolor;
       out vec4 fColor;
 
       void main()
       {
-        fColor = color;
+        fColor = gcolor;
         // fColor = vec4(1.,1.,0.,1.);
       }
     ''',
@@ -472,6 +619,7 @@ class GLDataWindowChild(QOpenGLWidget):
         self.gldw = gldw
         self.setMouseTracking(True)
         self.fragment_vaos = {}
+        self.multi_fragment_vao = None
         # 0: asynchronous mode, 1: synch mode
         # synch mode is much slower
         self.logging_mode = 1
@@ -555,10 +703,12 @@ class GLDataWindowChild(QOpenGLWidget):
     def drawFragments(self, fragments_overlay):
         # change current context; undo this before
         # leaving the function
+        timera = Utils.Timer()
         self.fragment_context.makeCurrent(self.fragment_surface)
         f = self.fragment_gl
         f.glClear(f.GL_COLOR_BUFFER_BIT)
         dw = self.gldw
+        axstr = "(%d) "%dw.axis
         ww = dw.size().width()
         wh = dw.size().height()
         opacity = dw.getDrawOpacity("overlay")
@@ -620,8 +770,11 @@ class GLDataWindowChild(QOpenGLWidget):
         self.fragment_program.setUniformValue("xform", xform)
         self.fragment_program.setUniformValue("size", dw.size())
         self.fragment_program.setUniformValue("thickness", 1.*thickness)
+        ''''''
         colors = []
         colors.append((0.,0.,0.,0.))
+        timera.time(axstr+"setup")
+        new_fragment_vaos = {}
         for fv in dw.fragmentViews():
             if not fv.visible:
                 continue
@@ -630,19 +783,21 @@ class GLDataWindowChild(QOpenGLWidget):
             # print("rgba", rgba, [65535*c for c in rgba])
             cvcolor = [int(65535*c) for c in rgba]
             cvcolor[3] = int(line_alpha*65535)
-            # rgba[3] = 1.
+            rgba[3] = 1.
             findex = len(colors)/65536.
             colors.append(cvcolor)
             # self.fragment_program.bind()
-            self.fragment_program.setUniformValue("color", findex,0.,0.,1.)
+            # self.fragment_program.setUniformValue("gcolor", findex,0.,0.,1.)
+            self.fragment_program.setUniformValue("gcolor", *rgba)
             if fv not in self.fragment_vaos:
                 fvao = FragmentVao(fv, self.fragment_program, self.gl)
                 self.fragment_vaos[fv] = fvao
             fvao = self.fragment_vaos[fv]
+            new_fragment_vaos[fv] = fvao
             vao = fvao.getVao()
             vao.bind()
             # vaoBinder = QOpenGLVertexArrayObject.Binder(vao)
-            self.fragment_program.setUniformValue("xform", xform)
+            # self.fragment_program.setUniformValue("xform", xform)
 
             # print("tis", fvao.trgl_index_size)
             f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size, 
@@ -650,6 +805,29 @@ class GLDataWindowChild(QOpenGLWidget):
             vao.release()
             # vaoBinder = None
             # self.fragment_program.release()
+        timera.time(axstr+"draw")
+        self.fragment_vaos = new_fragment_vaos
+        ''''''
+        '''
+        if self.multi_fragment_vao is None:
+            self.multi_fragment_vao = MultiFragmentVao(dw.fragmentViews(), self.fragment_program, self.gl)
+        fvao = self.multi_fragment_vao
+        vao = fvao.getVao(dw.fragmentViews())
+        if vao is None:
+            # restore default context
+            self.makeCurrent()
+            return
+        timera.time(axstr+"setup")
+        vao.bind()
+
+        f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size, 
+                         f.GL_UNSIGNED_INT, None)
+        vao.release()
+        timera.time(axstr+"draw")
+        '''
+
+
+        ''''''
         self.fragment_program.release()
         # Because fragment_fbo was created with an
         # internal texture format of RGBA16 (see the code
@@ -662,6 +840,7 @@ class GLDataWindowChild(QOpenGLWidget):
         # https://doc.qt.io/qt-5/qimage.html
         # https://doc.qt.io/qt-5/qopenglframebufferobject.html
         im = self.fragment_fbo.toImage()
+        timera.time(axstr+"get image")
         # print("image format, size", im.format(), im.size(), im.sizeInBytes())
         # im.save("test.png")
 
@@ -677,9 +856,13 @@ class GLDataWindowChild(QOpenGLWidget):
         # am = farr.argmax()
         # print("arr", arr.shape, arr.dtype, farr[0:16], farr[am-4:am+16])
         # self.fragment_lines_arr = np.zeros_like(arr)
+        '''
         acolors = np.array(colors)
         # self.fragment_lines_arr[:,:] = acolors[arr[:,:,0]]
         fragments_overlay[:,:] = acolors[arr[:,:,0]]
+        '''
+        fragments_overlay[:,:,:] = arr[:,:,:]
+        ''''''
         # farr = self.fragment_lines_arr.flatten()
         # am = farr.argmax()
         # print("farr", farr.dtype, farr[0:16], farr[am-4:am+16])
@@ -842,6 +1025,13 @@ class GLDataWindowChild(QOpenGLWidget):
         fragments_tex.bind()
         self.slice_program.setUniformValue(floc, funit)
 
+        opacity = dw.getDrawOpacity("overlay")
+        apply_line_opacity = dw.getDrawApplyOpacity("line")
+        line_alpha = 1.
+        if apply_line_opacity:
+            line_alpha = opacity
+        # uniform float frag_opacity = 1.;
+        self.slice_program.setUniformValue("frag_opacity", line_alpha)
 
         f.glActiveTexture(f.GL_TEXTURE0)
         # base_tex.release()
