@@ -1356,8 +1356,11 @@ class MainWindow(QMainWindow):
 
     def updateDrawSettingsWidgets(self):
         for setting_name, setting in self.draw_settings.items():
+            # see comment on "opacity" in setDrawSettingsToDefaults
+            if "opacity" not in setting:
+                continue
             for param, value in setting.items():
-                dc = self.draw_settings_widgets.get(param, None)
+                dc = self.draw_settings_widgets.get(setting_name, None)
                 if dc is None: 
                     continue
                 widget = dc.get(param, None)
