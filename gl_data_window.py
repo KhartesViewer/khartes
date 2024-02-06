@@ -41,129 +41,6 @@ from utils import Utils
 
 from data_window import DataWindow
 
-class MultiFragmentVao:
-    def __init__(self, fragment_views, fragment_program, gl):
-        self.fragment_views = set()
-        self.gl = gl
-        self.vao = None
-        self.vao_modified = ""
-        self.fragment_program = fragment_program
-        self.getVao(fragment_views)
-
-    def getVao(self, fragment_views):
-        fmod = "";
-        ptcnt = 0
-        trgcnt = 0
-        new_fvs = set()
-        # TODO: how to tell if frag visibility
-        # has been modified?
-        for fv in fragment_views:
-            if not fv.visible:
-                continue
-            lmod = fv.modified;
-            # print(fv.fragment.name, lmod)
-            if lmod > fmod:
-                fmod = lmod
-            ptcnt += len(fv.vpoints)
-            # TODO: handle fv.trgls() is None
-            trgcnt += len(fv.trgls())
-            new_fvs.add(fv)
-        # print("modified", self.vao_modified, fmod)
-        if new_fvs == self.fragment_views and self.vao_modified >= fmod:
-            return self.vao
-
-        self.fragment_views = new_fvs
-
-        self.fragment_program.bind()
-
-        if self.vao is None:
-            self.vao = QOpenGLVertexArrayObject()
-            self.vao.create()
-        self.vao.bind()
-
-        pts3d = np.zeros((ptcnt, 3), dtype=np.float32)
-        colors = np.zeros((ptcnt, 4), dtype=np.float32)
-        trgls = np.zeros((trgcnt, 3), dtype=np.uint32)
-
-        ipt = 0
-        itrg = 0
-        for fv in self.fragment_views:
-            if not fv.visible:
-                continue
-            pts = fv.vpoints
-            npts = len(pts)
-            qcolor = fv.fragment.color
-            rgba = list(qcolor.getRgbF())
-            # cvcolor = [int(65535*c) for c in rgba]
-            # cvcolor[3] = 65535
-            rgba[3] = 1.
-            colors[ipt:ipt+npts] = rgba
-            pts3d[ipt:ipt+npts] = pts[:, :3]
-            trgs = fv.trgls()
-            ntrgs = len(trgs)
-            trgls[itrg:itrg+ntrgs] = trgs + ipt
-            ipt += npts
-            itrg += ntrgs
-
-        f = self.gl
-
-        self.vbo = QOpenGLBuffer()
-        self.vbo.create()
-        self.vbo.bind()
-
-        nbytes = pts3d.size*pts3d.itemsize
-        self.vbo.allocate(pts3d, nbytes)
-
-        vloc = self.fragment_program.attributeLocation("position")
-        print("vloc", vloc)
-        f.glVertexAttribPointer(
-                vloc,
-                pts3d.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
-                0, 0)
-        self.vbo.release()
-
-        self.fragment_program.enableAttributeArray(vloc)
-
-        self.cvbo = QOpenGLBuffer()
-        self.cvbo.create()
-        self.cvbo.bind()
-
-        nbytes = colors.size*colors.itemsize
-        self.cvbo.allocate(colors, nbytes)
-
-        cloc = self.fragment_program.attributeLocation("color")
-        print("cloc", cloc)
-        f.glVertexAttribPointer(
-                cloc,
-                colors.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
-                0, 0)
-        self.cvbo.release()
-
-        self.fragment_program.enableAttributeArray(cloc)
-
-        self.ibo = QOpenGLBuffer(QOpenGLBuffer.IndexBuffer)
-        self.ibo.create()
-        self.ibo.bind()
-
-        # TODO: Need to deal with case where we have a
-        # a line, not a triangulated surface!
-
-        self.trgl_index_size = trgls.size
-
-        nbytes = trgls.size*trgls.itemsize
-        self.ibo.allocate(trgls, nbytes)
-
-        print("nodes, trgls", pts3d.shape, trgls.shape)
-
-        self.vao_modified = Utils.timestamp()
-        self.vao.release()
-        # vaoBinder = None
-        
-        # do not release ibo before vao is released!
-        self.ibo.release()
-
-        return self.vao
-
 
 class FragmentVao:
     def __init__(self, fragment_view, fragment_program, gl):
@@ -183,35 +60,14 @@ class FragmentVao:
         if self.vao is None:
             self.vao = QOpenGLVertexArrayObject()
             self.vao.create()
+
         self.vao.bind()
-        # vaoBinder = QOpenGLVertexArrayObject.Binder(self.vao)
 
         self.vbo = QOpenGLBuffer()
         self.vbo.create()
         self.vbo.bind()
         fv = self.fragment_view
         pts3d = np.ascontiguousarray(fv.vpoints[:,:3], dtype=np.float32)
-
-        '''
-        xys_list = [
-                ((-1, +1, 0.)),
-                ((+1, -1, 0.)),
-                ((-1, -1, 0.)),
-                ((+1, +1, 0.)),
-                ]
-        pts3d = np.array(xys_list, dtype=np.float32)
-        pts3d *= .5
-        '''
-
-        # pts3d /= 3000.
-        '''
-        pts3d[:,0] -= 300
-        pts3d[:,1] -= 1200
-        pts3d[:,2] -= 300
-        pts3d /= 500.
-        '''
-        # print(pts3d.min(axis=0))
-        # print(pts3d.max(axis=0))
 
         nbytes = pts3d.size*pts3d.itemsize
         self.vbo.allocate(pts3d, nbytes)
@@ -233,17 +89,12 @@ class FragmentVao:
 
         # TODO: Need to deal with case where we have a
         # a line, not a triangulated surface!
+        # notice that indices must be uint8, uint16, or uint32
         fv_trgls = fv.trgls()
         if fv_trgls is None:
             fv_trgls = np.zeros((0,3), dtype=np.uint32)
         
         trgls = np.ascontiguousarray(fv_trgls, dtype=np.uint32)
-
-        '''
-        indices_list = [(0,1,2), (1,0,3)]
-        # notice that indices must be uint8, uint16, or uint32
-        trgls = np.array(indices_list, dtype=np.uint32)
-        '''
 
         self.trgl_index_size = trgls.size
 
@@ -254,7 +105,6 @@ class FragmentVao:
 
         self.vao_modified = Utils.timestamp()
         self.vao.release()
-        # vaoBinder = None
         
         # do not release ibo before vao is released!
         self.ibo.release()
@@ -327,263 +177,249 @@ fragment_code = {
     "vertex": '''
       #version 410 core
 
-      in vec4 color;
-      out vec4 vcolor;
-
       uniform mat4 xform;
       in vec3 position;
       void main() {
         gl_Position = xform*vec4(position, 1.0);
-        // gl_Position = vec4(position, 1.0);
-        vcolor = color;
       }
-    ''',
-
-    # from https://stackoverflow.com/questions/16884423/geometry-shader-producing-gaps-between-lines/16886843
-    "geometry_orig": '''
-    #version 410 core
-
-    layout(triangles) in;
-    layout(line_strip, max_vertices = 3) out;
-
-    void emitIntersection(in vec4 a, in float distA, in vec4 b, in float distB)
-    {
-      if (sign(distA) * sign(distB) <= 0.0f && !(sign(distA) == 0 && sign(distB) == 0))
-      {
-        float fa = abs(distA);
-        float fb = abs(distB);
-        gl_Position = (fa * b + fb * a) / (fa + fb);
-        EmitVertex();
-      }
-    }
-
-    void main()
-    {
-      float dist[3];
-      for (int i=0; i<3; i++)
-        // dist[i] = dot(gl_in[i].gl_Position, plane);
-        dist[i] = gl_in[i].gl_Position.z;
-
-      // Find the smallest i where vertex i is below and vertex i+1 is above the plane.
-      ivec3 ijk = ivec3(0, 1, 2); // use swizzle to permute the indices
-      for (int i=0; i < 3 && (dist[ijk.x] > 0 || dist[ijk.y] < 0); ijk=ijk.yzx, i++);
-
-      emitIntersection(gl_in[ijk.x].gl_Position, dist[ijk.x], gl_in[ijk.y].gl_Position, dist[ijk.y]);
-      emitIntersection(gl_in[ijk.y].gl_Position, dist[ijk.y], gl_in[ijk.z].gl_Position, dist[ijk.z]);
-      emitIntersection(gl_in[ijk.z].gl_Position, dist[ijk.z], gl_in[ijk.x].gl_Position, dist[ijk.x]);
-    }
     ''',
 
     # modified from https://stackoverflow.com/questions/16884423/geometry-shader-producing-gaps-between-lines/16886843
     "geometry": '''
-    #version 410 core
-
-    uniform float thickness;
-    uniform vec2 size;
-    uniform int vcount = 10;
-    in vec4 vcolor[];
-    out vec4 gcolor;
-
-    layout(triangles) in;
-    // layout(line_strip, max_vertices = 3) out;
-    // layout(triangle_strip, max_vertices = 18) out;
-    layout(triangle_strip, max_vertices = 18) out;
-    // layout(triangle_strip, max_vertices = 4) out;
-
-
-    /*
-    void emitIntersection(in vec4 a, in float distA, in vec4 b, in float distB)
-    {
-      if (sign(distA) * sign(distB) <= 0.0f && !(sign(distA) == 0 && sign(distB) == 0))
+      #version 410 core
+  
+      uniform float thickness;
+      uniform vec2 window_size;
+  
+      layout(triangles) in;
+      layout(triangle_strip, max_vertices = 18) out;
+  
+      const float angles[] = float[8](
+        radians(0), radians(45), radians(90), radians(135), 
+        radians(180), radians(225), radians(270), radians(315));
+      const vec2 trig_table[] = vec2[9](
+        vec2(cos(angles[0]), sin(angles[0])),
+        vec2(cos(angles[1]), sin(angles[1])),
+        vec2(cos(angles[2]), sin(angles[2])),
+        vec2(cos(angles[3]), sin(angles[3])),
+        vec2(cos(angles[4]), sin(angles[4])),
+        vec2(cos(angles[5]), sin(angles[5])),
+        vec2(cos(angles[6]), sin(angles[6])),
+        vec2(cos(angles[7]), sin(angles[7])),
+        vec2(0., 0.));
+  
+  
+      void main()
       {
-        float fa = abs(distA);
-        float fb = abs(distB);
-        gl_Position = (fa * b + fb * a) / (fa + fb);
-        EmitVertex();
-      }
-    }
-    */
+        float dist[3];
+        float sgn[3]; // sign(float) returns float
+        float sig = 0; // signature
+        float m = 1;
 
-    void main()
-    {
-      float dist[3];
-      for (int i=0; i<3; i++)
-        // dist[i] = dot(gl_in[i].gl_Position, plane);
-        dist[i] = gl_in[i].gl_Position.z;
-      int j = 0;
-      // Have to go through nodes in the correct order.
-      // Imagine a triangle a,b,c, with distances
-      // a = -1, b = 0, c = 1.  In this case, there
-      // are two intersections: one at point b, and one on
-      // the line between a and c.
-      // All three lines (ab, bc, ca) will have intersections,
-      // with the lines ab and bc both having the same intersection,
-      // at point b.
-      // If the lines are scanned in that order, and only the first
-      // two detected intersections are stored, then the two detected
-      // intersections will both be point b!
-      // There are various ways to detect and avoid this problem,
-      // but the method below seems the least convoluted.
-      
-      // Find the smallest i where vertex i and vertex i+1 
-      // are on opposite sides of the plane
-      ivec3 ijk = ivec3(0, 1, 2); // use swizzle to permute the indices
-      for (int i=0; i < 3 && (dist[ijk.x]*dist[ijk.y] >= 0); ijk=ijk.yzx, i++);
-
-      vec4 pcs[2];
-      // int zcnt = 0;
-      for (int i=0; i<3 && j<2; ijk=ijk.yzx, i++) {
-      // for (int i=0; i<3; ijk=ijk.yzx, i++) {
-        float da = dist[ijk.x];
-        float db = dist[ijk.y];
-        // float prod = da*db;
-        if (da*db > 0 || (da == 0 && db == 0)) continue;
-        // if (prod > 0 ) continue;
-        /*
-        if (prod == 0) {
-          if (zcnt > 0) continue;
-          zcnt++;
+        for (int i=0; i<3; i++) {
+          dist[i] = gl_in[i].gl_Position.z;
+          sgn[i] = sign(dist[i]);
+          sig += m*(1+sgn[i]);
+          m *= 3;
         }
-        */
-        vec4 pa = gl_in[ijk.x].gl_Position;
-        vec4 pb = gl_in[ijk.y].gl_Position;
-        float fa = abs(da);
-        float fb = abs(db);
-        vec4 pc = (fa * pb + fb * pa) / (fa + fb);
-        pcs[j++] = pc;
-        /*
-        if (j>0) {
-          vec4 prev = pcs[j-1];
-          vec2 norm = (pc-pcs[1]).xy;
-          norm = normalize(vec2(-norm.y, norm.x));
-          vec4 offset = thickness*vec4(norm.x/size.x, norm.y/size.y, 0., 0.);
-        }
-        */
-        // gl_Position = pc;
-        // gcolor = vcolor[0];
-        // EmitVertex();
 
-      }
-      if (j<2) return;
-      vec2 tan = (pcs[1]-pcs[0]).xy;
-      tan = normalize(tan);
-      vec2 norm = vec2(-tan.y, tan.x);
-      float xfactor = thickness/size.x;
-      float yfactor = thickness/size.y;
-      if (vcount == 18) {
-        vec4 offsets[8];
-        for (int i=0; i<8; i++) {
-          float deg = i*45;
-          float rad = radians(deg);
-          vec2 raw_offset = -cos(rad)*tan + sin(rad)*norm;
-          vec4 scaled_offset = 
-            vec4(xfactor*raw_offset.x, yfactor*raw_offset.y, 0., 0.);
+        // These correspond to the cases where there are
+        // no intersections (---, 000, +++):
+        if (sig == 0 || sig == 13 || sig == 26) return;
+  
+        // Have to go through nodes in the correct order.
+        // Imagine a triangle a,b,c, with distances
+        // a = -1, b = 0, c = 1.  In this case, there
+        // are two intersections: one at point b, and one on
+        // the line between a and c.
+        // All three lines (ab, bc, ca) will have intersections,
+        // the lines ab and bc will both have the same intersection,
+        // at point b.
+        // If the lines are scanned in that order, and only the first
+        // two detected intersections are stored, then the two detected
+        // intersections will both be point b!
+        // There are various ways to detect and avoid this problem,
+        // but the method below seems the least convoluted.
+
+        // General note: much of the code below could be replaced with
+        // a lookup table based on the sig (signature) computed above.
+        // This rewrite can wait until a later time, though, since 
+        // the existing code works, and seems fast enough.
+        
+        ivec3 ijk = ivec3(0, 1, 2); // use swizzle to permute the indices
+
+        // Let each vertex of the triangle be denoted by +, -, or 0,
+        // depending on the sign (sgn) of its distance from the plane.
+        // 
+        // We want to rotate any given triangle so that
+        // its ordered sgn values match one of these:
+        // ---  000  +++  (no intersections)
+        // 0++  -0-       (one intersection)
+        // 0+0  -00       (two intersections)
+        // 0+-  -+0       (two intersections)
+        // -++  -+-       (two intersections)
+        // Every possible triangle can be cyclically reordered into
+        // one of these orderings.
+        // In the two-intersection cases above, the intersections
+        // computed from the first two segments (ignoring 00 segments)
+        // will be unique, and in a consistent orientation,
+        // given these orderings.
+        // In most cases, the test sgn[ijk.x] < sgn[ijk.y] is
+        // sufficient to ensure this order.  But there is
+        // one ambiguous case: 0+- and -0+ are two orderings
+        // of the same triangle, and both pass the test.
+        // But only the 0+- ordering will allow the first two
+        // segments to yield two intersections in the correct order
+        // (the -0+ ordering will yield the same location twice!).
+        // So an additional test is needed to avoid this case:
+        // sgn[ijk.y] >= sgn[ijk.z]
+        // Thus the input triangle needs to be rotated until
+        // the following condition holds:
+        // sgn[ijk.x] < sgn[ijk.y] && sgn[ijk.y] >= sgn[ijk.z]
+        // So the condition for continuing to rotate is that the
+        // condition above not be true, in other words:
+        // !(sgn[ijk.x] < sgn[ijk.y] && sgn[ijk.y] >= sgn[ijk.z])
+        // Rewrite, so the condition to continue to rotate is:
+        // sgn[ijk.x] >= sgn[ijk.y] || sgn[ijk.y] < sgn[ijk.z]>0;
+
+        // Continue to rotate the triangle so long as the above condition is
+        // met:
+        for (int i=0; 
+             i<3 // stop after 3 iterations
+             && (sgn[ijk.x] >= sgn[ijk.y] || sgn[ijk.y] < sgn[ijk.z]);
+             ijk=ijk.yzx, i++);
+        // At this point, ijk has been set to rotate the triangle 
+        // to the correct order.
+
+        vec4 pcs[2];
+        int j = 0;
+        for (int i=0; i<3 && j<2; ijk=ijk.yzx, i++) {
+          float da = dist[ijk.x];
+          float db = dist[ijk.y];
+          if (da*db > 0 || (da == 0 && db == 0)) continue;
+  
+          vec4 pa = gl_in[ijk.x].gl_Position;
+          vec4 pb = gl_in[ijk.y].gl_Position;
+          float fa = abs(da);
+          float fb = abs(db);
+          vec4 pc = pa;
+          if (fa > 0 || fb > 0) pc = (fa * pb + fb * pa) / (fa + fb);
+          pcs[j++] = pc;
+        }
+
+        if (j<2) return;
+        int vcount = 4;
+        if (thickness < 5) {
+          vcount = 4;
+        } else {
+           vcount = 10;
+        }
+
+        vec2 tan = (pcs[1]-pcs[0]).xy;
+        if (tan.x == 0 && tan.y == 0) {
+          tan.x = 1.;
+          tan.y = 0.;
+        }
+        tan = normalize(tan);
+        vec2 norm = vec2(-tan.y, tan.x);
+        vec2 factor = thickness*vec2(1./window_size.x, 1./window_size.y);
+        vec4 offsets[9];
+        for (int i=0; i<9; i++) {
+          // trig contains cosine and sine of angle i*45 degrees
+          vec2 trig = trig_table[i];
+          vec2 raw_offset = -trig.x*tan + trig.y*norm;
+          vec4 scaled_offset = vec4(factor*raw_offset, 0., 0.);
           offsets[i] = scaled_offset;
         }
-        vec4 opts[18];
-        int i = 0;
-        opts[i++] = pcs[0];
-        opts[i++] = pcs[0]+offsets[6];
-        opts[i++] = pcs[0]+offsets[7];
-        opts[i++] = pcs[0];
-        opts[i++] = pcs[0]+offsets[0];
-        opts[i++] = pcs[0]+offsets[1];
-        opts[i++] = pcs[0];
-        opts[i++] = pcs[0]+offsets[2];
-        opts[i++] = pcs[1];
-        opts[i++] = pcs[1]+offsets[2];
-        opts[i++] = pcs[1]+offsets[3];
-        opts[i++] = pcs[1];
-        opts[i++] = pcs[1]+offsets[4];
-        opts[i++] = pcs[1]+offsets[5];
-        opts[i++] = pcs[1];
-        opts[i++] = pcs[1]+offsets[6];
-        opts[i++] = pcs[0];
-        opts[i++] = pcs[0]+offsets[6];
-        for (int i=0; i<18; i++) {
-          gl_Position = opts[i];
-          gcolor = vcolor[0];
-          EmitVertex();
-        }
-      } else if (vcount == 10) {
-        vec4 offsets[8];
-        for (int i=0; i<8; i++) {
-          float deg = i*45;
-          float rad = radians(deg);
-          vec2 raw_offset = -cos(rad)*tan + sin(rad)*norm;
-          vec4 scaled_offset = 
-            vec4(xfactor*raw_offset.x, yfactor*raw_offset.y, 0., 0.);
-          offsets[i] = scaled_offset;
-        }
-        vec4 opts[10];
-        int i = 0;
-        opts[i++] = pcs[0]+offsets[0];
-        opts[i++] = pcs[0]+offsets[1];
-        opts[i++] = pcs[0]+offsets[7];
-        opts[i++] = pcs[0]+offsets[2];
-        opts[i++] = pcs[0]+offsets[6];
-        opts[i++] = pcs[1]+offsets[2];
-        opts[i++] = pcs[1]+offsets[6];
-        opts[i++] = pcs[1]+offsets[3];
-        opts[i++] = pcs[1]+offsets[5];
-        opts[i++] = pcs[1]+offsets[4];
-        for (int i=0; i<10; i++) {
-          gl_Position = opts[i];
-          gcolor = vcolor[0];
-          EmitVertex();
-        }
-      } else if (vcount == 4) {
 
-          vec4 offset = vec4(xfactor*norm.x, yfactor*norm.y, 0., 0.);
-          // vec4 offset = thickness*vec4(norm.x/size.x, norm.y/size.y, 0., 0.);
-          gl_Position = pcs[0] + offset;
-          gcolor = vcolor[0];
+        // all arrays need to be the same size
+        // so the correct one can be copied into "vs"
+        ivec2 v18[] = ivec2[18](
+          ivec2(0, 8),
+          ivec2(0, 6),
+          ivec2(0, 7),
+          ivec2(0, 8),
+          ivec2(0, 0),
+          ivec2(0, 1),
+          ivec2(0, 8),
+          ivec2(0, 2),
+          ivec2(1, 8),
+          ivec2(1, 2),
+          ivec2(1, 3),
+          ivec2(1, 8),
+          ivec2(1, 4),
+          ivec2(1, 5),
+          ivec2(1, 8),
+          ivec2(1, 6),
+          ivec2(0, 8),
+          ivec2(0, 6)
+        );
+        ivec2 v10[] = ivec2[18](
+          ivec2(0, 0),
+          ivec2(0, 1),
+          ivec2(0, 7),
+          ivec2(0, 2),
+          ivec2(0, 6),
+          ivec2(1, 2),
+          ivec2(1, 6),
+          ivec2(1, 3),
+          ivec2(1, 5),
+          ivec2(1, 4),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1)
+        );
+        ivec2 v4[] = ivec2[18](
+          ivec2(0, 2),
+          ivec2(0, 6),
+          ivec2(1, 2),
+          ivec2(1, 6),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1),
+          ivec2(-1, -1)
+        );
+        ivec2 vs[18];
+        if (vcount == 18) {
+          vs = v18;
+        } else if (vcount == 10) {
+          vs = v10;
+        } else if (vcount == 4) {
+          vs = v4;
+        }
+
+        for (int i=0; i<vcount; i++) {
+          ivec2 iv = vs[i];
+          gl_Position = pcs[iv.x] + offsets[iv.y];
           EmitVertex();
-          gl_Position = pcs[0] - offset;
-          gcolor = vcolor[0];
-          EmitVertex();
-          gl_Position = pcs[1] + offset;
-          gcolor = vcolor[0];
-          EmitVertex();
-          gl_Position = pcs[1] - offset;
-          gcolor = vcolor[0];
-          EmitVertex();
+        }
       }
-      /*
-      gl_Position = pcs[0];
-      EmitVertex();
-      gl_Position = pcs[1]+vec4(.01,0.,0.,1.);
-      EmitVertex();
-      gl_Position = pcs[0]+vec4(.01,0.,0.,1.);
-      EmitVertex();
-      gl_Position = pcs[1];
-      EmitVertex();
-      */
-
-
-      /*
-      // Find the smallest i where vertex i is below and vertex i+1 is above the plane.
-      ivec3 ijk = ivec3(0, 1, 2); // use swizzle to permute the indices
-      for (int i=0; i < 3 && (dist[ijk.x] > 0 || dist[ijk.y] < 0); ijk=ijk.yzx, i++);
-
-      emitIntersection(gl_in[ijk.x].gl_Position, dist[ijk.x], gl_in[ijk.y].gl_Position, dist[ijk.y]);
-      emitIntersection(gl_in[ijk.y].gl_Position, dist[ijk.y], gl_in[ijk.z].gl_Position, dist[ijk.z]);
-      emitIntersection(gl_in[ijk.z].gl_Position, dist[ijk.z], gl_in[ijk.x].gl_Position, dist[ijk.x]);
-      */
-    }
     ''',
 
     "fragment": '''
       #version 410 core
 
       uniform vec4 gcolor;
-      // in vec4 gcolor;
       out vec4 fColor;
 
       void main()
       {
         fColor = gcolor;
-        // fColor = vec4(1.,1.,0.,1.);
       }
     ''',
 }
@@ -704,6 +540,7 @@ class GLDataWindowChild(QOpenGLWidget):
         # change current context; undo this before
         # leaving the function
         timera = Utils.Timer()
+        timera.active = False
         self.fragment_context.makeCurrent(self.fragment_surface)
         f = self.fragment_gl
         f.glClear(f.GL_COLOR_BUFFER_BIT)
@@ -768,7 +605,7 @@ class GLDataWindowChild(QOpenGLWidget):
         '''
         self.fragment_program.bind()
         self.fragment_program.setUniformValue("xform", xform)
-        self.fragment_program.setUniformValue("size", dw.size())
+        self.fragment_program.setUniformValue("window_size", dw.size())
         self.fragment_program.setUniformValue("thickness", 1.*thickness)
         ''''''
         colors = []
