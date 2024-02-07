@@ -488,40 +488,44 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glClearColor(.6,.3,.3,1.)
 
     def createGLSurfaces(self):
-        self.fragment_context = QOpenGLContext()
-        self.fragment_context.create()
-        self.fragment_surface = QOffscreenSurface()
-        self.fragment_surface.create()
+        # self.fragment_context = QOpenGLContext()
+        # self.fragment_context.create()
+        # self.fragment_surface = QOffscreenSurface()
+        # self.fragment_surface.create()
         # Make new context current; need to undo this
         # before leaving the function
-        self.fragment_context.makeCurrent(self.fragment_surface)
+        # self.fragment_context.makeCurrent(self.fragment_surface)
         # Note that debug logging only takes place if the
         # surface format option "DebugContext" is set
-        self.frag_logger = QOpenGLDebugLogger()
-        self.frag_logger.initialize()
+        # self.frag_logger = QOpenGLDebugLogger()
+        # self.frag_logger.initialize()
         # self.frag_logger.messageLogged.connect(self.onLogMessage)
-        self.frag_logger.messageLogged.connect(lambda m: self.onLogMessage("fc", m))
-        self.frag_logger.startLogging(self.logging_mode)
-        msg = QOpenGLDebugMessage.createApplicationMessage("test debug messaging")
-        self.logger.logMessage(msg)
-        self.fragment_gl = self.fragment_context.versionFunctions()
+        # self.frag_logger.messageLogged.connect(lambda m: self.onLogMessage("fc", m))
+        # self.frag_logger.startLogging(self.logging_mode)
+        # msg = QOpenGLDebugMessage.createApplicationMessage("test debug messaging")
+        # self.logger.logMessage(msg)
+        # self.fragment_gl = self.fragment_context.versionFunctions()
+        self.fragment_gl = self.gl
         self.fragment_program = self.buildProgram(fragment_code)
         # Restore default context
-        self.makeCurrent()
+        # self.makeCurrent()
 
     def resizeGL(self, width, height):
         # pass
         # self.buildBordersVao()
         # print("resize", width, height)
         # based on https://stackoverflow.com/questions/59338015/minimal-opengl-offscreen-rendering-using-qt
-        self.fragment_context.makeCurrent(self.fragment_surface)
+        # self.fragment_context.makeCurrent(self.fragment_surface)
         vp_size = QSize(width, height)
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
         ff = self.fragment_gl
         fbo_format.setInternalTextureFormat(ff.GL_RGBA16)
         self.fragment_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
+        self.fragment_fbo.bind()
+        # self.fragment_fbo2 = QOpenGLFramebufferObject(vp_size, fbo_format)
         ff.glViewport(0, 0, vp_size.width(), vp_size.height())
+        QOpenGLFramebufferObject.bindDefault()
 
     def paintGL(self):
         # print("paintGL")
@@ -530,20 +534,31 @@ class GLDataWindowChild(QOpenGLWidget):
             return
         
         f = self.gl
+        f.glClearColor(.6,.3,.3,1.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
         self.paintSlice()
         # self.paintFragments()
-        # self.paintBorders()
+        # self.paintBorders()k
 
     # def paintFragments(self):
     def drawFragments(self, fragments_overlay):
         # change current context; undo this before
         # leaving the function
+        # print("entering draw fragments")
         timera = Utils.Timer()
         timera.active = False
-        self.fragment_context.makeCurrent(self.fragment_surface)
+        # self.fragment_context.makeCurrent(self.fragment_surface)
+        self.fragment_fbo.bind()
         f = self.fragment_gl
+
+        # Be sure to clear with alpha = 0
+        # so that the images below aren't blocked!
+        f.glClearColor(0.,0.,0.,0.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
+
+        # Aargh!  PyQt5 does not define glClearBufferfv!!
+        # f.glClearBufferfv(f.GL_COLOR, 0, (.3, .6, .3, 1.))
+
         dw = self.gldw
         axstr = "(%d) "%dw.axis
         ww = dw.size().width()
@@ -705,7 +720,9 @@ class GLDataWindowChild(QOpenGLWidget):
         # print("farr", farr.dtype, farr[0:16], farr[am-4:am+16])
 
         # restore default context
-        self.makeCurrent()
+        # self.makeCurrent()
+        QOpenGLFramebufferObject.bindDefault()
+        # print("leaving drawFragments")
 
     def texFromData(self, data, qiformat):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
@@ -807,6 +824,7 @@ class GLDataWindowChild(QOpenGLWidget):
                 
 
     def paintSlice(self):
+        # print("a")
         dw = self.gldw
         volume_view = dw.volume_view
         f = self.gl
@@ -824,6 +842,7 @@ class GLDataWindowChild(QOpenGLWidget):
         paint_result = volume_view.paintSlice(
                 data_slice, self.gldw.axis, volume_view.ijktf, 
                 self.gldw.getZoom(), zarr_max_width)
+        # print("b")
 
         base_tex = self.texFromData(data_slice, QImage.Format_Grayscale16)
         bloc = self.slice_program.uniformLocation("base_sampler")
@@ -835,6 +854,7 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glActiveTexture(f.GL_TEXTURE0+bunit)
         base_tex.bind()
         self.slice_program.setUniformValue(bloc, bunit)
+        # print("c")
 
 
         overlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
@@ -848,19 +868,26 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glActiveTexture(f.GL_TEXTURE0+ounit)
         overlay_tex.bind()
         self.slice_program.setUniformValue(oloc, ounit)
-
+        # print("d")
 
         fragments_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawFragments(fragments_data)
+        # print("d1")
         fragments_tex = self.texFromData(fragments_data, QImage.Format_RGBA64)
+        # print("d2")
+
+        self.slice_program.bind()
         floc = self.slice_program.uniformLocation("fragments_sampler")
+        # print("d3", floc)
         if floc < 0:
             print("couldn't get loc for fragments sampler")
             return
         funit = 3
         f.glActiveTexture(f.GL_TEXTURE0+funit)
         fragments_tex.bind()
+        # print("d4")
         self.slice_program.setUniformValue(floc, funit)
+        # print("e")
 
         opacity = dw.getDrawOpacity("overlay")
         apply_line_opacity = dw.getDrawApplyOpacity("line")
@@ -868,7 +895,9 @@ class GLDataWindowChild(QOpenGLWidget):
         if apply_line_opacity:
             line_alpha = opacity
         # uniform float frag_opacity = 1.;
+        # print("e1")
         self.slice_program.setUniformValue("frag_opacity", line_alpha)
+        # print("f")
 
         f.glActiveTexture(f.GL_TEXTURE0)
         # base_tex.release()
@@ -879,6 +908,7 @@ class GLDataWindowChild(QOpenGLWidget):
                          self.slice_indices.size, f.GL_UNSIGNED_INT, None)
         self.slice_program.release()
         vaoBinder = None
+        # print("g")
 
     '''
     def paintBorders(self):
