@@ -122,14 +122,6 @@ class GLDataWindow(DataWindow):
         layout.addWidget(self.glw)
 
     def drawSlice(self):
-        # print("drawSlice", self.size())
-        # super(GLDataWindow, self).drawSlice()
-
-        # The next 3 lines keep the window from shrinking too much
-        # img = QImage(self.size(), QImage.Format_ARGB32)
-        # pixmap = QPixmap.fromImage(img)
-        # self.setPixmap(pixmap)
-
         self.glw.update()
 
 slice_code = {
@@ -415,6 +407,7 @@ fragment_code = {
       #version 410 core
 
       uniform vec4 gcolor;
+      uniform vec4 icolor;
       out vec4 fColor;
 
       void main()
@@ -487,37 +480,9 @@ class GLDataWindowChild(QOpenGLWidget):
         # self.gl.glClearColor(.3,.6,.3,1.)
         f.glClearColor(.6,.3,.3,1.)
 
-    '''
-    def createGLSurfaces(self):
-        # self.fragment_context = QOpenGLContext()
-        # self.fragment_context.create()
-        # self.fragment_surface = QOffscreenSurface()
-        # self.fragment_surface.create()
-        # Make new context current; need to undo this
-        # before leaving the function
-        # self.fragment_context.makeCurrent(self.fragment_surface)
-        # Note that debug logging only takes place if the
-        # surface format option "DebugContext" is set
-        # self.frag_logger = QOpenGLDebugLogger()
-        # self.frag_logger.initialize()
-        # self.frag_logger.messageLogged.connect(self.onLogMessage)
-        # self.frag_logger.messageLogged.connect(lambda m: self.onLogMessage("fc", m))
-        # self.frag_logger.startLogging(self.logging_mode)
-        # msg = QOpenGLDebugMessage.createApplicationMessage("test debug messaging")
-        # self.logger.logMessage(msg)
-        # self.fragment_gl = self.fragment_context.versionFunctions()
-        # self.fragment_gl = self.gl
-        # self.fragment_program = self.buildProgram(fragment_code)
-        # Restore default context
-        # self.makeCurrent()
-    '''
-
     def resizeGL(self, width, height):
-        # pass
-        # self.buildBordersVao()
         # print("resize", width, height)
         # based on https://stackoverflow.com/questions/59338015/minimal-opengl-offscreen-rendering-using-qt
-        # self.fragment_context.makeCurrent(self.fragment_surface)
         vp_size = QSize(width, height)
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
@@ -525,7 +490,6 @@ class GLDataWindowChild(QOpenGLWidget):
         fbo_format.setInternalTextureFormat(f.GL_RGBA16)
         self.fragment_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.fragment_fbo.bind()
-        # self.fragment_fbo2 = QOpenGLFramebufferObject(vp_size, fbo_format)
         # TODO: create "pick" texture, attach it to fragment_fbo
         f.glViewport(0, 0, vp_size.width(), vp_size.height())
 
@@ -541,18 +505,38 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glClearColor(.6,.3,.3,1.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
         self.paintSlice()
-        # self.paintFragments()
-        # self.paintBorders()k
 
-    # def paintFragments(self):
-    # def drawFragments(self, fragments_overlay):
+    # assumes the image is from fragment_fbo, and that
+    # fragment_fbo was created with the RGBA16 format
+    def npArrayFromQImage(im):
+        # Because fragment_fbo was created with an
+        # internal texture format of RGBA16 (see the code
+        # where fragment_fbo was created), the QImage
+        # created by toImage is in QImage format 27, which is 
+        # "a premultiplied 64-bit halfword-ordered RGBA format (16-16-16-16)"
+        # The "premultiplied" means that the RGB values have already
+        # been multiplied by alpha.
+        # This comment is based on:
+        # https://doc.qt.io/qt-5/qimage.html
+        # https://doc.qt.io/qt-5/qopenglframebufferobject.html
+        im = self.fragment_fbo.toImage()
+        # print("image format, size", im.format(), im.size(), im.sizeInBytes())
+        # im.save("test.png")
+
+        # conversion to numpy array based on
+        # https://stackoverflow.com/questions/19902183/qimage-to-numpy-array-using-pyside
+        iw = im.width()
+        ih = im.height()
+        iptr = im.constBits()
+        iptr.setsize(im.sizeInBytes())
+        arr = np.frombuffer(iptr, dtype=np.uint16)
+        arr.resize(ih, iw, 4)
+        return arr
+
     def drawFragments(self):
-        # change current context; undo this before
-        # leaving the function
         # print("entering draw fragments")
         timera = Utils.Timer()
         timera.active = False
-        # self.fragment_context.makeCurrent(self.fragment_surface)
         self.fragment_fbo.bind()
         f = self.gl
 
@@ -577,33 +561,17 @@ class GLDataWindowChild(QOpenGLWidget):
         thickness = (3*thickness)//2
         volume_view = dw.volume_view
         xform = QMatrix4x4()
-        # xform.scale(1./12000.)
-        '''
-        pts3d[:,0] -= 300
-        pts3d[:,1] -= 1200
-        pts3d[:,2] -= 300
-        pts3d /= 500.
-        '''
-        # xform.scale(1./500.)
-        # xform.translate(-300, -1200, -300)
+
         iind = dw.iIndex
         jind = dw.jIndex
         kind = dw.kIndex
         zoom = dw.getZoom()
         cijk = volume_view.ijktf
-        '''
-        xform.setRow(0, QVector4D(.002,0,0,-.6))
-        xform.setRow(1, QVector4D(0,.002,0,-2.4))
-        xform.setRow(2, QVector4D(0,0,.002,-.6))
-        '''
-        '''
-        mat = np.array((
-            (.002,0,0,-.6),
-            (0,.002,0,-2.4),
-            (0,0,.002,-.6),
-            (0,0,0,1.)
-            ))
-        '''
+
+        # Convert tijk coordinates to OpenGL clip-window coordinates.
+        # Note that the matrix converts the axis coordinate such that
+        # only points within .5 voxel widths on either side are
+        # in the clip-window range -1. < z < 1.
         mat = np.zeros((4,4), dtype=np.float32)
         ww = dw.size().width()
         wh = dw.size().height()
@@ -627,25 +595,20 @@ class GLDataWindowChild(QOpenGLWidget):
         self.fragment_program.setUniformValue("xform", xform)
         self.fragment_program.setUniformValue("window_size", dw.size())
         self.fragment_program.setUniformValue("thickness", 1.*thickness)
-        ''''''
-        colors = []
-        colors.append((0.,0.,0.,0.))
+
         timera.time(axstr+"setup")
         new_fragment_vaos = {}
+        iindex = 0
         for fv in dw.fragmentViews():
             if not fv.visible:
                 continue
             qcolor = fv.fragment.color
             rgba = list(qcolor.getRgbF())
-            # print("rgba", rgba, [65535*c for c in rgba])
-            cvcolor = [int(65535*c) for c in rgba]
-            cvcolor[3] = int(line_alpha*65535)
             rgba[3] = 1.
-            findex = len(colors)/65536.
-            colors.append(cvcolor)
-            # self.fragment_program.bind()
-            # self.fragment_program.setUniformValue("gcolor", findex,0.,0.,1.)
+            iindex += 1
+            findex = iindex/65536.
             self.fragment_program.setUniformValue("gcolor", *rgba)
+            self.fragment_program.setUniformValue("icolor", *rgba)
             if fv not in self.fragment_vaos:
                 fvao = FragmentVao(fv, self.fragment_program, self.gl)
                 self.fragment_vaos[fv] = fvao
@@ -653,81 +616,13 @@ class GLDataWindowChild(QOpenGLWidget):
             new_fragment_vaos[fv] = fvao
             vao = fvao.getVao()
             vao.bind()
-            # vaoBinder = QOpenGLVertexArrayObject.Binder(vao)
-            # self.fragment_program.setUniformValue("xform", xform)
 
-            # print("tis", fvao.trgl_index_size)
             f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size, 
                              f.GL_UNSIGNED_INT, None)
             vao.release()
-            # vaoBinder = None
-            # self.fragment_program.release()
         timera.time(axstr+"draw")
         self.fragment_vaos = new_fragment_vaos
-        ''''''
-        '''
-        if self.multi_fragment_vao is None:
-            self.multi_fragment_vao = MultiFragmentVao(dw.fragmentViews(), self.fragment_program, self.gl)
-        fvao = self.multi_fragment_vao
-        vao = fvao.getVao(dw.fragmentViews())
-        if vao is None:
-            # restore default context
-            self.makeCurrent()
-            return
-        timera.time(axstr+"setup")
-        vao.bind()
-
-        f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size, 
-                         f.GL_UNSIGNED_INT, None)
-        vao.release()
-        timera.time(axstr+"draw")
-        '''
-
-
-        ''''''
         self.fragment_program.release()
-        """
-        # Because fragment_fbo was created with an
-        # internal texture format of RGBA16 (see the code
-        # where fragment_fbo was created), the QImage
-        # created by toImage is in QImage format 27, which is 
-        # "a premultiplied 64-bit halfword-ordered RGBA format (16-16-16-16)"
-        # The "premultiplied" means that the RGB values have already
-        # been multiplied by alpha.
-        # This comment is based on:
-        # https://doc.qt.io/qt-5/qimage.html
-        # https://doc.qt.io/qt-5/qopenglframebufferobject.html
-        im = self.fragment_fbo.toImage()
-        timera.time(axstr+"get image")
-        # print("image format, size", im.format(), im.size(), im.sizeInBytes())
-        # im.save("test.png")
-
-        # conversion to numpy array based on
-        # https://stackoverflow.com/questions/19902183/qimage-to-numpy-array-using-pyside
-        iw = im.width()
-        ih = im.height()
-        iptr = im.constBits()
-        iptr.setsize(im.sizeInBytes())
-        arr = np.frombuffer(iptr, dtype=np.uint16)
-        arr.resize(ih, iw, 4)
-        # farr = arr.flatten()
-        # am = farr.argmax()
-        # print("arr", arr.shape, arr.dtype, farr[0:16], farr[am-4:am+16])
-        # self.fragment_lines_arr = np.zeros_like(arr)
-        '''
-        acolors = np.array(colors)
-        # self.fragment_lines_arr[:,:] = acolors[arr[:,:,0]]
-        fragments_overlay[:,:] = acolors[arr[:,:,0]]
-        '''
-        fragments_overlay[:,:,:] = arr[:,:,:]
-        ''''''
-        # farr = self.fragment_lines_arr.flatten()
-        # am = farr.argmax()
-        # print("farr", farr.dtype, farr[0:16], farr[am-4:am+16])
-
-        # restore default context
-        # self.makeCurrent()
-        """
         QOpenGLFramebufferObject.bindDefault()
         # print("leaving drawFragments")
 
@@ -735,8 +630,6 @@ class GLDataWindowChild(QOpenGLWidget):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
         img = QImage(data, data.shape[1], data.shape[0],
                      bytesperline, qiformat)
-        # When tex goes out of scope (at the end of this
-        # function), the OpenGL texture will be destroyed.
         # mirror image vertically because of different y direction conventions
         tex = QOpenGLTexture(img.mirrored(), 
                              QOpenGLTexture.DontGenerateMipMaps)
@@ -831,7 +724,6 @@ class GLDataWindowChild(QOpenGLWidget):
                 
 
     def paintSlice(self):
-        # print("a")
         dw = self.gldw
         volume_view = dw.volume_view
         f = self.gl
@@ -849,7 +741,6 @@ class GLDataWindowChild(QOpenGLWidget):
         paint_result = volume_view.paintSlice(
                 data_slice, self.gldw.axis, volume_view.ijktf, 
                 self.gldw.getZoom(), zarr_max_width)
-        # print("b")
 
         base_tex = self.texFromData(data_slice, QImage.Format_Grayscale16)
         bloc = self.slice_program.uniformLocation("base_sampler")
@@ -861,8 +752,6 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glActiveTexture(f.GL_TEXTURE0+bunit)
         base_tex.bind()
         self.slice_program.setUniformValue(bloc, bunit)
-        # print("c")
-
 
         overlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawOverlays(overlay_data)
@@ -875,115 +764,36 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glActiveTexture(f.GL_TEXTURE0+ounit)
         overlay_tex.bind()
         self.slice_program.setUniformValue(oloc, ounit)
-        # print("d")
 
-        # fragments_data = np.zeros((wh,ww,4), dtype=np.uint16)
-        # self.drawFragments(fragments_data)
         self.drawFragments()
-        # print("d1")
-        # fragments_tex = self.texFromData(fragments_data, QImage.Format_RGBA64)
-        # print("d2")
 
         self.slice_program.bind()
         floc = self.slice_program.uniformLocation("fragments_sampler")
-        # print("d3", floc)
         if floc < 0:
             print("couldn't get loc for fragments sampler")
             return
         funit = 3
         f.glActiveTexture(f.GL_TEXTURE0+funit)
-        # fragments_tex.bind()
         tex_ids = self.fragment_fbo.textures()
         # print("textures", tex_ids)
         fragments_tex_id = tex_ids[0]
         f.glBindTexture(f.GL_TEXTURE_2D, fragments_tex_id)
-
-        # print("d4")
         self.slice_program.setUniformValue(floc, funit)
-        # print("e")
 
         opacity = dw.getDrawOpacity("overlay")
         apply_line_opacity = dw.getDrawApplyOpacity("line")
         line_alpha = 1.
         if apply_line_opacity:
             line_alpha = opacity
-        # uniform float frag_opacity = 1.;
-        # print("e1")
         self.slice_program.setUniformValue("frag_opacity", line_alpha)
-        # print("f")
 
         f.glActiveTexture(f.GL_TEXTURE0)
-        # base_tex.release()
-        # overlay_tex.release()
         vaoBinder = QOpenGLVertexArrayObject.Binder(self.slice_vao)
         self.slice_program.bind()
         f.glDrawElements(f.GL_TRIANGLES, 
                          self.slice_indices.size, f.GL_UNSIGNED_INT, None)
         self.slice_program.release()
         vaoBinder = None
-        # print("g")
-
-    '''
-    def paintBorders(self):
-        f = self.gl
-        dw = self.gldw
-
-        f.glEnable(f.GL_BLEND)
-        f.glBlendFunc(f.GL_SRC_ALPHA, f.GL_ONE_MINUS_SRC_ALPHA)
-
-        ww = dw.size().width()
-        wh = dw.size().height()
-        opacity = dw.getDrawOpacity("overlay")
-        apply_borders_opacity = dw.getDrawApplyOpacity("borders")
-        bw = dw.getDrawWidth("borders")
-        bwh = (bw-1)//2
-        bwhf = (bw)/2
-
-        cmin = (bwh+2, bwh+2)
-        cmax = (ww-bwh-1, wh-bwh-1)
-        cmm = np.array((cmin,cmax), dtype=np.float32)
-
-        sgns = np.array(((0,0),(0,1),(1,0),(1,1)))
-
-        cxys = np.zeros((4,2), dtype=np.float32)
-        cxys[:,0] = cmm[:,0][sgns[:,0]]
-        cxys[:,1] = cmm[:,1][sgns[:,1]]
-
-        axys = cxys+(sgns*2-1)*bwhf
-        bxys = cxys-(sgns*2-1)*bwhf
-
-        xys = np.zeros((8,2), dtype=np.float32)
-        xys[0:4] = axys
-        xys[4:8] = bxys
-
-        xys[:,0] = 2*xys[:,0]/ww - 1
-        xys[:,1] = 2*xys[:,1]/wh - 1
-
-        self.slice_vbo.bind()
-        self.slice_vbo.write(0, xys, xys.size*xys.itemsize)
-        
-        # f.glEnable(f.GL_LINE_SMOOTH)
-        # print("lw", f.glGetFloatv(f.GL_SMOOTH_LINE_WIDTH_RANGE))
-        # Oops, deprecated!!
-        # f.glLineWidth(2.)
-
-        vaoBinder = QOpenGLVertexArrayObject.Binder(self.borders_vao)
-        self.borders_program.bind()
-
-        axis_color = self.fAxisColor(self.gldw.axis)
-        alpha = 1.
-        if apply_borders_opacity:
-            alpha = opacity
-        axis_color[3] = alpha
-        self.borders_program.setUniformValue("color", *axis_color)
-
-        # f.glDrawElements(f.GL_LINE_LOOP, 
-        # TODO: testing
-        f.glDrawElements(f.GL_TRIANGLES, 
-                         self.borders_indices.size, f.GL_UNSIGNED_INT, None)
-        self.slice_program.release()
-        vaoBinder = None
-    '''
 
     def closeEvent(self, e):
         print("glw widget close event")
@@ -1022,78 +832,6 @@ class GLDataWindowChild(QOpenGLWidget):
         self.slice_program = self.buildProgram(slice_code)
         # self.borders_program = self.buildProgram(borders_code)
         self.fragment_program = self.buildProgram(fragment_code)
-
-    """
-    def buildBordersVao(self):
-        self.borders_vao = QOpenGLVertexArrayObject()
-        self.borders_vao.create()
-        vloc = self.borders_program.attributeLocation("position")
-        self.borders_program.bind()
-        f = self.gl
-        vaoBinder = QOpenGLVertexArrayObject.Binder(self.borders_vao)
-
-        # defaults to type=VertexBuffer, usage_pattern = Static Draw
-        vbo = QOpenGLBuffer()
-        vbo.create()
-        vbo.bind()
-
-        '''
-        xys_list = [
-                (-1, -1),
-                (-1, +1),
-                (+1, -1),
-                (+1, +1),
-                ]
-        '''
-        '''
-        xys_list = [
-                (-.9999, -.9999),
-                (-.9999, +1),
-                (+1, -.9999),
-                (+1, +1),
-                ]
-        '''
-        # xys = np.array(xys_list, dtype=np.float32)
-        # TODO: testing
-        # xys *= .5
-        xys = np.zeros((8, 2), dtype=np.float32)
-        nbytes = xys.size*xys.itemsize
-        vbo.allocate(xys, nbytes)
-        f.glVertexAttribPointer(
-                vloc,
-                xys.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
-                0, 0)
-        vbo.release()
-        self.slice_vbo = vbo
-        # self.slice_xys = xys
-        self.borders_program.enableAttributeArray(vloc)
-
-        ibo = QOpenGLBuffer(QOpenGLBuffer.IndexBuffer)
-        ibo.create()
-        ibo.bind()
-        # TODO: testing
-        # indices_list = [0,1,3,2]
-        # indices_list = [0,1,3,3,0,2]
-        indices_list = (
-                (0,1,4), (4,1,5),
-                (1,3,5), (5,3,7),
-                (3,2,7), (7,2,6),
-                (2,0,6), (6,0,4)
-                )
-        self.borders_indices = np.array(indices_list, dtype=np.uint32)
-        nbytes = self.borders_indices.size*self.borders_indices.itemsize
-        ibo.allocate(self.borders_indices, nbytes)
-        vaoBinder = None
-        ibo.release()
-    """
-
-
-    '''
-    def fAxisColor(self, axis):
-        color = self.gldw.axisColor(axis)
-        fcolor = [c/65535 for c in color]
-        return fcolor
-    '''
 
     def buildSliceVao(self):
         self.slice_vao = QOpenGLVertexArrayObject()
