@@ -481,12 +481,13 @@ class GLDataWindowChild(QOpenGLWidget):
         self.buildSliceVao()
         # self.buildBordersVao()
 
-        self.createGLSurfaces()
+        # self.createGLSurfaces()
         
         f = self.gl
         # self.gl.glClearColor(.3,.6,.3,1.)
         f.glClearColor(.6,.3,.3,1.)
 
+    '''
     def createGLSurfaces(self):
         # self.fragment_context = QOpenGLContext()
         # self.fragment_context.create()
@@ -505,10 +506,11 @@ class GLDataWindowChild(QOpenGLWidget):
         # msg = QOpenGLDebugMessage.createApplicationMessage("test debug messaging")
         # self.logger.logMessage(msg)
         # self.fragment_gl = self.fragment_context.versionFunctions()
-        self.fragment_gl = self.gl
-        self.fragment_program = self.buildProgram(fragment_code)
+        # self.fragment_gl = self.gl
+        # self.fragment_program = self.buildProgram(fragment_code)
         # Restore default context
         # self.makeCurrent()
+    '''
 
     def resizeGL(self, width, height):
         # pass
@@ -519,12 +521,14 @@ class GLDataWindowChild(QOpenGLWidget):
         vp_size = QSize(width, height)
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
-        ff = self.fragment_gl
-        fbo_format.setInternalTextureFormat(ff.GL_RGBA16)
+        f = self.gl
+        fbo_format.setInternalTextureFormat(f.GL_RGBA16)
         self.fragment_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.fragment_fbo.bind()
         # self.fragment_fbo2 = QOpenGLFramebufferObject(vp_size, fbo_format)
-        ff.glViewport(0, 0, vp_size.width(), vp_size.height())
+        # TODO: create "pick" texture, attach it to fragment_fbo
+        f.glViewport(0, 0, vp_size.width(), vp_size.height())
+
         QOpenGLFramebufferObject.bindDefault()
 
     def paintGL(self):
@@ -541,7 +545,8 @@ class GLDataWindowChild(QOpenGLWidget):
         # self.paintBorders()k
 
     # def paintFragments(self):
-    def drawFragments(self, fragments_overlay):
+    # def drawFragments(self, fragments_overlay):
+    def drawFragments(self):
         # change current context; undo this before
         # leaving the function
         # print("entering draw fragments")
@@ -549,10 +554,10 @@ class GLDataWindowChild(QOpenGLWidget):
         timera.active = False
         # self.fragment_context.makeCurrent(self.fragment_surface)
         self.fragment_fbo.bind()
-        f = self.fragment_gl
+        f = self.gl
 
         # Be sure to clear with alpha = 0
-        # so that the images below aren't blocked!
+        # so that the slice view isn't blocked!
         f.glClearColor(0.,0.,0.,0.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
 
@@ -681,6 +686,7 @@ class GLDataWindowChild(QOpenGLWidget):
 
         ''''''
         self.fragment_program.release()
+        """
         # Because fragment_fbo was created with an
         # internal texture format of RGBA16 (see the code
         # where fragment_fbo was created), the QImage
@@ -721,6 +727,7 @@ class GLDataWindowChild(QOpenGLWidget):
 
         # restore default context
         # self.makeCurrent()
+        """
         QOpenGLFramebufferObject.bindDefault()
         # print("leaving drawFragments")
 
@@ -870,10 +877,11 @@ class GLDataWindowChild(QOpenGLWidget):
         self.slice_program.setUniformValue(oloc, ounit)
         # print("d")
 
-        fragments_data = np.zeros((wh,ww,4), dtype=np.uint16)
-        self.drawFragments(fragments_data)
+        # fragments_data = np.zeros((wh,ww,4), dtype=np.uint16)
+        # self.drawFragments(fragments_data)
+        self.drawFragments()
         # print("d1")
-        fragments_tex = self.texFromData(fragments_data, QImage.Format_RGBA64)
+        # fragments_tex = self.texFromData(fragments_data, QImage.Format_RGBA64)
         # print("d2")
 
         self.slice_program.bind()
@@ -884,7 +892,12 @@ class GLDataWindowChild(QOpenGLWidget):
             return
         funit = 3
         f.glActiveTexture(f.GL_TEXTURE0+funit)
-        fragments_tex.bind()
+        # fragments_tex.bind()
+        tex_ids = self.fragment_fbo.textures()
+        # print("textures", tex_ids)
+        fragments_tex_id = tex_ids[0]
+        f.glBindTexture(f.GL_TEXTURE_2D, fragments_tex_id)
+
         # print("d4")
         self.slice_program.setUniformValue(floc, funit)
         # print("e")
@@ -1008,7 +1021,7 @@ class GLDataWindowChild(QOpenGLWidget):
     def buildPrograms(self):
         self.slice_program = self.buildProgram(slice_code)
         # self.borders_program = self.buildProgram(borders_code)
-        # self.fragment_program = self.buildProgram(fragment_code)
+        self.fragment_program = self.buildProgram(fragment_code)
 
     """
     def buildBordersVao(self):
