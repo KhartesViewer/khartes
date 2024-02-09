@@ -52,7 +52,8 @@ class FragmentVao:
         self.getVao()
 
     def getVao(self):
-        if self.vao_modified >= self.fragment_view.modified:
+        fv = self.fragment_view
+        if self.vao_modified >= fv.modified and self.vao_modified > fv.fragment.modified:
             return self.vao
 
         self.fragment_program.bind()
@@ -66,7 +67,6 @@ class FragmentVao:
         self.vbo = QOpenGLBuffer()
         self.vbo.create()
         self.vbo.bind()
-        fv = self.fragment_view
         pts3d = np.ascontiguousarray(fv.vpoints[:,:3], dtype=np.float32)
 
         nbytes = pts3d.size*pts3d.itemsize
@@ -163,6 +163,51 @@ slice_code = {
     ''',
 }
 
+common_offset_code = '''
+    layout(triangle_strip, max_vertices = 10) out;
+
+    const float angles[] = float[8](
+      radians(0), radians(45), radians(90), radians(135), 
+      radians(180), radians(225), radians(270), radians(315));
+    const vec2 trig_table[] = vec2[9](
+      vec2(cos(angles[0]), sin(angles[0])),
+      vec2(cos(angles[1]), sin(angles[1])),
+      vec2(cos(angles[2]), sin(angles[2])),
+      vec2(cos(angles[3]), sin(angles[3])),
+      vec2(cos(angles[4]), sin(angles[4])),
+      vec2(cos(angles[5]), sin(angles[5])),
+      vec2(cos(angles[6]), sin(angles[6])),
+      vec2(cos(angles[7]), sin(angles[7])),
+      vec2(0., 0.));
+
+  // all arrays need to be the same size
+  // so the correct one can be copied into "vs"
+  const ivec2 v10[] = ivec2[10](
+    ivec2(0, 0),
+    ivec2(0, 1),
+    ivec2(0, 7),
+    ivec2(0, 2),
+    ivec2(0, 6),
+    ivec2(1, 2),
+    ivec2(1, 6),
+    ivec2(1, 3),
+    ivec2(1, 5),
+    ivec2(1, 4)
+  );
+  const ivec2 v4[] = ivec2[10](
+    ivec2(0, 2),
+    ivec2(0, 6),
+    ivec2(1, 2),
+    ivec2(1, 6),
+    ivec2(-1, -1),
+    ivec2(-1, -1),
+    ivec2(-1, -1),
+    ivec2(-1, -1),
+    ivec2(-1, -1),
+    ivec2(-1, -1)
+  );
+'''
+
 fragment_code = {
     "name": "fragment",
 
@@ -184,22 +229,8 @@ fragment_code = {
       uniform vec2 window_size;
   
       layout(triangles) in;
-      layout(triangle_strip, max_vertices = 18) out;
   
-      const float angles[] = float[8](
-        radians(0), radians(45), radians(90), radians(135), 
-        radians(180), radians(225), radians(270), radians(315));
-      const vec2 trig_table[] = vec2[9](
-        vec2(cos(angles[0]), sin(angles[0])),
-        vec2(cos(angles[1]), sin(angles[1])),
-        vec2(cos(angles[2]), sin(angles[2])),
-        vec2(cos(angles[3]), sin(angles[3])),
-        vec2(cos(angles[4]), sin(angles[4])),
-        vec2(cos(angles[5]), sin(angles[5])),
-        vec2(cos(angles[6]), sin(angles[6])),
-        vec2(cos(angles[7]), sin(angles[7])),
-        vec2(0., 0.));
-  
+      %s
   
       void main()
       {
@@ -323,73 +354,8 @@ fragment_code = {
           vec4 scaled_offset = vec4(factor*raw_offset, 0., 0.);
           offsets[i] = scaled_offset;
         }
-
-        // all arrays need to be the same size
-        // so the correct one can be copied into "vs"
-        ivec2 v18[] = ivec2[18](
-          ivec2(0, 8),
-          ivec2(0, 6),
-          ivec2(0, 7),
-          ivec2(0, 8),
-          ivec2(0, 0),
-          ivec2(0, 1),
-          ivec2(0, 8),
-          ivec2(0, 2),
-          ivec2(1, 8),
-          ivec2(1, 2),
-          ivec2(1, 3),
-          ivec2(1, 8),
-          ivec2(1, 4),
-          ivec2(1, 5),
-          ivec2(1, 8),
-          ivec2(1, 6),
-          ivec2(0, 8),
-          ivec2(0, 6)
-        );
-        ivec2 v10[] = ivec2[18](
-          ivec2(0, 0),
-          ivec2(0, 1),
-          ivec2(0, 7),
-          ivec2(0, 2),
-          ivec2(0, 6),
-          ivec2(1, 2),
-          ivec2(1, 6),
-          ivec2(1, 3),
-          ivec2(1, 5),
-          ivec2(1, 4),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1)
-        );
-        ivec2 v4[] = ivec2[18](
-          ivec2(0, 2),
-          ivec2(0, 6),
-          ivec2(1, 2),
-          ivec2(1, 6),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1),
-          ivec2(-1, -1)
-        );
-        ivec2 vs[18];
-        if (vcount == 18) {
-          vs = v18;
-        } else if (vcount == 10) {
+        ivec2 vs[10];
+        if (vcount == 10) {
           vs = v10;
         } else if (vcount == 4) {
           vs = v4;
@@ -401,7 +367,7 @@ fragment_code = {
           EmitVertex();
         }
       }
-    ''',
+    ''' % common_offset_code,
 
     "fragment": '''
       #version 410 core
