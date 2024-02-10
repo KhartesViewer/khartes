@@ -229,6 +229,7 @@ fragment_code = {
       uniform vec2 window_size;
   
       layout(triangles) in;
+      flat out int trgl_type;
   
       %s
   
@@ -345,7 +346,7 @@ fragment_code = {
         }
         tan = normalize(tan);
         vec2 norm = vec2(-tan.y, tan.x);
-        vec2 factor = thickness*vec2(1./window_size.x, 1./window_size.y);
+        vec2 factor = vec2(1./window_size.x, 1./window_size.y);
         vec4 offsets[9];
         for (int i=0; i<9; i++) {
           // trig contains cosine and sine of angle i*45 degrees
@@ -363,7 +364,16 @@ fragment_code = {
 
         for (int i=0; i<vcount; i++) {
           ivec2 iv = vs[i];
-          gl_Position = pcs[iv.x] + offsets[iv.y];
+          gl_Position = pcs[iv.x] + thickness*offsets[iv.y];
+          trgl_type = 0;
+          EmitVertex();
+        }
+        EndPrimitive();
+
+        for (int i=0; i<4; i++) {
+          ivec2 iv = v4[i];
+          gl_Position = pcs[iv.x] + 1.*offsets[iv.y];
+          trgl_type = 1;
           EmitVertex();
         }
       }
@@ -375,38 +385,29 @@ fragment_code = {
       uniform vec4 gcolor;
       uniform vec4 icolor;
       out vec4 fColor;
+      layout(location = 0) out vec4 frag_color;
+      layout(location = 1) out vec4 pick_color;
+      // The most important thing about empty_color
+      // is that alpha = 0., so with blending enabled,
+      // empty_color is effectively not drawn
+      const vec4 empty_color = vec4(0.,0.,0.,0.);
+      flat in int trgl_type;
 
       void main()
       {
-        fColor = gcolor;
+        // in both clauses of the if statement, need to
+        // set both frag_color and pick_color.  If either
+        // is not set, it will be drawn in an undefined color.
+        if (trgl_type == 0) {
+          frag_color = gcolor;
+          pick_color = empty_color;
+        } else {
+          frag_color = empty_color;
+          pick_color = icolor;
+        }
       }
     ''',
 }
-
-"""
-borders_code = {
-    "name": "borders",
-    "vertex": '''
-      #version 410 core
-
-      in vec2 position;
-      void main() {
-        gl_Position = vec4(position, 0.0, 1.0);
-      }
-    ''',
-    "fragment": '''
-      #version 410 core
-
-      uniform vec4 color;
-      out vec4 fColor;
-
-      void main()
-      {
-        fColor = color;
-      }
-    ''',
-}
-"""
 
 class GLDataWindowChild(QOpenGLWidget):
     def __init__(self, gldw, parent=None):
@@ -456,7 +457,43 @@ class GLDataWindowChild(QOpenGLWidget):
         fbo_format.setInternalTextureFormat(f.GL_RGBA16)
         self.fragment_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.fragment_fbo.bind()
+
+        """  All this is obsolete
+
         # TODO: create "pick" texture, attach it to fragment_fbo
+        # pick_data = np.zeros((height,width,4), dtype=np.uint16)
+        # attach it to self so it isn't deleted when
+        # the function returns
+        # self.pick_tex = self.texFromData(pick_data, QImage.Format_RGBA64)
+        # QOpenGLFramebufferObject.addColorAttachment() does
+        # not work correctly with QImage.Format_RGBA64, so
+        # cannot use it
+        # self.fragment_fbo.addColorAttachment(width, height, QImage.Format_RGBA64)
+        '''
+        print("r textures a", self.fragment_fbo.textures())
+        self.fragment_fbo.addColorAttachment(width, height, QImage.Format_RGBA64)
+        print("r textures b", self.fragment_fbo.textures())
+        junk = self.fragment_fbo.takeTexture(1)
+        print("junk", junk)
+        print("r textures c", self.fragment_fbo.textures())
+        self.fragment_fbo.release()
+        print("r textures d", self.fragment_fbo.textures())
+        self.fragment_fbo.bind()
+        print("r textures e", self.fragment_fbo.textures())
+        '''
+
+        # f.glFramebufferTexture2D(f.GL_DRAW_FRAMEBUFFER, f.GL_COLOR_ATTACHMENT0+1, f.GL_TEXTURE_2D, self.pick_tex.textureId(), 0)
+        '''
+        for i in range(3):
+          # PyQt5 is missing glGetFramebufferAttachmentParameteriv (sigh!)
+          p = f.glGetFramebufferAttachmentParameteriv(f.GL_FRAMEBUFFER, f.GL_COLOR_ATTACHMENT0+i, f.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME)
+          print(i, p)
+        '''
+        """
+
+        self.fragment_fbo.addColorAttachment(width, height, f.GL_RGBA16)
+        draw_buffers = (f.GL_COLOR_ATTACHMENT0, f.GL_COLOR_ATTACHMENT0+1)
+        f.glDrawBuffers(len(draw_buffers), draw_buffers)
         f.glViewport(0, 0, vp_size.width(), vp_size.height())
 
         QOpenGLFramebufferObject.bindDefault()
@@ -474,7 +511,7 @@ class GLDataWindowChild(QOpenGLWidget):
 
     # assumes the image is from fragment_fbo, and that
     # fragment_fbo was created with the RGBA16 format
-    def npArrayFromQImage(im):
+    def npArrayFromQImage(self, im):
         # Because fragment_fbo was created with an
         # internal texture format of RGBA16 (see the code
         # where fragment_fbo was created), the QImage
@@ -485,7 +522,7 @@ class GLDataWindowChild(QOpenGLWidget):
         # This comment is based on:
         # https://doc.qt.io/qt-5/qimage.html
         # https://doc.qt.io/qt-5/qopenglframebufferobject.html
-        im = self.fragment_fbo.toImage()
+        # im = self.fragment_fbo.toImage()
         # print("image format, size", im.format(), im.size(), im.sizeInBytes())
         # im.save("test.png")
 
@@ -564,17 +601,18 @@ class GLDataWindowChild(QOpenGLWidget):
 
         timera.time(axstr+"setup")
         new_fragment_vaos = {}
-        iindex = 0
+        indexed_fvs = []
         for fv in dw.fragmentViews():
             if not fv.visible:
                 continue
             qcolor = fv.fragment.color
             rgba = list(qcolor.getRgbF())
             rgba[3] = 1.
-            iindex += 1
+            indexed_fvs.append(fv)
+            iindex = len(indexed_fvs)
             findex = iindex/65536.
             self.fragment_program.setUniformValue("gcolor", *rgba)
-            self.fragment_program.setUniformValue("icolor", *rgba)
+            self.fragment_program.setUniformValue("icolor", findex,0.,0.,1.)
             if fv not in self.fragment_vaos:
                 fvao = FragmentVao(fv, self.fragment_program, self.gl)
                 self.fragment_vaos[fv] = fvao
@@ -589,6 +627,21 @@ class GLDataWindowChild(QOpenGLWidget):
         timera.time(axstr+"draw")
         self.fragment_vaos = new_fragment_vaos
         self.fragment_program.release()
+
+        # 1 means drawing-attachment 1, which is the
+        # texture containing icolor (index) information
+        im = self.fragment_fbo.toImage(True, 1)
+        arr = self.npArrayFromQImage(im)
+        # in the loop above, findex (iindex/65536) is stored in element 0,
+        # thus the 0 here
+        pick_array = arr[:,:,0]
+        pts = np.nonzero(pick_array > 0)
+        self.pick_ijv = np.stack(
+                (pts[0], pts[1], pick_array[pts[0], pts[1]]), axis=1)
+        # print("ijv", ijv.shape)
+        # print(frag_points[0], frag_points[-1])
+
+        # print("pa max",pick_array.max())
         QOpenGLFramebufferObject.bindDefault()
         # print("leaving drawFragments")
 
@@ -731,7 +784,20 @@ class GLDataWindowChild(QOpenGLWidget):
         overlay_tex.bind()
         self.slice_program.setUniformValue(oloc, ounit)
 
+        # In the fragment shader of the fragment_code program, 
+        # each fragment is written to two textures.  But we only
+        # want each given fragment to be drawn onto one particular texture,
+        # not on both.  So when drawing to the texture that we don't
+        # really want to draw on, we draw a dummy fragment with alpha = 0.
+        # So that this dummy fragment is effectively ignored, we
+        # need to use alpha blending.
+        # I'm not sure whether enabling alpha blending affects
+        # only the current fbo, or whether it affects every drawing
+        # operation everywhere from now on.
+        f.glEnable(f.GL_BLEND)
+        f.glBlendFunc(f.GL_SRC_ALPHA, f.GL_ONE_MINUS_SRC_ALPHA)
         self.drawFragments()
+        # f.glDisable(f.GL_BLEND)
 
         self.slice_program.bind()
         floc = self.slice_program.uniformLocation("fragments_sampler")
@@ -740,9 +806,17 @@ class GLDataWindowChild(QOpenGLWidget):
             return
         funit = 3
         f.glActiveTexture(f.GL_TEXTURE0+funit)
+        # only valid if texture is created using
+        # addColorAttachment()
         tex_ids = self.fragment_fbo.textures()
         # print("textures", tex_ids)
+        # The 0 below means to use color attachment 0 of the
+        # fbo, which corresponds to the texture containing the
+        # cross-section of the fragments
         fragments_tex_id = tex_ids[0]
+        # fragments_tex_id = self.pick_tex.textureId()
+        # testing:
+        # fragments_tex_id = tex_ids[1]
         f.glBindTexture(f.GL_TEXTURE_2D, fragments_tex_id)
         self.slice_program.setUniformValue(floc, funit)
 
