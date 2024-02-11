@@ -291,6 +291,19 @@ class DataWindow(QLabel):
         # print("shift_pressed", shift_pressed)
         return shift_pressed
 
+    def fvsInBounds(self, xymin, xymax):
+        ijl = self.xyToIj(xymin)
+        ijg = self.xyToIj(xymax)
+        fvs = set()
+        for fv, zpts in self.fv2zpoints.items():
+            if len(zpts) == 0:
+                continue
+            matches = ((zpts >= ijl).all(axis=1) & (zpts <= ijg).all(axis=1)).nonzero()[0]
+            if len(matches) > 0:
+                fvs.add(fv)
+        return fvs
+
+
     def findBoundingNodes(self, xy):
         if self.axis == 2:
             # print("a")
@@ -306,6 +319,9 @@ class DataWindow(QLabel):
         curfv = self.currentFragmentView()
 
         d = 3
+        xyl = (xy[0]-d, xy[1]-d)
+        xyg = (xy[0]+d, xy[1]+d)
+        '''
         ijl = self.xyToIj((xy[0]-d, xy[1]-d))
         ijg = self.xyToIj((xy[0]+d, xy[1]+d))
         line_found = False
@@ -318,6 +334,10 @@ class DataWindow(QLabel):
             if len(matches) > 0:
                 line_found = True
                 break
+        '''
+        fvs = self.fvsInBounds(xyl, xyg)
+        line_found = (curfv in fvs)
+        ''''''
 
         if not line_found:
             # print("d")
@@ -508,14 +528,16 @@ class DataWindow(QLabel):
     def setStatusTextFromMousePosition(self):
         pt = self.mapFromGlobal(QCursor.pos())
         mxy = (pt.x(), pt.y())
-        ij = self.xyToIj(mxy)
-        tijk = self.ijToTijk(ij)
-        self.setStatusText(tijk)
+        # ij = self.xyToIj(mxy)
+        # tijk = self.ijToTijk(ij)
+        self.setStatusText(mxy)
 
 
-    def setStatusText(self, ijk):
+    def setStatusText(self, xy):
         if self.volume_view is None:
             return
+        ij = self.xyToIj(xy)
+        ijk = self.ijToTijk(ij)
         gijk = self.volume_view.transposedIjkToGlobalPosition(ijk)
         # gi,gj,gk = gijk
         vol = self.volume_view.volume
@@ -537,9 +559,12 @@ class DataWindow(QLabel):
                 dtxt = "("+dtxt+")"
             stxt += "%s %s   "%(labels[i], dtxt)
 
-        ij = self.tijkToIj(ijk)
-        xy = self.ijToXy(ij)
+        # ij = self.tijkToIj(ijk)
+        # xy = self.ijToXy(ij)
         d = 3
+        xyl = (xy[0]-d, xy[1]-d)
+        xyg = (xy[0]+d, xy[1]+d)
+        '''
         ijl = self.xyToIj((xy[0]-d, xy[1]-d))
         ijg = self.xyToIj((xy[0]+d, xy[1]+d))
         # ijl = (ij[0]-d, ij[1]-d)
@@ -555,6 +580,16 @@ class DataWindow(QLabel):
                     stxt += "|  "
                 stxt += " %s"%fv.fragment.name
                 line_found = True
+        '''
+        line_found = False
+        fvs = self.fvsInBounds(xyl, xyg)
+        for fv in fvs:
+            if not line_found:
+                stxt += "|  "
+            stxt += " %s"%fv.fragment.name
+            line_found = True
+
+        ''''''
         if line_found:
             stxt += "   "
 

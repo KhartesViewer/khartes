@@ -73,7 +73,7 @@ class FragmentVao:
         self.vbo.allocate(pts3d, nbytes)
 
         vloc = self.fragment_program.attributeLocation("position")
-        print("vloc", vloc)
+        # print("vloc", vloc)
         f = self.gl
         f.glVertexAttribPointer(
                 vloc,
@@ -101,7 +101,7 @@ class FragmentVao:
         nbytes = trgls.size*trgls.itemsize
         self.ibo.allocate(trgls, nbytes)
 
-        print("nodes, trgls", pts3d.shape, trgls.shape)
+        # print("nodes, trgls", pts3d.shape, trgls.shape)
 
         self.vao_modified = Utils.timestamp()
         self.vao.release()
@@ -123,6 +123,28 @@ class GLDataWindow(DataWindow):
 
     def drawSlice(self):
         self.glw.update()
+
+    def fvsInBounds(self, xymin, xymax):
+        xyfvs = self.glw.xyfvs
+        indexed_fvs = self.glw.indexed_fvs
+        fvs = set()
+        if xyfvs is None or indexed_fvs is None:
+            return fvs
+
+        matches = ((xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
+        # print("xyfvs", xymin, xymax, xyfvs.shape)
+        # print("matches", matches.shape)
+        if len(matches) == 0:
+            return fvs
+        uniques = np.unique(xyfvs[matches][:,2])
+        # print(uniques)
+        for ind in uniques:
+            if ind < 0 or ind >= len(indexed_fvs):
+                continue
+            fv = indexed_fvs[ind]
+            fvs.add(fv)
+        return fvs
+
 
 slice_code = {
     "name": "slice",
@@ -153,7 +175,6 @@ slice_code = {
       {
         fColor = texture(base_sampler, ftxt);
         vec4 frColor = texture(fragments_sampler, ftxt);
-        // float alpha = frColor.a;
         float alpha = frag_opacity*frColor.a;
         fColor = (1.-alpha)*fColor + alpha*frColor;
         vec4 oColor = texture(overlay_sampler, ftxt);
@@ -164,7 +185,6 @@ slice_code = {
 }
 
 common_offset_code = '''
-    layout(triangle_strip, max_vertices = 10) out;
 
     const float angles[] = float[8](
       radians(0), radians(45), radians(90), radians(135), 
@@ -229,6 +249,8 @@ fragment_code = {
       uniform vec2 window_size;
   
       layout(triangles) in;
+      // max_vertices = 10+4 (10 for thick line, 4 for pick line)
+      layout(triangle_strip, max_vertices = 14) out;
       flat out int trgl_type;
   
       %s
@@ -417,8 +439,10 @@ class GLDataWindowChild(QOpenGLWidget):
         self.fragment_vaos = {}
         self.multi_fragment_vao = None
         # 0: asynchronous mode, 1: synch mode
-        # synch mode is much slower
+        # synch mode is said to be much slower
         self.logging_mode = 1
+        self.xyfvs = None
+        self.indexed_fvs = None
         # self.logging_mode = 0
 
     def dwKeyPressEvent(self, e):
@@ -458,39 +482,6 @@ class GLDataWindowChild(QOpenGLWidget):
         self.fragment_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.fragment_fbo.bind()
 
-        """  All this is obsolete
-
-        # TODO: create "pick" texture, attach it to fragment_fbo
-        # pick_data = np.zeros((height,width,4), dtype=np.uint16)
-        # attach it to self so it isn't deleted when
-        # the function returns
-        # self.pick_tex = self.texFromData(pick_data, QImage.Format_RGBA64)
-        # QOpenGLFramebufferObject.addColorAttachment() does
-        # not work correctly with QImage.Format_RGBA64, so
-        # cannot use it
-        # self.fragment_fbo.addColorAttachment(width, height, QImage.Format_RGBA64)
-        '''
-        print("r textures a", self.fragment_fbo.textures())
-        self.fragment_fbo.addColorAttachment(width, height, QImage.Format_RGBA64)
-        print("r textures b", self.fragment_fbo.textures())
-        junk = self.fragment_fbo.takeTexture(1)
-        print("junk", junk)
-        print("r textures c", self.fragment_fbo.textures())
-        self.fragment_fbo.release()
-        print("r textures d", self.fragment_fbo.textures())
-        self.fragment_fbo.bind()
-        print("r textures e", self.fragment_fbo.textures())
-        '''
-
-        # f.glFramebufferTexture2D(f.GL_DRAW_FRAMEBUFFER, f.GL_COLOR_ATTACHMENT0+1, f.GL_TEXTURE_2D, self.pick_tex.textureId(), 0)
-        '''
-        for i in range(3):
-          # PyQt5 is missing glGetFramebufferAttachmentParameteriv (sigh!)
-          p = f.glGetFramebufferAttachmentParameteriv(f.GL_FRAMEBUFFER, f.GL_COLOR_ATTACHMENT0+i, f.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME)
-          print(i, p)
-        '''
-        """
-
         self.fragment_fbo.addColorAttachment(width, height, f.GL_RGBA16)
         draw_buffers = (f.GL_COLOR_ATTACHMENT0, f.GL_COLOR_ATTACHMENT0+1)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
@@ -522,9 +513,6 @@ class GLDataWindowChild(QOpenGLWidget):
         # This comment is based on:
         # https://doc.qt.io/qt-5/qimage.html
         # https://doc.qt.io/qt-5/qopenglframebufferobject.html
-        # im = self.fragment_fbo.toImage()
-        # print("image format, size", im.format(), im.size(), im.sizeInBytes())
-        # im.save("test.png")
 
         # conversion to numpy array based on
         # https://stackoverflow.com/questions/19902183/qimage-to-numpy-array-using-pyside
@@ -548,7 +536,7 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glClearColor(0.,0.,0.,0.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
 
-        # Aargh!  PyQt5 does not define glClearBufferfv!!
+        # Aargh!  PyQt5 does not define glClearBufferfv!
         # f.glClearBufferfv(f.GL_COLOR, 0, (.3, .6, .3, 1.))
 
         dw = self.gldw
@@ -573,7 +561,7 @@ class GLDataWindowChild(QOpenGLWidget):
 
         # Convert tijk coordinates to OpenGL clip-window coordinates.
         # Note that the matrix converts the axis coordinate such that
-        # only points within .5 voxel widths on either side are
+        # only points within .5 voxel width on either side are
         # in the clip-window range -1. < z < 1.
         mat = np.zeros((4,4), dtype=np.float32)
         ww = dw.size().width()
@@ -601,18 +589,19 @@ class GLDataWindowChild(QOpenGLWidget):
 
         timera.time(axstr+"setup")
         new_fragment_vaos = {}
-        indexed_fvs = []
+        self.indexed_fvs = []
         for fv in dw.fragmentViews():
             if not fv.visible:
                 continue
             qcolor = fv.fragment.color
             rgba = list(qcolor.getRgbF())
             rgba[3] = 1.
-            indexed_fvs.append(fv)
-            iindex = len(indexed_fvs)
+            self.indexed_fvs.append(fv)
+            iindex = len(self.indexed_fvs)
             findex = iindex/65536.
             self.fragment_program.setUniformValue("gcolor", *rgba)
             self.fragment_program.setUniformValue("icolor", findex,0.,0.,1.)
+            # self.fragment_program.setUniformValue("icolor", 1.,0.,0.,1.)
             if fv not in self.fragment_vaos:
                 fvao = FragmentVao(fv, self.fragment_program, self.gl)
                 self.fragment_vaos[fv] = fvao
@@ -628,22 +617,42 @@ class GLDataWindowChild(QOpenGLWidget):
         self.fragment_vaos = new_fragment_vaos
         self.fragment_program.release()
 
-        # 1 means drawing-attachment 1, which is the
+        # "True" means that the image should be flipped to convert
+        # from OpenGl's y-upwards convention to QImage's y-downwards
+        # convention.
+        # "1" means use drawing-attachment 1, which is the
         # texture containing icolor (index) information
         im = self.fragment_fbo.toImage(True, 1)
+
         arr = self.npArrayFromQImage(im)
-        # in the loop above, findex (iindex/65536) is stored in element 0,
-        # thus the 0 here
+        # In the loop above, findex (iindex/65536) is stored in 
+        # the red color component (element 0), thus the 0 here.
         pick_array = arr[:,:,0]
         pts = np.nonzero(pick_array > 0)
-        self.pick_ijv = np.stack(
-                (pts[0], pts[1], pick_array[pts[0], pts[1]]), axis=1)
+        # Then subtract 1 from value in pick_array, 
+        # because the stored iindex value starts at 1, not 0.
+        self.xyfvs = np.stack(
+                (pts[1], pts[0], pick_array[pts[0], pts[1]]-1), axis=1)
+                # (pick_array[pts[0], pts[1]], pts[0], pts[1]), axis=1)
+
+        # vij = np.sort(vij, axis=0)
+        # One approach: split by v, create dw.fv2zpoints dict, where fv is
+        # the fragment view and zpoints is from getZsurfPoints:
+        '''
+    # returns zsurf points, as array of [ipos, jpos] values
+    # for the slice with the given axis and axis position
+    # (axis and position relative to volume-view axes)
+    def getZsurfPoints(self, vaxis, vaxisPosition):
+        '''
+
         # print("ijv", ijv.shape)
         # print(frag_points[0], frag_points[-1])
 
         # print("pa max",pick_array.max())
         QOpenGLFramebufferObject.bindDefault()
         # print("leaving drawFragments")
+
+
 
     def texFromData(self, data, qiformat):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
@@ -710,7 +719,7 @@ class GLDataWindowChild(QOpenGLWidget):
                     continue
                 color = vol_view.cvcolor
                 color[3] = alpha16
-                cv2.rectangle(outrgbx, minxy, maxxy, color, 2)
+                cv2.rectangle(data, minxy, maxxy, color, 2)
         tiff_corners = dww.tiff_loader.corners()
         if tiff_corners is not None:
             # print("tiff corners", tiff_corners)
