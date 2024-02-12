@@ -43,12 +43,15 @@ from data_window import DataWindow
 
 
 class FragmentVao:
-    def __init__(self, fragment_view, fragment_program, gl):
+    # def __init__(self, fragment_view, fragment_trgls_program, gl):
+    # def __init__(self, fragment_view, position_location, gl, fragment_trgls_program):
+    def __init__(self, fragment_view, position_location, gl):
         self.fragment_view = fragment_view
         self.gl = gl
         self.vao = None
         self.vao_modified = ""
-        self.fragment_program = fragment_program
+        # self.fragment_trgls_program = fragment_trgls_program
+        self.position_location = position_location
         self.getVao()
 
     def getVao(self):
@@ -56,7 +59,7 @@ class FragmentVao:
         if self.vao_modified >= fv.modified and self.vao_modified > fv.fragment.modified:
             return self.vao
 
-        self.fragment_program.bind()
+        # self.fragment_trgls_program.bind()
 
         if self.vao is None:
             self.vao = QOpenGLVertexArrayObject()
@@ -68,12 +71,14 @@ class FragmentVao:
         self.vbo.create()
         self.vbo.bind()
         pts3d = np.ascontiguousarray(fv.vpoints[:,:3], dtype=np.float32)
+        self.pts_size = pts3d.size
 
         nbytes = pts3d.size*pts3d.itemsize
         self.vbo.allocate(pts3d, nbytes)
 
-        vloc = self.fragment_program.attributeLocation("position")
-        # print("vloc", vloc)
+        # vloc = self.fragment_trgls_program.attributeLocation("position")
+        # print("vloc", vloc, self.position_location)
+        vloc = self.position_location
         f = self.gl
         f.glVertexAttribPointer(
                 vloc,
@@ -81,7 +86,8 @@ class FragmentVao:
                 0, 0)
         self.vbo.release()
 
-        self.fragment_program.enableAttributeArray(vloc)
+        # This needs to be called while the current VAO is bound
+        f.glEnableVertexAttribArray(vloc)
 
         self.ibo = QOpenGLBuffer(QOpenGLBuffer.IndexBuffer)
         self.ibo.create()
@@ -122,6 +128,7 @@ class GLDataWindow(DataWindow):
         layout.addWidget(self.glw)
 
     def drawSlice(self):
+        self.window.setFocus()
         self.glw.update()
 
     def fvsInBounds(self, xymin, xymax):
@@ -165,18 +172,27 @@ slice_code = {
       #version 410 core
 
       uniform sampler2D base_sampler;
+      uniform sampler2D underlay_sampler;
       uniform sampler2D overlay_sampler;
       uniform sampler2D fragments_sampler;
-      uniform float frag_opacity = 1.;
+      // uniform float frag_opacity = 1.;
       in vec2 ftxt;
       out vec4 fColor;
 
       void main()
       {
+        float alpha;
         fColor = texture(base_sampler, ftxt);
+
+        vec4 uColor = texture(underlay_sampler, ftxt);
+        alpha = uColor.a;
+        fColor = (1.-alpha)*fColor + alpha*uColor;
+
         vec4 frColor = texture(fragments_sampler, ftxt);
-        float alpha = frag_opacity*frColor.a;
+        // alpha = frag_opacity*frColor.a;
+        alpha = frColor.a;
         fColor = (1.-alpha)*fColor + alpha*frColor;
+
         vec4 oColor = texture(overlay_sampler, ftxt);
         alpha = oColor.a;
         fColor = (1.-alpha)*fColor + alpha*oColor;
@@ -228,14 +244,49 @@ common_offset_code = '''
   );
 '''
 
-fragment_code = {
-    "name": "fragment",
+fragment_pts_code = {
+    "name": "fragment_trgls",
+
+    "vertex": '''
+      #version 410 core
+
+      uniform vec4 node_color;
+      uniform vec4 highlight_node_color;
+      uniform int nearby_node_id;
+      out vec4 color;
+      uniform mat4 xform;
+      layout(location=3) in vec3 position;
+      void main() {
+        if (gl_VertexID == nearby_node_id) {
+          color = highlight_node_color;
+        } else {
+          color = node_color;
+        }
+        gl_Position = xform*vec4(position, 1.0);
+      }
+    ''',
+
+    "fragment": '''
+      #version 410 core
+
+      in vec4 color;
+      out vec4 fColor;
+
+      void main()
+      {
+        fColor = color;
+      }
+    ''',
+}
+
+fragment_trgls_code = {
+    "name": "fragment_trgls",
 
     "vertex": '''
       #version 410 core
 
       uniform mat4 xform;
-      in vec3 position;
+      layout(location=3) in vec3 position;
       void main() {
         gl_Position = xform*vec4(position, 1.0);
       }
@@ -406,7 +457,7 @@ fragment_code = {
 
       uniform vec4 gcolor;
       uniform vec4 icolor;
-      out vec4 fColor;
+      // out vec4 fColor;
       layout(location = 0) out vec4 frag_color;
       layout(location = 1) out vec4 pick_color;
       // The most important thing about empty_color
@@ -443,6 +494,10 @@ class GLDataWindowChild(QOpenGLWidget):
         self.logging_mode = 1
         self.xyfvs = None
         self.indexed_fvs = None
+        # Location of "position" variable in vertex shaders.
+        # This is specified by the shader line:
+        # layout(location=3) in vec3 postion;
+        self.position_location = 3
         # self.logging_mode = 0
 
     def dwKeyPressEvent(self, e):
@@ -544,12 +599,6 @@ class GLDataWindowChild(QOpenGLWidget):
         ww = dw.size().width()
         wh = dw.size().height()
         opacity = dw.getDrawOpacity("overlay")
-        apply_line_opacity = dw.getDrawApplyOpacity("line")
-        line_alpha = 1.
-        if apply_line_opacity:
-            line_alpha = opacity
-        thickness = dw.getDrawWidth("line")
-        thickness = (3*thickness)//2
         volume_view = dw.volume_view
         xform = QMatrix4x4()
 
@@ -582,28 +631,39 @@ class GLDataWindowChild(QOpenGLWidget):
         for i in range(4):
             print(xform.row(i))
         '''
-        self.fragment_program.bind()
-        self.fragment_program.setUniformValue("xform", xform)
-        self.fragment_program.setUniformValue("window_size", dw.size())
-        self.fragment_program.setUniformValue("thickness", 1.*thickness)
 
+        apply_line_opacity = dw.getDrawApplyOpacity("line")
+        line_alpha = 1.
+        if apply_line_opacity:
+            line_alpha = opacity
+        line_thickness = dw.getDrawWidth("line")
+        line_thickness = (3*line_thickness)//2
+
+        self.fragment_trgls_program.bind()
+        self.fragment_trgls_program.setUniformValue("xform", xform)
+        self.fragment_trgls_program.setUniformValue("window_size", dw.size())
+        self.fragment_trgls_program.setUniformValue("thickness", 1.*line_thickness)
         timera.time(axstr+"setup")
         new_fragment_vaos = {}
         self.indexed_fvs = []
         for fv in dw.fragmentViews():
             if not fv.visible:
                 continue
+            if line_thickness == 0 or line_alpha == 0:
+                continue
             qcolor = fv.fragment.color
             rgba = list(qcolor.getRgbF())
-            rgba[3] = 1.
+            rgba[3] = line_alpha
             self.indexed_fvs.append(fv)
             iindex = len(self.indexed_fvs)
             findex = iindex/65536.
-            self.fragment_program.setUniformValue("gcolor", *rgba)
-            self.fragment_program.setUniformValue("icolor", findex,0.,0.,1.)
-            # self.fragment_program.setUniformValue("icolor", 1.,0.,0.,1.)
+            self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
+            self.fragment_trgls_program.setUniformValue("icolor", findex,0.,0.,1.)
+            # self.fragment_trgls_program.setUniformValue("icolor", 1.,0.,0.,1.)
             if fv not in self.fragment_vaos:
-                fvao = FragmentVao(fv, self.fragment_program, self.gl)
+                # fvao = FragmentVao(fv, self.fragment_trgls_program, self.gl)
+                # fvao = FragmentVao(fv, self.position_location, self.gl, self.fragment_trgls_program)
+                fvao = FragmentVao(fv, self.position_location, self.gl)
                 self.fragment_vaos[fv] = fvao
             fvao = self.fragment_vaos[fv]
             new_fragment_vaos[fv] = fvao
@@ -613,9 +673,99 @@ class GLDataWindowChild(QOpenGLWidget):
             f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size, 
                              f.GL_UNSIGNED_INT, None)
             vao.release()
+        self.fragment_trgls_program.release()
+
+        apply_node_opacity = dw.getDrawApplyOpacity("node")
+        node_alpha = 1.
+        if apply_node_opacity:
+            node_alpha = opacity
+        default_node_thickness = dw.getDrawWidth("node")
+        free_node_thickness = dw.getDrawWidth("free_node")
+        # node_thickness *= 2
+        # node_thickness = int(node_thickness)
+
+        self.fragment_pts_program.bind()
+        self.fragment_pts_program.setUniformValue("xform", xform)
+        highlight_node_color = [c/65535 for c in dw.highlightNodeColor]
+        highlight_node_color[3] = node_alpha
+        self.fragment_pts_program.setUniformValue("highlight_node_color", *highlight_node_color)
+
+        dw.cur_frag_pts_xyijk = None
+        dw.cur_frag_pts_fv = []
+        xyptslist = []
+        # if node_thickness > 0:
+        pv = dw.window.project_view
+        # nearby_node = (pv.nearby_node_fv, pv.nearby_node_index)
+        dw.nearbyNode = -1
+        i0 = 0
+        for fv in dw.fragmentViews():
+            if not fv.visible:
+                continue
+            node_thickness = default_node_thickness
+            if not fv.mesh_visible:
+                node_thickness = free_node_thickness
+            # in OpenCV, node_thickness is the radius
+            node_thickness *= 2
+
+            if node_thickness == 0 or node_alpha == 0:
+                continue
+            f.glPointSize(node_thickness)
+
+            '''
+            qcolor = fv.fragment.color
+            rgba = list(qcolor.getRgbF())
+            rgba[3] = 1.
+            '''
+            # rgba = (1.,0.,0.,1.)
+            color = dw.nodeColor
+            if not fv.active:
+                color = dw.inactiveNodeColor
+            if not fv.mesh_visible:
+                color = fv.fragment.cvcolor
+            rgba = [c/65535 for c in color]
+            rgba[3] = node_alpha
+            # print(color, rgba)
+            self.fragment_pts_program.setUniformValue("node_color", *rgba)
+
+            pts = fv.getPointsOnSlice(dw.axis, dw.positionOnAxis())
+            # print(fv.fragment.name, pts.shape)
+            nearby_node_id = -1
+            if fv == pv.nearby_node_fv:
+                ind = pv.nearby_node_index
+                nz = np.nonzero(pts[:,3] == ind)[0]
+                if len(nz) > 0:
+                    ind = nz[0]
+                    self.nearbyNode = i0 + ind
+                    nearby_node_id = int(pts[ind,3])
+                    # print("nearby node", len(nz), nz, self.nearbyNode, pts[nz, 3])
+
+            self.fragment_pts_program.setUniformValue("nearby_node_id", nearby_node_id)
+
+            if fv not in self.fragment_vaos:
+                fvao = FragmentVao(fv, self.position_location, self.gl)
+                self.fragment_vaos[fv] = fvao
+            fvao = self.fragment_vaos[fv]
+            new_fragment_vaos[fv] = fvao
+            vao = fvao.getVao()
+            vao.bind()
+
+            # print("drawing", node_thickness, fvao.pts_size)
+            f.glDrawArrays(f.GL_POINTS, 0, fvao.pts_size)
+            vao.release()
+
+            i0 += len(pts)
+
+            ijs = dw.tijksToIjs(pts)
+            xys = dw.ijsToXys(ijs)
+            # print(pts.shape, xys.shape)
+            xypts = np.concatenate((xys, pts), axis=1)
+            xyptslist.append(xypts)
+            dw.cur_frag_pts_fv.extend([fv]*len(pts))
+        self.fragment_pts_program.release()
+        dw.cur_frag_pts_xyijk = np.concatenate(xyptslist, axis=0)
+
         timera.time(axstr+"draw")
         self.fragment_vaos = new_fragment_vaos
-        self.fragment_program.release()
 
         # "True" means that the image should be flipped to convert
         # from OpenGl's y-upwards convention to QImage's y-downwards
@@ -654,6 +804,7 @@ class GLDataWindowChild(QOpenGLWidget):
 
 
 
+
     def texFromData(self, data, qiformat):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
         img = QImage(data, data.shape[1], data.shape[0],
@@ -668,7 +819,7 @@ class GLDataWindowChild(QOpenGLWidget):
         tex.setMagnificationFilter(QOpenGLTexture.Nearest)
         return tex
 
-    def drawOverlays(self, data):
+    def drawUnderlays(self, data):
         dw = self.gldw
         volume_view = dw.volume_view
 
@@ -701,6 +852,12 @@ class GLDataWindowChild(QOpenGLWidget):
             jcolor = dw.axisColor(dw.jIndex)
             jcolor[3] = alpha16
             cv2.line(data, (0,fy), (ww,fy), jcolor, aw)
+
+    def drawOverlays(self, data):
+        dw = self.gldw
+        volume_view = dw.volume_view
+        opacity = dw.getDrawOpacity("overlay")
+
         lw = dw.getDrawWidth("labels")
         alpha = 1.
         if dw.getDrawApplyOpacity("labels"):
@@ -781,6 +938,18 @@ class GLDataWindowChild(QOpenGLWidget):
         base_tex.bind()
         self.slice_program.setUniformValue(bloc, bunit)
 
+        underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
+        self.drawUnderlays(underlay_data)
+        underlay_tex = self.texFromData(underlay_data, QImage.Format_RGBA64)
+        uloc = self.slice_program.uniformLocation("underlay_sampler")
+        if uloc < 0:
+            print("couldn't get loc for underlay sampler")
+            return
+        uunit = 2
+        f.glActiveTexture(f.GL_TEXTURE0+uunit)
+        underlay_tex.bind()
+        self.slice_program.setUniformValue(uloc, uunit)
+
         overlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawOverlays(overlay_data)
         overlay_tex = self.texFromData(overlay_data, QImage.Format_RGBA64)
@@ -788,12 +957,12 @@ class GLDataWindowChild(QOpenGLWidget):
         if oloc < 0:
             print("couldn't get loc for overlay sampler")
             return
-        ounit = 2
+        ounit = 3
         f.glActiveTexture(f.GL_TEXTURE0+ounit)
         overlay_tex.bind()
         self.slice_program.setUniformValue(oloc, ounit)
 
-        # In the fragment shader of the fragment_code program, 
+        # In the fragment shader of the fragment_trgls_code program, 
         # each fragment is written to two textures.  But we only
         # want each given fragment to be drawn onto one particular texture,
         # not on both.  So when drawing to the texture that we don't
@@ -813,7 +982,7 @@ class GLDataWindowChild(QOpenGLWidget):
         if floc < 0:
             print("couldn't get loc for fragments sampler")
             return
-        funit = 3
+        funit = 4
         f.glActiveTexture(f.GL_TEXTURE0+funit)
         # only valid if texture is created using
         # addColorAttachment()
@@ -832,9 +1001,9 @@ class GLDataWindowChild(QOpenGLWidget):
         opacity = dw.getDrawOpacity("overlay")
         apply_line_opacity = dw.getDrawApplyOpacity("line")
         line_alpha = 1.
-        if apply_line_opacity:
-            line_alpha = opacity
-        self.slice_program.setUniformValue("frag_opacity", line_alpha)
+        # if apply_line_opacity:
+        #     line_alpha = opacity
+        # self.slice_program.setUniformValue("frag_opacity", line_alpha)
 
         f.glActiveTexture(f.GL_TEXTURE0)
         vaoBinder = QOpenGLVertexArrayObject.Binder(self.slice_vao)
@@ -880,7 +1049,8 @@ class GLDataWindowChild(QOpenGLWidget):
     def buildPrograms(self):
         self.slice_program = self.buildProgram(slice_code)
         # self.borders_program = self.buildProgram(borders_code)
-        self.fragment_program = self.buildProgram(fragment_code)
+        self.fragment_trgls_program = self.buildProgram(fragment_trgls_code)
+        self.fragment_pts_program = self.buildProgram(fragment_pts_code)
 
     def buildSliceVao(self):
         self.slice_vao = QOpenGLVertexArrayObject()

@@ -994,11 +994,16 @@ class FragmentView(BaseFragmentView):
         self.working_vpoints = np.full((len(self.vpoints),),True)
         self.working_trgls = np.full((0,),True)
         npts = self.vpoints.shape[0]
+        '''
         if npts > 0:
             indices = np.reshape(np.arange(npts), (npts,1))
             # print(self.vpoints.shape, indices.shape)
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
             # print(self.vpoints[0])
+        '''
+        indices = np.reshape(np.arange(npts), (npts,1))
+        self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
+        ''''''
         if not self.mesh_visible:
             self.zsurf = None
             self.ssurf = None
@@ -1674,6 +1679,7 @@ class FragmentView(BaseFragmentView):
 
     def getPointsOnSlice(self, axis, i):
         # matches = self.vpoints[(self.vpoints[:, axis] == i)]
+        # print(self.vpoints.shape)
         matches = self.vpoints[(self.vpoints[:, axis] >= i-.5) & (self.vpoints[:, axis] < i+.5)]
         return matches
 
