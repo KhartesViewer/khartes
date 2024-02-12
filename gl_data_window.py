@@ -50,6 +50,7 @@ class FragmentVao:
         self.gl = gl
         self.vao = None
         self.vao_modified = ""
+        self.is_line = False
         # self.fragment_trgls_program = fragment_trgls_program
         self.position_location = position_location
         self.getVao()
@@ -98,7 +99,13 @@ class FragmentVao:
         # notice that indices must be uint8, uint16, or uint32
         fv_trgls = fv.trgls()
         if fv_trgls is None:
-            fv_trgls = np.zeros((0,3), dtype=np.uint32)
+            fv_line = fv.line
+            if fv_line is not None:
+                self.is_line = True
+                # This is actually a line strip
+                fv_trgls = fv.line[:,2]
+            else:
+                fv_trgls = np.zeros((0,3), dtype=np.uint32)
         
         trgls = np.ascontiguousarray(fv_trgls, dtype=np.uint32)
 
@@ -275,6 +282,113 @@ fragment_pts_code = {
       void main()
       {
         fColor = color;
+      }
+    ''',
+}
+
+fragment_lines_code = {
+    "name": "fragment_lines",
+
+    "vertex": '''
+      #version 410 core
+
+      uniform mat4 xform;
+      layout(location=3) in vec3 position;
+      void main() {
+        gl_Position = xform*vec4(position, 1.0);
+      }
+    ''',
+    "geometry": '''
+      #version 410 core
+  
+      uniform float thickness;
+      uniform vec2 window_size;
+  
+      layout(lines) in;
+      // max_vertices = 10+4 (10 for thick line, 4 for pick line)
+      layout(triangle_strip, max_vertices = 14) out;
+  
+      %s
+  
+      void main() {
+        float dist[2];
+        float sgn[2]; // sign(float) returns float
+        float sig = 0; // signature
+        float m = 1;
+
+        for (int i=0; i<2; i++) {
+          dist[i] = gl_in[i].gl_Position.z;
+          sgn[i] = sign(dist[i]);
+          sig += m*(1+sgn[i]);
+          m *= 3;
+        }
+        if (sig == 0 || sig == 8) return;
+        vec4 pcs[2];
+        if (sig == 4) {
+          pcs[0] = gl_in[0].gl_Position;
+          pcs[1] = gl_in[1].gl_Position;
+        } else {
+          float da = dist[0];
+          float db = dist[1];
+  
+          vec4 pa = gl_in[0].gl_Position;
+          vec4 pb = gl_in[1].gl_Position;
+          float fa = abs(da);
+          float fb = abs(db);
+          vec4 pc = pa;
+          if (fa > 0 || fb > 0) pc = (fa * pb + fb * pa) / (fa + fb);
+          pcs[0] = pc;
+          pcs[1] = pc;
+        }
+
+        int vcount = 4;
+        if (thickness < 5) {
+          vcount = 4;
+        } else {
+           vcount = 10;
+        }
+
+        vec2 tan = (pcs[1]-pcs[0]).xy;
+        if (tan.x == 0 && tan.y == 0) {
+          tan.x = 1.;
+          tan.y = 0.;
+        }
+        tan = normalize(tan);
+        vec2 norm = vec2(-tan.y, tan.x);
+        vec2 factor = vec2(1./window_size.x, 1./window_size.y);
+        vec4 offsets[9];
+        for (int i=0; i<9; i++) {
+          // trig contains cosine and sine of angle i*45 degrees
+          vec2 trig = trig_table[i];
+          vec2 raw_offset = -trig.x*tan + trig.y*norm;
+          vec4 scaled_offset = vec4(factor*raw_offset, 0., 0.);
+          offsets[i] = scaled_offset;
+        }
+        ivec2 vs[10];
+        if (vcount == 10) {
+          vs = v10;
+        } else if (vcount == 4) {
+          vs = v4;
+        }
+
+        for (int i=0; i<vcount; i++) {
+          ivec2 iv = vs[i];
+          gl_Position = pcs[iv.x] + thickness*offsets[iv.y];
+          EmitVertex();
+        }
+      }
+
+    ''' % common_offset_code,
+
+    "fragment": '''
+      #version 410 core
+
+      uniform vec4 gcolor;
+      out vec4 fColor;
+
+      void main()
+      {
+        fColor = gcolor;
       }
     ''',
 }
@@ -646,10 +760,23 @@ class GLDataWindowChild(QOpenGLWidget):
         timera.time(axstr+"setup")
         new_fragment_vaos = {}
         self.indexed_fvs = []
+        lines = []
         for fv in dw.fragmentViews():
             if not fv.visible:
                 continue
             if line_thickness == 0 or line_alpha == 0:
+                continue
+            # self.fragment_trgls_program.setUniformValue("icolor", 1.,0.,0.,1.)
+            if fv not in self.fragment_vaos:
+                # fvao = FragmentVao(fv, self.fragment_trgls_program, self.gl)
+                # fvao = FragmentVao(fv, self.position_location, self.gl, self.fragment_trgls_program)
+                fvao = FragmentVao(fv, self.position_location, self.gl)
+                self.fragment_vaos[fv] = fvao
+            fvao = self.fragment_vaos[fv]
+            new_fragment_vaos[fv] = fvao
+
+            if fvao.is_line:
+                lines.append(fv)
                 continue
             qcolor = fv.fragment.color
             rgba = list(qcolor.getRgbF())
@@ -659,14 +786,6 @@ class GLDataWindowChild(QOpenGLWidget):
             findex = iindex/65536.
             self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
             self.fragment_trgls_program.setUniformValue("icolor", findex,0.,0.,1.)
-            # self.fragment_trgls_program.setUniformValue("icolor", 1.,0.,0.,1.)
-            if fv not in self.fragment_vaos:
-                # fvao = FragmentVao(fv, self.fragment_trgls_program, self.gl)
-                # fvao = FragmentVao(fv, self.position_location, self.gl, self.fragment_trgls_program)
-                fvao = FragmentVao(fv, self.position_location, self.gl)
-                self.fragment_vaos[fv] = fvao
-            fvao = self.fragment_vaos[fv]
-            new_fragment_vaos[fv] = fvao
             vao = fvao.getVao()
             vao.bind()
 
@@ -674,6 +793,27 @@ class GLDataWindowChild(QOpenGLWidget):
                              f.GL_UNSIGNED_INT, None)
             vao.release()
         self.fragment_trgls_program.release()
+
+        if len(lines) > 0:
+            self.fragment_lines_program.bind()
+            self.fragment_lines_program.setUniformValue("xform", xform)
+            self.fragment_lines_program.setUniformValue("window_size", dw.size())
+            self.fragment_lines_program.setUniformValue("thickness", 1.*line_thickness)
+            for fv in lines:
+                fvao = self.fragment_vaos[fv]
+    
+                qcolor = fv.fragment.color
+                rgba = list(qcolor.getRgbF())
+                rgba[3] = line_alpha
+                self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
+                vao = fvao.getVao()
+                vao.bind()
+    
+                f.glDrawElements(f.GL_LINE_STRIP, fvao.trgl_index_size, 
+                                 f.GL_UNSIGNED_INT, None)
+                vao.release()
+
+            self.fragment_lines_program.release()
 
         apply_node_opacity = dw.getDrawApplyOpacity("node")
         node_alpha = 1.
@@ -1050,6 +1190,7 @@ class GLDataWindowChild(QOpenGLWidget):
         self.slice_program = self.buildProgram(slice_code)
         # self.borders_program = self.buildProgram(borders_code)
         self.fragment_trgls_program = self.buildProgram(fragment_trgls_code)
+        self.fragment_lines_program = self.buildProgram(fragment_lines_code)
         self.fragment_pts_program = self.buildProgram(fragment_pts_code)
 
     def buildSliceVao(self):
