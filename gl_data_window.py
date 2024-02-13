@@ -35,6 +35,7 @@ from PyQt5.QtCore import (
         QTimer,
         )
 
+import time
 import numpy as np
 import cv2
 from utils import Utils
@@ -57,15 +58,20 @@ class FragmentVao:
 
     def getVao(self):
         fv = self.fragment_view
-        if self.vao_modified >= fv.modified and self.vao_modified > fv.fragment.modified:
+        if self.vao_modified > fv.modified and self.vao_modified > fv.fragment.modified and self.vao_modified > fv.local_points_modified:
+            # print("returning existing vao")
             return self.vao
+
+        self.vao_modified = Utils.timestamp()
 
         # self.fragment_trgls_program.bind()
 
         if self.vao is None:
             self.vao = QOpenGLVertexArrayObject()
             self.vao.create()
+            # print("creating new vao")
 
+        # print("updating vao")
         self.vao.bind()
 
         self.vbo = QOpenGLBuffer()
@@ -98,6 +104,7 @@ class FragmentVao:
         # a line, not a triangulated surface!
         # notice that indices must be uint8, uint16, or uint32
         fv_trgls = fv.trgls()
+        self.is_line = False
         if fv_trgls is None:
             fv_line = fv.line
             if fv_line is not None:
@@ -116,7 +123,6 @@ class FragmentVao:
 
         # print("nodes, trgls", pts3d.shape, trgls.shape)
 
-        self.vao_modified = Utils.timestamp()
         self.vao.release()
         
         # do not release ibo before vao is released!
@@ -273,14 +279,36 @@ fragment_pts_code = {
       }
     ''',
 
+    "geometry_hide": '''
+      #version 410 core
+  
+      layout(points) in;
+      in vec4 color[1];
+      out vec4 gcolor;
+      layout(points, max_vertices = 1) out;
+
+      void main() {
+        vec4 pos = gl_in[0].gl_Position;
+        if (pos.x < -1. || pos.x > 1. ||
+            pos.y < -1. || pos.y > 1. ||
+            pos.z < -1. || pos.z > 1.) return;
+
+        gl_Position = pos;
+        gcolor = color[0];
+        EmitVertex();
+    }
+    ''',
+
     "fragment": '''
       #version 410 core
 
+      // in vec4 gcolor;
       in vec4 color;
       out vec4 fColor;
 
       void main()
       {
+        // fColor = gcolor;
         fColor = color;
       }
     ''',
@@ -307,6 +335,7 @@ fragment_lines_code = {
       layout(lines) in;
       // max_vertices = 10+4 (10 for thick line, 4 for pick line)
       layout(triangle_strip, max_vertices = 14) out;
+      flat out int trgl_type;
   
       %s
   
@@ -374,6 +403,15 @@ fragment_lines_code = {
         for (int i=0; i<vcount; i++) {
           ivec2 iv = vs[i];
           gl_Position = pcs[iv.x] + thickness*offsets[iv.y];
+          trgl_type = 0;
+          EmitVertex();
+        }
+        EndPrimitive();
+
+        for (int i=0; i<4; i++) {
+          ivec2 iv = v4[i];
+          gl_Position = pcs[iv.x] + 1.*offsets[iv.y];
+          trgl_type = 1;
           EmitVertex();
         }
       }
@@ -384,11 +422,27 @@ fragment_lines_code = {
       #version 410 core
 
       uniform vec4 gcolor;
-      out vec4 fColor;
+      uniform vec4 icolor;
+      layout(location = 0) out vec4 frag_color;
+      layout(location = 1) out vec4 pick_color;
+      // The most important thing about empty_color
+      // is that alpha = 0., so with blending enabled,
+      // empty_color is effectively not drawn
+      const vec4 empty_color = vec4(0.,0.,0.,0.);
+      flat in int trgl_type;
 
       void main()
       {
-        fColor = gcolor;
+        // in both clauses of the if statement, need to
+        // set both frag_color and pick_color.  If either
+        // is not set, it will be drawn in an undefined color.
+        if (trgl_type == 0) {
+          frag_color = gcolor;
+          pick_color = empty_color;
+        } else {
+          frag_color = empty_color;
+          pick_color = icolor;
+        }
       }
     ''',
 }
@@ -621,6 +675,7 @@ class GLDataWindowChild(QOpenGLWidget):
         print("initializeGL")
         self.context().aboutToBeDestroyed.connect(self.destroyingContext)
         self.gl = self.context().versionFunctions()
+        self.fragment_fbo = None
         self.main_context = self.context()
         # Note that debug logging only takes place if the
         # surface format option "DebugContext" is set
@@ -639,6 +694,11 @@ class GLDataWindowChild(QOpenGLWidget):
         f = self.gl
         # self.gl.glClearColor(.3,.6,.3,1.)
         f.glClearColor(.6,.3,.3,1.)
+        self.frag_last_check = 0
+        self.frag_last_change = 0
+        self.frag_timer = QTimer()
+        self.frag_timer.timeout.connect(self.getPicks)
+        self.frag_timer.start(1000)
 
     def resizeGL(self, width, height):
         # print("resize", width, height)
@@ -774,6 +834,7 @@ class GLDataWindowChild(QOpenGLWidget):
                 self.fragment_vaos[fv] = fvao
             fvao = self.fragment_vaos[fv]
             new_fragment_vaos[fv] = fvao
+            self.indexed_fvs.append(fv)
 
             if fvao.is_line:
                 lines.append(fv)
@@ -781,7 +842,6 @@ class GLDataWindowChild(QOpenGLWidget):
             qcolor = fv.fragment.color
             rgba = list(qcolor.getRgbF())
             rgba[3] = line_alpha
-            self.indexed_fvs.append(fv)
             iindex = len(self.indexed_fvs)
             findex = iindex/65536.
             self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
@@ -805,7 +865,10 @@ class GLDataWindowChild(QOpenGLWidget):
                 qcolor = fv.fragment.color
                 rgba = list(qcolor.getRgbF())
                 rgba[3] = line_alpha
+                iindex = self.indexed_fvs.index(fv)
+                findex = iindex/65536.
                 self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
+                self.fragment_trgls_program.setUniformValue("icolor", findex,0.,0.,1.)
                 vao = fvao.getVao()
                 vao.bind()
     
@@ -814,6 +877,8 @@ class GLDataWindowChild(QOpenGLWidget):
                 vao.release()
 
             self.fragment_lines_program.release()
+
+        timera.time(axstr+"draw lines")
 
         apply_node_opacity = dw.getDrawApplyOpacity("node")
         node_alpha = 1.
@@ -867,9 +932,9 @@ class GLDataWindowChild(QOpenGLWidget):
             # print(color, rgba)
             self.fragment_pts_program.setUniformValue("node_color", *rgba)
 
+            nearby_node_id = -1
             pts = fv.getPointsOnSlice(dw.axis, dw.positionOnAxis())
             # print(fv.fragment.name, pts.shape)
-            nearby_node_id = -1
             if fv == pv.nearby_node_fv:
                 ind = pv.nearby_node_index
                 nz = np.nonzero(pts[:,3] == ind)[0]
@@ -879,7 +944,37 @@ class GLDataWindowChild(QOpenGLWidget):
                     nearby_node_id = int(pts[ind,3])
                     # print("nearby node", len(nz), nz, self.nearbyNode, pts[nz, 3])
 
+            i0 += len(pts)
             self.fragment_pts_program.setUniformValue("nearby_node_id", nearby_node_id)
+
+            ijs = dw.tijksToIjs(pts)
+            xys = dw.ijsToXys(ijs)
+            # print(pts.shape, xys.shape)
+            xypts = np.concatenate((xys, pts), axis=1)
+            xyptslist.append(xypts)
+            dw.cur_frag_pts_fv.extend([fv]*len(pts))
+
+
+            '''
+            nearby_node_id = -1
+            if fv == pv.nearby_node_fv:
+                nearby_node_id = -1
+                pts = fv.getPointsOnSlice(dw.axis, dw.positionOnAxis())
+                ind = pv.nearby_node_index
+                nz = np.nonzero(pts[:,3] == ind)[0]
+                if len(nz) > 0:
+                    ind = nz[0]
+                    self.nearbyNode = i0 + ind
+                    nearby_node_id = int(pts[ind,3])
+                ijs = dw.tijksToIjs(pts)
+                xys = dw.ijsToXys(ijs)
+                # print(pts.shape, xys.shape)
+                xypts = np.concatenate((xys, pts), axis=1)
+                xyptslist.append(xypts)
+                dw.cur_frag_pts_fv.extend([fv]*len(pts))
+
+            self.fragment_pts_program.setUniformValue("nearby_node_id", nearby_node_id)
+            '''
 
             if fv not in self.fragment_vaos:
                 fvao = FragmentVao(fv, self.position_location, self.gl)
@@ -893,26 +988,47 @@ class GLDataWindowChild(QOpenGLWidget):
             f.glDrawArrays(f.GL_POINTS, 0, fvao.pts_size)
             vao.release()
 
-            i0 += len(pts)
-
-            ijs = dw.tijksToIjs(pts)
-            xys = dw.ijsToXys(ijs)
-            # print(pts.shape, xys.shape)
-            xypts = np.concatenate((xys, pts), axis=1)
-            xyptslist.append(xypts)
-            dw.cur_frag_pts_fv.extend([fv]*len(pts))
         self.fragment_pts_program.release()
-        dw.cur_frag_pts_xyijk = np.concatenate(xyptslist, axis=0)
+        if len(xyptslist) > 0:
+            dw.cur_frag_pts_xyijk = np.concatenate(xyptslist, axis=0)
+        else:
+            dw.cur_frag_pts_xyijk = np.zeros((0,5), dtype=np.float32)
+        # print("pts", len(dw.cur_frag_pts_xyijk))
 
-        timera.time(axstr+"draw")
+        timera.time(axstr+"draw points")
         self.fragment_vaos = new_fragment_vaos
 
+        ''''''
+        QOpenGLFramebufferObject.bindDefault()
+        # self.getPicks()
+        self.frag_last_change = time.time()
+
+    # The toImage() call in this routine can be time-consuming,
+    # since it requires the GPU to pause and export data.
+    # But the result is not needed after every drawSlice call;
+    # it is sufficient to call getPicks once a second or so.
+    # So call getPicks from a QTimer instead of from inside 
+    # drawFragments.
+    def getPicks(self):
+        if self.fragment_fbo is None:
+            return
+        if self.frag_last_change < self.frag_last_check:
+            return
+        self.frag_last_check = time.time()
+        # print(self.frag_last_check)
+        dw = self.gldw
+        f = self.gl
+        timerb = Utils.Timer()
+        timerb.active = False
+        axstr = "(%d) "%dw.axis
+        self.fragment_fbo.bind()
         # "True" means that the image should be flipped to convert
         # from OpenGl's y-upwards convention to QImage's y-downwards
         # convention.
         # "1" means use drawing-attachment 1, which is the
         # texture containing icolor (index) information
         im = self.fragment_fbo.toImage(True, 1)
+        timerb.time(axstr+"get image")
 
         arr = self.npArrayFromQImage(im)
         # In the loop above, findex (iindex/65536) is stored in 
@@ -924,6 +1040,8 @@ class GLDataWindowChild(QOpenGLWidget):
         self.xyfvs = np.stack(
                 (pts[1], pts[0], pick_array[pts[0], pts[1]]-1), axis=1)
                 # (pick_array[pts[0], pts[1]], pts[0], pts[1]), axis=1)
+        timerb.time(axstr+"get picks")
+        ''''''
 
         # vij = np.sort(vij, axis=0)
         # One approach: split by v, create dw.fv2zpoints dict, where fv is
@@ -941,8 +1059,6 @@ class GLDataWindowChild(QOpenGLWidget):
         # print("pa max",pick_array.max())
         QOpenGLFramebufferObject.bindDefault()
         # print("leaving drawFragments")
-
-
 
 
     def texFromData(self, data, qiformat):
