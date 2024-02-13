@@ -980,6 +980,7 @@ class FragmentView(BaseFragmentView):
     def setLocalPoints(self, recursion_ok, always_update_zsurf=True):
         # print("set local points", self.cur_volume_view.volume.name)
         # print("set local points", self.fragment.name)
+        self.local_points_modified = Utils.timestamp()
         if self.cur_volume_view is None:
             self.fpoints = np.zeros((0,4), dtype=np.float32)
             self.vpoints = np.zeros((0,4), dtype=np.float32)

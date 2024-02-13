@@ -163,6 +163,7 @@ class BaseFragmentView:
         self.active = False
         self.mesh_visible = True
         self.modified = Utils.timestamp()
+        self.local_points_modified = Utils.timestamp()
 
     def setVolumeView(self, vol_view):
         if vol_view == self.cur_volume_view:

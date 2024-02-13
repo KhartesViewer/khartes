@@ -362,6 +362,7 @@ class TrglFragmentView(BaseFragmentView):
 
     # TODO: if cur_volume_view changed, unset working region
     def setLocalPoints(self, recursion_ok=True, always_update_zsurfs=True):
+        self.local_points_modified = Utils.timestamp()
         if self.cur_volume_view is None:
             self.vpoints = np.zeros((0,4), dtype=np.float32)
             self.fpoints = self.vpoints
