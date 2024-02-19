@@ -868,7 +868,7 @@ class MainWindow(QMainWindow):
         self.openhand_transparents = self.transparentSvgs(path+"/icons/openhand transparent.svg", 11)
         self.openhand_transparent = self.openhand_transparents[0]
 
-        case = 0
+        case = 2
 
         if case == 0:
             # x slice or y slice in data
