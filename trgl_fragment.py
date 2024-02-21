@@ -1,11 +1,14 @@
 import math
 import json
 import numpy as np
+
 from pathlib import Path
 from collections import deque
 from utils import Utils
 from base_fragment import BaseFragment, BaseFragmentView
 from fragment import Fragment, FragmentView
+
+
 
 from PyQt5.QtGui import QColor
 
@@ -13,7 +16,7 @@ class TrglFragment(BaseFragment):
     def __init__(self, name):
         super(TrglFragment, self).__init__(name)
         self.gpoints = np.zeros((0,3), dtype=np.float32)
-        self.tpoints = np.zeros((0,2), dtype=np.float32)
+        self.gtpoints = np.zeros((0,2), dtype=np.float32)
         self.trgls = np.zeros((0,3), dtype=np.int32)
         self.direction = 0
         '''
@@ -70,7 +73,7 @@ class TrglFragment(BaseFragment):
             frag_name = name
         trgl_frag = TrglFragment(frag_name)
         trgl_frag.gpoints = np.array(vrtl, dtype=np.float32)
-        trgl_frag.tpoints = np.array(tvrtl, dtype=np.float32)
+        trgl_frag.gtpoints = np.array(tvrtl, dtype=np.float32)
         if len(trgl) > 0:
             trgl_frag.trgls = np.array(trgl, dtype=np.int32)
         else:
@@ -113,7 +116,7 @@ class TrglFragment(BaseFragment):
         trgl_frag.setColor(color, no_notify=True)
         trgl_frag.valid = True
         trgl_frag.neighbors = BaseFragment.findNeighbors(trgl_frag.trgls)
-        print(trgl_frag.name, trgl_frag.color.name(), trgl_frag.gpoints.shape, trgl_frag.tpoints.shape, trgl_frag.trgls.shape)
+        print(trgl_frag.name, trgl_frag.color.name(), trgl_frag.gpoints.shape, trgl_frag.gtpoints.shape, trgl_frag.trgls.shape)
         # print("tindexes", BaseFragment.trglsAroundPoint(100, trgl_frag.trgls))
 
         return [trgl_frag]
@@ -125,7 +128,7 @@ class TrglFragment(BaseFragment):
         frag = TrglFragment(name)
         frag.setColor(self.color, no_notify=True)
         frag.gpoints = np.copy(self.gpoints)
-        frag.tpoints = np.copy(self.tpoints)
+        frag.gtpoints = np.copy(self.gtpoints)
         frag.trgls = np.copy(self.trgls)
         frag.neighbors = np.copy(self.neighbors)
         frag.valid = True
@@ -183,9 +186,9 @@ class TrglFragment(BaseFragment):
         # print("mtllib %s.mtl"%self.name, file=of)
         print("mtllib %s.mtl"%name, file=of)
         print("usemtl default", file=of)
-        has_texture = (len(self.tpoints) == len(self.gpoints))
+        has_texture = (len(self.gtpoints) == len(self.gpoints))
         if has_texture:
-            for i, pt in enumerate(self.tpoints):
+            for i, pt in enumerate(self.gtpoints):
                 print("vt %f %f"%(pt[0], pt[1]), file=of)
         print("# Faces: %d"%len(self.trgls), file=of)
         for trgl in self.trgls:
@@ -371,6 +374,7 @@ class TrglFragmentView(BaseFragmentView):
             return
         self.vpoints = self.cur_volume_view.globalPositionsToTransposedIjks(self.fragment.gpoints)
         self.fpoints = self.vpoints
+        # self.tpoints = self.fragment.gtpoints.copy()
         self.fragment.direction = self.cur_volume_view.direction
         npts = self.vpoints.shape[0]
         if npts > 0:
@@ -378,6 +382,7 @@ class TrglFragmentView(BaseFragmentView):
             # print(self.vpoints.shape, indices.shape)
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
         self.calculateSqCm()
+        self.setScaledTexturePoints()
         # self.setWorkingRegion(35555, 60.)
         # TODO:
         # update positions of working points
@@ -388,6 +393,144 @@ class TrglFragmentView(BaseFragmentView):
             # print("before wfv slp")
             self.working_fv.setLocalPoints(False)
             # print("after wfv slp")
+
+    def setScaledTexturePoints(self):
+        f = self.fragment
+        self.stpoints = None
+        if len(f.gtpoints) != len(f.gpoints):
+            return
+
+        timer = Utils.Timer()
+        # print("t, v",self.trgls().shape, self.vpoints.shape)
+        # txyzs is array[trgl #][trgl pt (0, 1, or 2)][pt xyz]
+        txyzs = self.vpoints[:,0:3][self.trgls()]
+        # print(txyzs[0], txyzs[-1])
+        cxyzs = txyzs.sum(axis=1)/3
+        # print(cxyzs.shape)
+        cxyzs = cxyzs[:,np.newaxis,:]
+        # print(cxyzs[0], cxyzs[-1])
+        # Shift each trgl in txyzs so that the xyz of each point
+        # of the trgl is relative to the center of the trgl.
+        txyzs -= cxyzs
+        # print(txyzs[0], txyzs[-1])
+        # print("txyzs", txyzs.shape)
+        t01 = txyzs[:,1]-txyzs[:,0]
+        t02 = txyzs[:,2]-txyzs[:,0]
+        # print("t10", t10.shape)
+        # print(txyzs[0])
+        # print(t10[0])
+        tnorm = np.cross(t01, t02)
+        weights = np.sqrt((tnorm*tnorm).sum(axis=1))
+        weights = weights.reshape(-1,1,1)
+        # print(tnorm.shape, weights.shape)
+        fxyaxis = np.cross(tnorm, (0.,0.,1))
+        fzaxis = np.cross(tnorm, fxyaxis)
+
+        norm = np.linalg.norm(fzaxis, axis=1, keepdims=True)
+        norm[norm==0] = 1.
+        fzaxis = fzaxis/norm
+
+        norm = np.linalg.norm(fxyaxis, axis=1, keepdims=True)
+        norm[norm==0] = 1.
+        fxyaxis = fxyaxis/norm
+        # print(fzaxis[0], fzaxis[-1])
+        # re-center xyz to center of triangle, apply axes to get fxy, fz
+        # compare this to re-centered u,v
+        # print(fxyaxis.shape)
+        fxyaxis = fxyaxis[:,np.newaxis,:]
+        # print(fxyaxis.shape)
+        tfxy = (txyzs*fxyaxis).sum(axis=2)
+        fzaxis = fzaxis[:,np.newaxis,:]
+        # print(fxyaxis.shape)
+        tfz = (txyzs*fzaxis).sum(axis=2)
+        tfxy = np.stack((tfxy, tfz), axis=2)
+        # print(tfxy.shape, tfz.shape, tfxyz.shape)
+        # print(tfxy[0])
+        # print(tfz[0])
+        # print(tfxyz[0])
+        # print(fxyaxis[0])
+        # print(txyzs[0])
+        # print((txyzs*fxyaxis)[0])
+        # print(tfxy[0])
+        # TODO: now do the same with fzaxis
+        # then combine to form tfxys
+        # mxyz = np.stack((fxyaxis,fzaxis), axis=0)
+        # print(fxyaxis[0])
+        # print(fzaxis[0])
+        # print(mxyz[0])
+
+        tuvs = self.fragment.gtpoints[self.trgls()]
+        cuvs = tuvs.sum(axis=1)/3
+        cuvs = cuvs[:,np.newaxis,:]
+        # Shift each trgl in tuvs so that the uv of each point
+        # of the trgl is relative to the center of the trgl.
+        tfuv = tuvs-cuvs
+        # print(tfxyz.shape, tfuv.shape)
+        tfxy *= weights
+        tfxy = tfxy.reshape(-1,2)
+        tfuv *= weights
+        tfuv = tfuv.reshape(-1,2)
+        # print(tfxy.shape, tfuv.shape)
+        u = tfuv[:,0]
+        v = tfuv[:,1]
+        x = tfxy[:,0]
+        y = tfxy[:,1]
+
+        n = len(u)
+
+        '''
+        # slc = slice(500000,600000)
+        # slc = slice(300000,n)
+        # slc = slice(n)
+        # sn = len(range(*slc.indices(n)))
+        print("sn", sn)
+        uu = (u*u)[slc].sum()
+        uv = (u*v)[slc].sum()
+        vv = (v*v)[slc].sum()
+        ux = (u*x)[slc].sum()
+        uy = (u*y)[slc].sum()
+        vx = (v*x)[slc].sum()
+        vy = (v*y)[slc].sum()
+        '''
+
+        uu = (u*u).sum()
+        uv = (u*v).sum()
+        vv = (v*v).sum()
+        ux = (u*x).sum()
+        uy = (u*y).sum()
+        vx = (v*x).sum()
+        vy = (v*y).sum()
+
+        # mden = uu+vv-2*uv
+        mden = uu*vv - uv*uv
+        # sn = n
+        # print("mden", mden/sn)
+        # print("uu vv uv", uu/sn, uv/sn, vv/sn)
+        # print("uxy vxy", ux/sn, uy/sn, vx/sn, vy/sn)
+        if mden == 0:
+            return
+        a = ( vv*ux - uv*vx)/mden
+        b = (-uv*ux + uu*vx)/mden
+        c = ( vv*uy - uv*vy)/mden
+        d = (-uv*uy + uu*vy)/mden
+        # print("abcd", a,b,c,d)
+
+        gtp = self.fragment.gtpoints
+        gu = gtp[:,0]
+        gv = gtp[:,1]
+        stp = np.zeros_like(gtp)
+        stp[:,0] = a*gu + b*gv
+        stp[:,1] = c*gu + d*gv
+        # stp[:,0] -= stp[:,0].min()
+        # stp[:,1] -= stp[:,1].min()
+        self.st_abcd = (a,b,c,d)
+        self.st_shift = -stp.min(axis=0)
+        stp += self.st_shift
+        timer.time("scale uv time")
+        print("stx range", stp[:,0].min(), stp[:,0].max())
+        print("sty range", stp[:,1].min(), stp[:,1].max())
+        self.stpoints = stp
+
         
     def setVolumeViewDirection(self, direction):
         self.setWorkingRegion(-1, 0.)
