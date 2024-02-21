@@ -394,6 +394,44 @@ class TrglFragmentView(BaseFragmentView):
             self.working_fv.setLocalPoints(False)
             # print("after wfv slp")
 
+    '''
+    
+    Each vertex in a .obj file that is created by vc carries two
+    pieces of information: the xyz location, and the texture (uv)
+    coordinate.
+    The xyz location is in scroll coordinates, but the uv coordinates
+    are stretched or compressed so they both extend over the entire
+    range 0.0 to 1.0.  The uv coordinates may also be rotated relative
+    to the viewing angle we may prefer.
+    The setScaledTexturePoints routine attepts to find a transformation 
+    (scale, rotate, shift, aka an affine transformation) 
+    that will convert uv coordinates into what I called "st" 
+    (scaled texture) coordinates.  I denote the two resulting coordinates 
+    as stx and sty.  
+    Given the fundamental constraints (all stx and sty values are
+    generated from u and v using the same affine transformation),
+    the goals are:
+        1) sty is, as much as possible, parallel to the original z axis;
+        2) each triangle in st coordinates preserves, as much as possible,
+           the area and angles of the original triangle in xyz space.
+    
+    The steps are:
+        1) transform each triangle into a flattened xy space, exactly
+        preserving areas and angles, and where the original alignment with
+        the z axis is preserved;
+        2) shift the triangle so that its center is at the origin of the
+        flattened xy space;
+        3) for each triangle, shift the uv coordinates of its vertices
+        so that the center of the triangle in uv space is at the origin
+        of uv space;
+        4) solve a least-squares equation to find the coefficients
+        (I call them a,b,c,d) of a rotation+scale transform (no
+        shift), with the objective function being: the sum of the distances
+        between the transformed uv points (transformed by the a,b,c,d
+        matrix) and the recentered xy points be as small as possible.
+    
+    '''
+
     def setScaledTexturePoints(self):
         f = self.fragment
         self.stpoints = None
@@ -402,16 +440,23 @@ class TrglFragmentView(BaseFragmentView):
 
         timer = Utils.Timer()
         # print("t, v",self.trgls().shape, self.vpoints.shape)
+
         # txyzs is array[trgl #][trgl pt (0, 1, or 2)][pt xyz]
         txyzs = self.vpoints[:,0:3][self.trgls()]
+
         # print(txyzs[0], txyzs[-1])
+
+        # centers of triangles
         cxyzs = txyzs.sum(axis=1)/3
         # print(cxyzs.shape)
         cxyzs = cxyzs[:,np.newaxis,:]
+
         # print(cxyzs[0], cxyzs[-1])
-        # Shift each trgl in txyzs so that the xyz of each point
-        # of the trgl is relative to the center of the trgl.
+
+        # Shift each trgl in txyzs so that the center of each
+        # triangle is at the origin of the xyz coordinate system
         txyzs -= cxyzs
+
         # print(txyzs[0], txyzs[-1])
         # print("txyzs", txyzs.shape)
         t01 = txyzs[:,1]-txyzs[:,0]
@@ -419,31 +464,63 @@ class TrglFragmentView(BaseFragmentView):
         # print("t10", t10.shape)
         # print(txyzs[0])
         # print(t10[0])
+
+        # an array with the normal of each triangle
+        # (not yet normalized)
         tnorm = np.cross(t01, t02)
-        weights = np.sqrt((tnorm*tnorm).sum(axis=1))
-        weights = weights.reshape(-1,1,1)
+
         # print(tnorm.shape, weights.shape)
+
+        # For each triangle, fxyaxis lies in the plane of the triangle,
+        # and is perpendicular to the z axis
         fxyaxis = np.cross(tnorm, (0.,0.,1))
+
+        # For each triangle, calculate a weight based on the
+        # cross product of the unnormalized triangle normal and
+        # the z axis.
+        # This weight will be used later in the least-squares process.
+        # The idea is: triangles whose normal points in the z-axis
+        # direction are not going to provide reliable information on
+        # orientation.
+        weights = np.sqrt((fxyaxis*fxyaxis).sum(axis=1))
+        weights = weights.reshape(-1,1,1)
+
+        # For each triangle, fzaxis lies in the plane of the triangle,
+        # and is perpendicular to the triangle's normal and to
+        # fxyaxis.  Note also that fzaxis lies in the plane formed
+        # by the z axis, and the triangle's normal.
         fzaxis = np.cross(tnorm, fxyaxis)
 
+        # normalize fzaxis
         norm = np.linalg.norm(fzaxis, axis=1, keepdims=True)
         norm[norm==0] = 1.
         fzaxis = fzaxis/norm
 
+        # normalize fxyaxis
         norm = np.linalg.norm(fxyaxis, axis=1, keepdims=True)
         norm[norm==0] = 1.
         fxyaxis = fxyaxis/norm
+
         # print(fzaxis[0], fzaxis[-1])
         # re-center xyz to center of triangle, apply axes to get fxy, fz
         # compare this to re-centered u,v
         # print(fxyaxis.shape)
         fxyaxis = fxyaxis[:,np.newaxis,:]
         # print(fxyaxis.shape)
+
+        # For each vertex of each triangle, calculate the vertex's
+        # position in the new coordinate system formed by the
+        # orthognal normalized axes fxyaxis and fzaxis.
+        # Because these axes lie in the plane of the triangle,
+        # each triangle in the new coordinate system will have the
+        # same area and vertex angles as it did in the original xyz
+        # coordinate system
         tfxy = (txyzs*fxyaxis).sum(axis=2)
         fzaxis = fzaxis[:,np.newaxis,:]
         # print(fxyaxis.shape)
         tfz = (txyzs*fzaxis).sum(axis=2)
         tfxy = np.stack((tfxy, tfz), axis=2)
+
         # print(tfxy.shape, tfz.shape, tfxyz.shape)
         # print(tfxy[0])
         # print(tfz[0])
@@ -459,24 +536,38 @@ class TrglFragmentView(BaseFragmentView):
         # print(fzaxis[0])
         # print(mxyz[0])
 
+        # tuvs contains the uv coordinates of each
+        # vertex of each triangle.  Each row in tuvs
+        # represents a single triangle, analogous to
+        # txyzs at the top of this function
         tuvs = self.fragment.gtpoints[self.trgls()]
+        # Calculate the center of each triangle in uv coordinates.
         cuvs = tuvs.sum(axis=1)/3
         cuvs = cuvs[:,np.newaxis,:]
-        # Shift each trgl in tuvs so that the uv of each point
-        # of the trgl is relative to the center of the trgl.
+        # Shift each trgl in tuvs so that the center of the triangle
+        # in uv space lies at the origin of the uv coordinate system.
         tfuv = tuvs-cuvs
         # print(tfxyz.shape, tfuv.shape)
+
+        # apply the weights to the xy and uv coordinates
         tfxy *= weights
         tfxy = tfxy.reshape(-1,2)
         tfuv *= weights
         tfuv = tfuv.reshape(-1,2)
         # print(tfxy.shape, tfuv.shape)
+
+        # extract the re-centered u and v for each vertex of each triangle
         u = tfuv[:,0]
         v = tfuv[:,1]
+        # extract the re-centered, flattened x and y for each
+        # vertex of each triangle
         x = tfxy[:,0]
         y = tfxy[:,1]
 
-        n = len(u)
+        # u, v, x, and y are each one-dimensional arrays whose
+        # length is 3 times the number of triangles
+
+        # n = len(u)
 
         '''
         # slc = slice(500000,600000)
@@ -493,6 +584,15 @@ class TrglFragmentView(BaseFragmentView):
         vy = (v*y)[slc].sum()
         '''
 
+        # Solve a least-squares problem.  The idea is to
+        # find 4 numbers, (a,b,c,d), that minimize the error
+        # in these two equations:
+        # a*u + b*v = x
+        # c*u + d*v = y
+        # where u, v, x, y are the arrays computed above.
+
+        # The math is not derived here.
+
         uu = (u*u).sum()
         uv = (u*v).sum()
         vv = (v*v).sum()
@@ -502,6 +602,8 @@ class TrglFragmentView(BaseFragmentView):
         vy = (v*y).sum()
 
         # mden = uu+vv-2*uv
+
+        # denominator of the inverse of A.t()@A
         mden = uu*vv - uv*uv
         # sn = n
         # print("mden", mden/sn)
@@ -509,12 +611,16 @@ class TrglFragmentView(BaseFragmentView):
         # print("uxy vxy", ux/sn, uy/sn, vx/sn, vy/sn)
         if mden == 0:
             return
+
         a = ( vv*ux - uv*vx)/mden
         b = (-uv*ux + uu*vx)/mden
         c = ( vv*uy - uv*vy)/mden
         d = (-uv*uy + uu*vy)/mden
         # print("abcd", a,b,c,d)
 
+        # Now apply the coordinate transform defined
+        # by a,b,c,d to the original uv points, to get
+        # scaled transformed points
         gtp = self.fragment.gtpoints
         gu = gtp[:,0]
         gv = gtp[:,1]
@@ -524,11 +630,15 @@ class TrglFragmentView(BaseFragmentView):
         # stp[:,0] -= stp[:,0].min()
         # stp[:,1] -= stp[:,1].min()
         self.st_abcd = (a,b,c,d)
+
+        # shift the points so that the minimums are at the origin
         self.st_shift = -stp.min(axis=0)
         stp += self.st_shift
         timer.time("scale uv time")
         print("stx range", stp[:,0].min(), stp[:,0].max())
         print("sty range", stp[:,1].min(), stp[:,1].max())
+
+        # at last, set the st ("scaled texture") points
         self.stpoints = stp
 
         
