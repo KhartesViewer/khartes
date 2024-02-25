@@ -44,15 +44,12 @@ from data_window import DataWindow
 
 
 class FragmentVao:
-    # def __init__(self, fragment_view, fragment_trgls_program, gl):
-    # def __init__(self, fragment_view, position_location, gl, fragment_trgls_program):
     def __init__(self, fragment_view, position_location, gl):
         self.fragment_view = fragment_view
         self.gl = gl
         self.vao = None
         self.vao_modified = ""
         self.is_line = False
-        # self.fragment_trgls_program = fragment_trgls_program
         self.position_location = position_location
         self.getVao()
 
@@ -63,8 +60,6 @@ class FragmentVao:
             return self.vao
 
         self.vao_modified = Utils.timestamp()
-
-        # self.fragment_trgls_program.bind()
 
         if self.vao is None:
             self.vao = QOpenGLVertexArrayObject()
@@ -83,8 +78,6 @@ class FragmentVao:
         nbytes = pts3d.size*pts3d.itemsize
         self.vbo.allocate(pts3d, nbytes)
 
-        # vloc = self.fragment_trgls_program.attributeLocation("position")
-        # print("vloc", vloc, self.position_location)
         vloc = self.position_location
         f = self.gl
         f.glVertexAttribPointer(
@@ -100,16 +93,16 @@ class FragmentVao:
         self.ibo.create()
         self.ibo.bind()
 
-        # TODO: Need to deal with case where we have a
-        # a line, not a triangulated surface!
-        # notice that indices must be uint8, uint16, or uint32
+        # We may have a line, not a triangulated surface.
+        # Notice that indices must be uint8, uint16, or uint32
         fv_trgls = fv.trgls()
         self.is_line = False
         if fv_trgls is None:
             fv_line = fv.line
             if fv_line is not None:
                 self.is_line = True
-                # This is actually a line strip
+                # Despite the name "fv_trgls",
+                # this contains a line strip if self.is_line is True.
                 fv_trgls = fv.line[:,2]
             else:
                 fv_trgls = np.zeros((0,3), dtype=np.uint32)
@@ -144,9 +137,14 @@ class GLDataWindow(DataWindow):
         self.window.setFocus()
         self.glw.update()
 
+    # Overrides DataWindow.fvsInBounds
+    # Returns a set of all FragmentViews whose cross-section
+    # line on the slice passes through the bounding box given
+    # by xymin and xymax
     def fvsInBounds(self, xymin, xymax):
-        xyfvs = self.glw.xyfvs
-        indexed_fvs = self.glw.indexed_fvs
+        dw = self.glw
+        xyfvs = dw.xyfvs
+        indexed_fvs = dw.indexed_fvs
         fvs = set()
         if xyfvs is None or indexed_fvs is None:
             return fvs
@@ -156,6 +154,7 @@ class GLDataWindow(DataWindow):
         # print("matches", matches.shape)
         if len(matches) == 0:
             return fvs
+        # print("matches", matches.shape, xyfvs[matches[0]])
         uniques = np.unique(xyfvs[matches][:,2])
         # print(uniques)
         for ind in uniques:
@@ -164,6 +163,25 @@ class GLDataWindow(DataWindow):
             fv = indexed_fvs[ind]
             fvs.add(fv)
         return fvs
+
+    # Note that this only looks for trgls on the
+    # main active fragment view
+    def nearestUvInBounds(self, xymin, xymax):
+        fvs = set()
+        xycenter = ((xymin[0]+xymax[0])//2, (xymin[1]+xymax[1])//2)
+        dw = self.glw
+        xyfvs = dw.xyfvs
+        indexed_fvs = dw.indexed_fvs
+        pv = dw.window.project_view
+        mfvi = -1
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            return None
+        if mfv is not None:
+            mfvi = indexed_fvs.find(mfv)
+        if mfvi < 0:
+            return None
+        matches = (xyfvs[:,2] == mfvi & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
 
 
 slice_code = {
@@ -615,6 +633,7 @@ fragment_trgls_code = {
           ivec2 iv = v4[i];
           gl_Position = pcs[iv.x] + 1.*offsets[iv.y];
           trgl_type = 1;
+          gl_PrimitiveID = gl_PrimitiveIDIn;
           EmitVertex();
         }
       }
@@ -644,7 +663,12 @@ fragment_trgls_code = {
           pick_color = empty_color;
         } else {
           frag_color = empty_color;
-          pick_color = icolor;
+          uint lsid = gl_PrimitiveID & 0xffff;
+          uint msid = (gl_PrimitiveID>>16) & 0xffff;
+          // remember alpha must = 1!
+          vec4 ocolor = vec4(icolor.r, float(msid)/65536., float(lsid)/65536., 1.);
+          // vec4 ocolor = icolor;
+          pick_color = ocolor;
         }
       }
     ''',
@@ -656,7 +680,7 @@ class GLDataWindowChild(QOpenGLWidget):
         self.gldw = gldw
         self.setMouseTracking(True)
         self.fragment_vaos = {}
-        self.multi_fragment_vao = None
+        # self.multi_fragment_vao = None
         # 0: asynchronous mode, 1: synch mode
         # synch mode is said to be much slower
         self.logging_mode = 1
@@ -675,7 +699,6 @@ class GLDataWindowChild(QOpenGLWidget):
         print("initializeGL")
         self.context().aboutToBeDestroyed.connect(self.destroyingContext)
         self.gl = self.context().versionFunctions()
-        self.fragment_fbo = None
         self.main_context = self.context()
         # Note that debug logging only takes place if the
         # surface format option "DebugContext" is set
@@ -685,8 +708,6 @@ class GLDataWindowChild(QOpenGLWidget):
         self.logger.startLogging(self.logging_mode)
         msg = QOpenGLDebugMessage.createApplicationMessage("test debug messaging")
         self.logger.logMessage(msg)
-        self.buildPrograms()
-        self.buildSliceVao()
         # self.buildBordersVao()
 
         # self.createGLSurfaces()
@@ -694,6 +715,11 @@ class GLDataWindowChild(QOpenGLWidget):
         f = self.gl
         # self.gl.glClearColor(.3,.6,.3,1.)
         f.glClearColor(.6,.3,.3,1.)
+
+        self.buildPrograms()
+        self.buildSliceVao()
+
+        self.fragment_fbo = None
         self.frag_last_check = 0
         self.frag_last_change = 0
         self.frag_timer = QTimer()
@@ -1031,6 +1057,7 @@ class GLDataWindowChild(QOpenGLWidget):
         timerb.time(axstr+"get image")
 
         arr = self.npArrayFromQImage(im)
+        '''
         # In the loop above, findex (iindex/65536) is stored in 
         # the red color component (element 0), thus the 0 here.
         pick_array = arr[:,:,0]
@@ -1041,6 +1068,26 @@ class GLDataWindowChild(QOpenGLWidget):
                 (pts[1], pts[0], pick_array[pts[0], pts[1]]-1), axis=1)
                 # (pick_array[pts[0], pts[1]], pts[0], pts[1]), axis=1)
         timerb.time(axstr+"get picks")
+        '''
+
+        pts = np.nonzero(arr[:,:,0] > 0)
+        nonzeros = np.concatenate(
+                (pts[1].reshape(-1,1), 
+                 pts[0].reshape(-1,1), 
+                 arr[pts[0], pts[1]]), 
+                axis=1)
+
+        self.xyfvs = np.zeros((nonzeros.shape[0], 4), nonzeros.dtype)
+        self.xyfvs[:,0:2] = nonzeros[:,0:2]
+        self.xyfvs[:,2] = nonzeros[:,2] - 1
+        msid = nonzeros[:,3]
+        lsid = nonzeros[:,4]
+        trglid = msid*65536 + lsid
+        self.xyfvs[:,3] = trglid
+        # print("nz", nonzeros.shape, self.xyfvs.shape)
+        # self.xyfvs = np.stack(
+        #         (pts[1], pts[0], arr[pts[0], pts[1], 0]-1), axis=1)
+
         ''''''
 
         # vij = np.sort(vij, axis=0)

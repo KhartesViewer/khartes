@@ -4,6 +4,8 @@ import numpy as np
 
 from pathlib import Path
 from collections import deque
+from scipy.spatial import Delaunay
+
 from utils import Utils
 from base_fragment import BaseFragment, BaseFragmentView
 from fragment import Fragment, FragmentView
@@ -383,6 +385,7 @@ class TrglFragmentView(BaseFragmentView):
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
         self.calculateSqCm()
         self.setScaledTexturePoints()
+        # self.createTetras()
         # self.setWorkingRegion(35555, 60.)
         # TODO:
         # update positions of working points
@@ -432,6 +435,14 @@ class TrglFragmentView(BaseFragmentView):
     
     '''
 
+    def createTetras(self):
+        xyzs = self.vpoints[:,0:3]
+        timer = Utils.Timer()
+        self.tetras = Delaunay(xyzs)
+        timer.time("delaunay")
+        print(len(xyzs), len(self.tetras.simplices))
+
+
     def setScaledTexturePoints(self):
         f = self.fragment
         self.stpoints = None
@@ -441,8 +452,11 @@ class TrglFragmentView(BaseFragmentView):
         timer = Utils.Timer()
         # print("t, v",self.trgls().shape, self.vpoints.shape)
 
+        # original xyzs
+        oxyzs = self.vpoints[:,0:3]
+        # oxyzs = f.gpoints[:]
         # txyzs is array[trgl #][trgl pt (0, 1, or 2)][pt xyz]
-        txyzs = self.vpoints[:,0:3][self.trgls()]
+        txyzs = oxyzs[self.trgls()]
 
         # print(txyzs[0], txyzs[-1])
 
@@ -473,7 +487,11 @@ class TrglFragmentView(BaseFragmentView):
 
         # For each triangle, fxyaxis lies in the plane of the triangle,
         # and is perpendicular to the z axis
-        fxyaxis = np.cross(tnorm, (0.,0.,1))
+        # NOTE that in the local transposed coordinate
+        # system, the global z axis is in the local y direction.
+        fxyaxis = np.cross(tnorm, (0.,1.,0))
+        # fxyaxis = np.cross(tnorm, (0.,0.,1))
+        # print("ijk axis", self.iIndex, self.jIndex, self.kIndex)
 
         # For each triangle, calculate a weight based on the
         # cross product of the unnormalized triangle normal and
@@ -541,6 +559,11 @@ class TrglFragmentView(BaseFragmentView):
         # represents a single triangle, analogous to
         # txyzs at the top of this function
         tuvs = self.fragment.gtpoints[self.trgls()]
+        # print("tuvs", tuvs.shape)
+        # TODO: testing!
+        # tuvs = tuvs[:,:,(1,0)]
+        # print("tuvs", tuvs.shape)
+
         # Calculate the center of each triangle in uv coordinates.
         cuvs = tuvs.sum(axis=1)/3
         cuvs = cuvs[:,np.newaxis,:]
@@ -624,6 +647,9 @@ class TrglFragmentView(BaseFragmentView):
         gtp = self.fragment.gtpoints
         gu = gtp[:,0]
         gv = gtp[:,1]
+        # TODO: testing!
+        # gu = gtp[:,1]
+        # gv = gtp[:,0]
         stp = np.zeros_like(gtp)
         stp[:,0] = a*gu + b*gv
         stp[:,1] = c*gu + d*gv
@@ -631,8 +657,22 @@ class TrglFragmentView(BaseFragmentView):
         # stp[:,1] -= stp[:,1].min()
         self.st_abcd = (a,b,c,d)
 
+        stmin = stp.min(axis=0)
+        stmax = stp.max(axis=0)
+        styc = .5*(stmin[1]+stmax[1])
+        xyzmin = oxyzs.min(axis=0)
+        xyzmax = oxyzs.max(axis=0)
+        print("xyz min max", xyzmin, xyzmax)
+        # zc = .5*(xyzmin[2]+xyzmax[2])
+        # See note above; global z axis is in local y-axis direction
+        zc = .5*(xyzmin[1]+xyzmax[1])
+        print("styc zc", styc, zc)
+
         # shift the points so that the minimums are at the origin
-        self.st_shift = -stp.min(axis=0)
+        # self.st_shift = -stp.min(axis=0)
+        self.st_shift = -stmin
+        # but then center z
+        self.st_shift[1] = zc-styc
         stp += self.st_shift
         timer.time("scale uv time")
         print("stx range", stp[:,0].min(), stp[:,0].max())
@@ -640,6 +680,10 @@ class TrglFragmentView(BaseFragmentView):
 
         # at last, set the st ("scaled texture") points
         self.stpoints = stp
+        self.stmin = stmin
+        self.stmax = stmax
+        self.xyzmin = xyzmin
+        self.xyzmax = xyzmax
 
         
     def setVolumeViewDirection(self, direction):
