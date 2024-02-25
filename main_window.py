@@ -49,6 +49,7 @@ from volume_zarr import CachedZarrVolume
 from ppm import Ppm
 from utils import Utils
 from gl_data_window import GLDataWindow
+from gl_surface_window import GLSurfaceWindow
 
 class ColorBlock(QLabel):
 
@@ -864,7 +865,7 @@ class MainWindow(QMainWindow):
         self.openhand_transparents = self.transparentSvgs(path+"/icons/openhand transparent.svg", 11)
         self.openhand_transparent = self.openhand_transparents[0]
 
-        case = 2
+        case = 3
 
         if case == 0:
             # x slice or y slice in data
@@ -873,6 +874,8 @@ class MainWindow(QMainWindow):
             self.inline = DataWindow(self, 0)
             # y slice or x slice in data
             self.xline = DataWindow(self, 1)
+            # slice of data from interpreted surface
+            self.surface = SurfaceWindow(self)
         elif case == 1:
             # x slice or y slice in data
             self.depth = DataWindow(self, 2)
@@ -880,6 +883,8 @@ class MainWindow(QMainWindow):
             self.inline = GLDataWindow(self, 1)
             # y slice or x slice in data
             self.xline = DataWindow(self, 1)
+            # slice of data from interpreted surface
+            self.surface = SurfaceWindow(self)
         elif case == 2:
             # x slice or y slice in data
             self.depth = GLDataWindow(self, 2)
@@ -887,9 +892,18 @@ class MainWindow(QMainWindow):
             self.inline = GLDataWindow(self, 0)
             # y slice or x slice in data
             self.xline = GLDataWindow(self, 1)
-
-        # slice of data from interpreted surface
-        self.surface = SurfaceWindow(self)
+            # slice of data from interpreted surface
+            self.surface = SurfaceWindow(self)
+        elif case == 3:
+            # x slice or y slice in data
+            self.depth = GLDataWindow(self, 2)
+            # z slice in data
+            self.inline = GLDataWindow(self, 0)
+            # y slice or x slice in data
+            self.xline = GLDataWindow(self, 1)
+            # slice of data from interpreted surface
+            self.surface = GLSurfaceWindow(self)
+            # self.surface = GLDataWindow(self, 1)
 
         # GUI panel
         self.tab_panel = QTabWidget()
