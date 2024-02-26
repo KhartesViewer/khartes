@@ -992,6 +992,9 @@ class FragmentView(BaseFragmentView):
             self.fpoints = np.concatenate((self.fpoints, indices), axis=1)
 
         self.vpoints = self.cur_volume_view.volume.globalPositionsToTransposedIjks(self.fragment.gpoints, self.cur_volume_view.direction)
+        self.stpoints = self.vpoints[:,0:2]
+        # self.xyzmin = (0.,0.,0.)
+        # self.xyzmin = (0.,0.,0.)
         self.working_vpoints = np.full((len(self.vpoints),),True)
         self.working_trgls = np.full((0,),True)
         npts = self.vpoints.shape[0]
