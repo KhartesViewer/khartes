@@ -115,10 +115,10 @@ trgl_code = {
       // in vec3 bary;
       in vec2 bary2;
       uniform vec4 color;
-      uniform vec3 xyzmin;
-      uniform vec3 xyzmax;
-      float dz = xyzmax.y - xyzmin.y;
-      float dx = xyzmax.x - xyzmin.x;
+      // uniform vec3 xyzmin;
+      // uniform vec3 xyzmax;
+      // float dz = xyzmax.y - xyzmin.y;
+      // float dx = xyzmax.x - xyzmin.x;
       out vec4 fColor;
 
       void main() {
@@ -312,8 +312,8 @@ class GLSurfaceWindowChild(QOpenGLWidget):
         rgba = list(qcolor.getRgbF())
         rgba[3] = 1.
         self.trgl_program.setUniformValue("color", *rgba)
-        self.trgl_program.setUniformValue("xyzmin", *mfv.xyzmin)
-        self.trgl_program.setUniformValue("xyzmax", *mfv.xyzmax)
+        # self.trgl_program.setUniformValue("xyzmin", *mfv.xyzmin)
+        # self.trgl_program.setUniformValue("xyzmax", *mfv.xyzmax)
 
         vao = fvao.getVao()
         vao.bind()
