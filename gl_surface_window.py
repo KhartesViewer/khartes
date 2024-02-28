@@ -52,6 +52,7 @@ class GLSurfaceWindow(DataWindow):
         self.setLayout(layout)
         self.glw = GLSurfaceWindowChild(self)
         layout.addWidget(self.glw)
+        self.zoomMult = .5
 
     # see comments for this function in DataWindow
     def nodeMovementAllowedInK(self):
@@ -268,6 +269,7 @@ class GLSurfaceWindowChild(QOpenGLWidget):
         volume_view = dw.volume_view
         xform = QMatrix4x4()
 
+        '''
         iind = dw.iIndex
         jind = dw.jIndex
         kind = dw.kIndex
@@ -292,6 +294,22 @@ class GLSurfaceWindowChild(QOpenGLWidget):
         mat[2][kind] = df
         mat[2][3] = -df*cijk[kind]
         mat[3][3] = 1.
+        '''
+        zoom = dw.getZoom()
+        cij = volume_view.stxytf
+        # print("cij", cij)
+        mat = np.zeros((4,4), dtype=np.float32)
+        ww = dw.size().width()
+        wh = dw.size().height()
+        wf = zoom/(.5*ww)
+        hf = zoom/(.5*wh)
+        mat[0][0] = wf
+        mat[0][3] = -wf*cij[0]
+        mat[1][1] = -hf
+        mat[1][3] = hf*cij[1]
+        mat[3][3] = 1.
+
+        ''' '''
         xform = QMatrix4x4(mat.flatten().tolist())
         
         self.trgl_program.bind()

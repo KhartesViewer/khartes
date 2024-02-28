@@ -348,6 +348,7 @@ class VolumeView():
         # in transposed-grid coordinates
         # so focus pixel = datatr[ktf, jtf, itf]
         self.ijktf = (0,0,0)
+        self.stxytf = (0.,0.)
         self.zoom = 0.
         self.minZoom = 0.
         self.maxZoom = 5
@@ -473,6 +474,9 @@ class VolumeView():
             o[i] = t
         self.ijktf = tuple(o)
         self.notifyModified()
+
+    def setStxyTf(self, stxy):
+        self.stxytf = stxy
 
     def ijkToTransposedIjk(self, ijk):
         return self.volume.ijkToTransposedIjk(ijk, self.direction)

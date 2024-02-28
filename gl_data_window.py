@@ -37,6 +37,7 @@ from PyQt5.QtCore import (
 
 import time
 import numpy as np
+import numpy.linalg as npla
 import cv2
 from utils import Utils
 
@@ -164,25 +165,134 @@ class GLDataWindow(DataWindow):
             fvs.add(fv)
         return fvs
 
+    def setIjkTf(self, tf):
+        # dw = self.glw
+        self.volume_view.setIjkTf(tf)
+        ij = self.tijkToIj(tf)
+        xy = self.ijToXy(ij)
+        d = 10
+        xyl = (xy[0]-d, xy[1]-d)
+        xyg = (xy[0]+d, xy[1]+d)
+
+        # ijl = self.xyToIj(xyl)
+        # ijg = self.xyToIj(xyg)
+
+        stxy = self.stxyInBounds(xyl, xyg, tf)
+        if stxy is not None:
+            self.volume_view.setStxyTf(stxy)
+
+    def ptInTrglBbox(self, ijk, tindex):
+        pv = self.window.project_view
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        trgl = mfv.trgls()[tindex]
+        vpts = mfv.vpoints[trgl]
+        ijkmin = vpts[:,:3].min(axis=0)
+        ijkmax = vpts[:,:3].max(axis=0)
+        return (ijkmin <= ijk).all() and (ijk <= ijkmax).all()
+
+    def ptToBary(self, ijk, vs):
+        v01 = vs[1]-vs[0]
+        v02 = vs[2]-vs[0]
+        tnorm = np.cross(v01,v02)
+        # tnormlen = np.sqrt(npla.norm(tnorm))
+        tnormlen = npla.norm(tnorm)
+        if tnormlen != 0:
+            tnorm /= tnormlen
+        vcs = vs - ijk
+        # bs = np.inner(tnorm, np.cross(vcs, np.roll(vcs, -1, axis=0)))/tnormlen
+        bs = np.inner(tnorm, np.cross(np.roll(vcs, 2, axis=0), np.roll(vcs, 1, axis=0)))/tnormlen
+        return bs
+
+    def ptInTrgl(self, ijk, tindex):
+        pv = self.window.project_view
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        trgl = mfv.trgls()[tindex]
+        vs = mfv.vpoints[trgl][:,:3]
+        '''
+        v01 = vs[1]-vs[0]
+        v02 = vs[2]-vs[0]
+        tnorm = np.cross(v01,v02)
+        # tnormlen = np.sqrt(npla.norm(tnorm))
+        tnormlen = npla.norm(tnorm)
+        if tnormlen != 0:
+            tnorm /= tnormlen
+        vcs = vs - ijk
+        bs = np.inner(tnorm, np.cross(vcs, np.roll(vcs, -1, axis=0)))/tnormlen
+        '''
+        bs = self.ptToBary(ijk, vs)
+        # print("bs", bs, bs.sum())
+        return (bs>=0).all() and (bs<=1).all()
+
     # Note that this only looks for trgls on the
     # main active fragment view
-    def nearestUvInBounds(self, xymin, xymax):
+    def stxyInBounds(self, xymin, xymax, ijk):
         fvs = set()
         xycenter = ((xymin[0]+xymax[0])//2, (xymin[1]+xymax[1])//2)
         dw = self.glw
         xyfvs = dw.xyfvs
         indexed_fvs = dw.indexed_fvs
-        pv = dw.window.project_view
+        pv = self.window.project_view
         mfvi = -1
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
             return None
-        if mfv is not None:
-            mfvi = indexed_fvs.find(mfv)
+        if mfv is not None and mfv in dw.indexed_fvs:
+            mfvi = dw.indexed_fvs.index(mfv)
         if mfvi < 0:
             return None
-        matches = (xyfvs[:,2] == mfvi & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
+        # need a lot of parentheses because the & operator
+        # has very low precedence
+        matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
+        if len(matches) == 0:
+            return None
 
+        mrows = xyfvs[matches]
+        # print(xymin, xymax)
+        # print(xyfvs[0])
+        # print(matches[0])
+        # print(xyfvs.shape, matches.shape, len(matches), mrows.shape)
+        # print(mrows.shape)
+
+        trgls = mrows[:,3]
+        uniques = np.unique(trgls)
+        # print("u", uniques)
+        inbounds = []
+        for trgl in uniques:
+            if self.ptInTrgl(ijk, trgl):
+                inbounds.append(trgl)
+        mirows = mrows[np.isin(trgls, inbounds)]
+        if len(mirows) == 0:
+            return None
+        # print("mirows", mirows)
+        xys = mirows[:,:2]
+        # ds = npla.norm(xys-np.array(xycenter), axis=1)
+        ds = npla.norm(xys-xycenter, axis=1)
+        imin = np.argmin(ds)
+        # print(mrows[imin])
+        trgl_index = int(mirows[imin, 3])
+        # print("trgl_index", trgl_index)
+        trgl = mfv.trgls()[trgl_index]
+        # print(trgl_index, trgl)
+        vpts = mfv.vpoints[trgl][:,:3]
+        # print(ijk)
+        # print(vpts)
+        # print(self.ptInTrglBbox(ijk, trgl_index))
+        # print(self.ptInTrglBbox(ijk, trgl_index-1))
+        # print(self.ptInTrglBbox(ijk, trgl_index+1))
+        # print(trgl_index)
+        # print(self.ptInTrgl(ijk, trgl_index))
+        # print(self.ptInTrgl(ijk, trgl_index+2))
+        # print(self.ptInTrgl(ijk, trgl_index+1))
+        # print(self.ptInTrgl(ijk, trgl_index-1))
+        # print(self.ptInTrgl(ijk, trgl_index-2))
+
+        bs = self.ptToBary(ijk, vpts)
+        sts = mfv.stpoints[trgl]
+        # print(sts)
+        # print(bs)
+        stxy = (sts*bs.reshape(-1,1)).sum(axis=0)
+        # print(stxy)
+        return stxy
 
 slice_code = {
     "name": "slice",
@@ -666,7 +776,8 @@ fragment_trgls_code = {
           uint lsid = gl_PrimitiveID & 0xffff;
           uint msid = (gl_PrimitiveID>>16) & 0xffff;
           // remember alpha must = 1!
-          vec4 ocolor = vec4(icolor.r, float(msid)/65536., float(lsid)/65536., 1.);
+          // vec4 ocolor = vec4(icolor.r, float(msid)/65536., float(lsid)/65536., 1.);
+          vec4 ocolor = vec4(icolor.r, float(msid)/65535., float(lsid)/65535., 1.);
           // vec4 ocolor = icolor;
           pick_color = ocolor;
         }
@@ -723,8 +834,9 @@ class GLDataWindowChild(QOpenGLWidget):
         self.frag_last_check = 0
         self.frag_last_change = 0
         self.frag_timer = QTimer()
-        self.frag_timer.timeout.connect(self.getPicks)
-        self.frag_timer.start(1000)
+        # self.frag_timer.timeout.connect(self.getPicks)
+        # self.frag_timer.start(1000)
+        # self.frag_timer.start(200)
 
     def resizeGL(self, width, height):
         # print("resize", width, height)
@@ -1106,6 +1218,7 @@ class GLDataWindowChild(QOpenGLWidget):
         # print("pa max",pick_array.max())
         QOpenGLFramebufferObject.bindDefault()
         # print("leaving drawFragments")
+        timerb.time(axstr+"done")
 
 
     def texFromData(self, data, qiformat):
@@ -1315,6 +1428,9 @@ class GLDataWindowChild(QOpenGLWidget):
                          self.slice_indices.size, f.GL_UNSIGNED_INT, None)
         self.slice_program.release()
         vaoBinder = None
+        # Putting getPicks here seems to fix the problems
+        # caused by synching between GPU and CPU
+        self.getPicks()
 
     def closeEvent(self, e):
         print("glw widget close event")
