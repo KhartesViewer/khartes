@@ -632,6 +632,9 @@ class DataWindow(QLabel):
 
         self.window.setStatusText(stxt)
 
+    def setIjkTf(self, tf):
+        self.volume_view.setIjkTf(tf)
+
     def mouseMoveEvent(self, e):
         # print("move", e.localPos())
         if self.volume_view is None:
@@ -647,7 +650,7 @@ class DataWindow(QLabel):
             zoom = self.getZoom()
             tf[self.iIndex] -= int(dx/zoom)
             tf[self.jIndex] -= int(dy/zoom)
-            self.volume_view.setIjkTf(tf)
+            self.setIjkTf(tf)
             self.window.drawSlices()
         elif self.isMovingNode:
             # print("moving node")
@@ -862,7 +865,7 @@ class DataWindow(QLabel):
                 tfijk[self.iIndex] += d[0]
                 tfijk[self.jIndex] += d[1]
                 tfijk[self.axis] += d[2]
-                self.volume_view.setIjkTf(tfijk)
+                self.setIjkTf(tfijk)
                 self.window.drawSlices()
             elif self.nearby_tiff_corner >= 0:
                 # move nearby tiff corner
@@ -920,7 +923,7 @@ class DataWindow(QLabel):
                 # tijk = self.ijToTijk(ijk[0:2])
                 tijk = self.ijkToTijk(ijk)
             # print("tijk", tijk)
-            self.volume_view.setIjkTf(tijk)
+            self.setIjkTf(tijk)
             self.window.drawSlices()
             # move cursor to cross hairs
             ij = self.tijkToIj(tijk)
