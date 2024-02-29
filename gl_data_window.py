@@ -932,12 +932,6 @@ class GLDataWindowChild(QOpenGLWidget):
                 continue
             f.glPointSize(node_thickness)
 
-            '''
-            qcolor = fv.fragment.color
-            rgba = list(qcolor.getRgbF())
-            rgba[3] = 1.
-            '''
-            # rgba = (1.,0.,0.,1.)
             color = dw.nodeColor
             if not fv.active:
                 color = dw.inactiveNodeColor

@@ -161,15 +161,6 @@ trgl_code = {
 class GLSurfaceWindowChild(GLDataWindowChild):
     def __init__(self, gldw, parent=None):
         super(GLSurfaceWindowChild, self).__init__(gldw, parent)
-        '''
-        self.gldw = gldw
-        self.setMouseTracking(True)
-        self.fragment_vaos = {}
-
-        # 0: asynchronous mode, 1: synch mode
-        # synch mode is said to be much slower
-        self.logging_mode = 1
-        '''
 
     def localInit(self):
         # This corresponds to the line in the vertex shader(s):
@@ -180,30 +171,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.stxy_location = 4
         self.message_prefix = "sw"
 
-    '''
-    def dwKeyPressEvent(self, e):
-        self.gldw.dwKeyPressEvent(e)
-    '''
-
-    '''
-    def initializeGL(self):
-        print("initializeGL (surface)")
-        self.context().aboutToBeDestroyed.connect(self.destroyingContext)
-        self.gl = self.context().versionFunctions()
-        self.main_context = self.context()
-        # Note that debug logging only takes place if the
-        # surface format option "DebugContext" is set
-        self.logger = QOpenGLDebugLogger()
-        self.logger.initialize()
-        self.logger.messageLogged.connect(lambda m: self.onLogMessage("dc", m))
-        self.logger.startLogging(self.logging_mode)
-        msg = QOpenGLDebugMessage.createApplicationMessage("test debug messaging")
-        self.logger.logMessage(msg)
-        # self.buildBordersVao()
-
-        # self.createGLSurfaces()
-    '''
-        
     def localInitializeGL(self):
         f = self.gl
         # self.gl.glClearColor(.3,.6,.3,1.)
@@ -228,43 +195,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f.glClear(f.GL_COLOR_BUFFER_BIT)
         self.drawTrgls()
 
-    '''
-    def closeEvent(self, e):
-        print("glsw widget close event")
-
-    def destroyingContext(self):
-        print("glsw destroying context")
-
-    def onLogMessage(self, head, msg):
-        print(head, "s log:", msg.message())
-    '''
-
-    '''
-    def buildProgram(self, sdict):
-        edict = {
-            "vertex": QOpenGLShader.Vertex,
-            "fragment": QOpenGLShader.Fragment,
-            "geometry": QOpenGLShader.Geometry,
-            "tessellation_control": QOpenGLShader.TessellationControl,
-            "tessellation_evaluation": QOpenGLShader.TessellationEvaluation,
-            }
-        name = sdict["name"]
-        program = QOpenGLShaderProgram()
-        for key, code in sdict.items():
-            if key not in edict:
-                continue
-            enum = edict[key]
-            ok = program.addShaderFromSourceCode(enum, code)
-            if not ok:
-                print(name, key, "shader failed")
-                exit()
-        ok = program.link()
-        if not ok:
-            print(name, "link failed")
-            exit()
-        return program
-    '''
-
     def buildPrograms(self):
         self.trgl_program = self.buildProgram(trgl_code)
 
@@ -283,32 +213,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         volume_view = dw.volume_view
         xform = QMatrix4x4()
 
-        '''
-        iind = dw.iIndex
-        jind = dw.jIndex
-        kind = dw.kIndex
-        zoom = dw.getZoom()
-        cijk = volume_view.ijktf
-
-        # Convert tijk coordinates to OpenGL clip-window coordinates.
-        # Note that the matrix converts the axis coordinate such that
-        # only points within .5 voxel width on either side are
-        # in the clip-window range -1. < z < 1.
-        mat = np.zeros((4,4), dtype=np.float32)
-        ww = dw.size().width()
-        wh = dw.size().height()
-        wf = zoom/(.5*ww)
-        hf = zoom/(.5*wh)
-        # df = 1/.5
-        df = 0
-        mat[0][iind] = wf
-        mat[0][3] = -wf*cijk[iind]
-        mat[1][jind] = -hf
-        mat[1][3] = hf*cijk[jind]
-        mat[2][kind] = df
-        mat[2][3] = -df*cijk[kind]
-        mat[3][3] = 1.
-        '''
         zoom = dw.getZoom()
         cij = volume_view.stxytf
         # print("cij", cij)
