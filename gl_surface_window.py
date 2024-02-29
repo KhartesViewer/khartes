@@ -41,6 +41,7 @@ import cv2
 from utils import Utils
 
 from data_window import DataWindow
+from gl_data_window import GLDataWindowChild
 
 
 class GLSurfaceWindow(DataWindow):
@@ -157,27 +158,34 @@ trgl_code = {
 }
 
     
-class GLSurfaceWindowChild(QOpenGLWidget):
-    def __init__(self, glsw, parent=None):
-        super(GLSurfaceWindowChild, self).__init__(parent)
-        self.glsw = glsw
+class GLSurfaceWindowChild(GLDataWindowChild):
+    def __init__(self, gldw, parent=None):
+        super(GLSurfaceWindowChild, self).__init__(gldw, parent)
+        '''
+        self.gldw = gldw
         self.setMouseTracking(True)
         self.fragment_vaos = {}
 
         # 0: asynchronous mode, 1: synch mode
         # synch mode is said to be much slower
         self.logging_mode = 1
+        '''
 
+    def localInit(self):
         # This corresponds to the line in the vertex shader(s):
         # layout(location=3) in vec3 xyx;
         self.xyz_location = 3
         # This corresponds to the line in the vertex shader(s):
         # layout(location=4) in vec3 stxy;
         self.stxy_location = 4
+        self.message_prefix = "sw"
 
+    '''
     def dwKeyPressEvent(self, e):
-        self.glsw.dwKeyPressEvent(e)
+        self.gldw.dwKeyPressEvent(e)
+    '''
 
+    '''
     def initializeGL(self):
         print("initializeGL (surface)")
         self.context().aboutToBeDestroyed.connect(self.destroyingContext)
@@ -194,7 +202,9 @@ class GLSurfaceWindowChild(QOpenGLWidget):
         # self.buildBordersVao()
 
         # self.createGLSurfaces()
+    '''
         
+    def localInitializeGL(self):
         f = self.gl
         # self.gl.glClearColor(.3,.6,.3,1.)
         f.glClearColor(.6,.3,.3,1.)
@@ -209,7 +219,7 @@ class GLSurfaceWindowChild(QOpenGLWidget):
         f.glViewport(0, 0, width, height)
 
     def paintGL(self):
-        if self.glsw.volume_view is None:
+        if self.gldw.volume_view is None:
             return
 
         # print("paintGL (surface)")
@@ -218,6 +228,7 @@ class GLSurfaceWindowChild(QOpenGLWidget):
         f.glClear(f.GL_COLOR_BUFFER_BIT)
         self.drawTrgls()
 
+    '''
     def closeEvent(self, e):
         print("glsw widget close event")
 
@@ -226,7 +237,9 @@ class GLSurfaceWindowChild(QOpenGLWidget):
 
     def onLogMessage(self, head, msg):
         print(head, "s log:", msg.message())
+    '''
 
+    '''
     def buildProgram(self, sdict):
         edict = {
             "vertex": QOpenGLShader.Vertex,
@@ -250,6 +263,7 @@ class GLSurfaceWindowChild(QOpenGLWidget):
             print(name, "link failed")
             exit()
         return program
+    '''
 
     def buildPrograms(self):
         self.trgl_program = self.buildProgram(trgl_code)
@@ -262,7 +276,7 @@ class GLSurfaceWindowChild(QOpenGLWidget):
         f.glClearColor(0.,0.,0.,0.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
 
-        dw = self.glsw
+        dw = self.gldw
 
         ww = dw.size().width()
         wh = dw.size().height()
@@ -318,7 +332,7 @@ class GLSurfaceWindowChild(QOpenGLWidget):
         pv = dw.window.project_view
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
-            print("No currently active fragment")
+            # print("No currently active fragment")
             return
 
         if self.active_vao is None or self.active_vao.fragment_view != mfv:

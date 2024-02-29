@@ -44,87 +44,6 @@ from utils import Utils
 from data_window import DataWindow
 
 
-class FragmentVao:
-    def __init__(self, fragment_view, position_location, gl):
-        self.fragment_view = fragment_view
-        self.gl = gl
-        self.vao = None
-        self.vao_modified = ""
-        self.is_line = False
-        self.position_location = position_location
-        self.getVao()
-
-    def getVao(self):
-        fv = self.fragment_view
-        if self.vao_modified > fv.modified and self.vao_modified > fv.fragment.modified and self.vao_modified > fv.local_points_modified:
-            # print("returning existing vao")
-            return self.vao
-
-        self.vao_modified = Utils.timestamp()
-
-        if self.vao is None:
-            self.vao = QOpenGLVertexArrayObject()
-            self.vao.create()
-            # print("creating new vao")
-
-        # print("updating vao")
-        self.vao.bind()
-
-        self.vbo = QOpenGLBuffer()
-        self.vbo.create()
-        self.vbo.bind()
-        pts3d = np.ascontiguousarray(fv.vpoints[:,:3], dtype=np.float32)
-        self.pts_size = pts3d.size
-
-        nbytes = pts3d.size*pts3d.itemsize
-        self.vbo.allocate(pts3d, nbytes)
-
-        vloc = self.position_location
-        f = self.gl
-        f.glVertexAttribPointer(
-                vloc,
-                pts3d.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
-                0, 0)
-        self.vbo.release()
-
-        # This needs to be called while the current VAO is bound
-        f.glEnableVertexAttribArray(vloc)
-
-        self.ibo = QOpenGLBuffer(QOpenGLBuffer.IndexBuffer)
-        self.ibo.create()
-        self.ibo.bind()
-
-        # We may have a line, not a triangulated surface.
-        # Notice that indices must be uint8, uint16, or uint32
-        fv_trgls = fv.trgls()
-        self.is_line = False
-        if fv_trgls is None:
-            fv_line = fv.line
-            if fv_line is not None:
-                self.is_line = True
-                # Despite the name "fv_trgls",
-                # this contains a line strip if self.is_line is True.
-                fv_trgls = fv.line[:,2]
-            else:
-                fv_trgls = np.zeros((0,3), dtype=np.uint32)
-        
-        trgls = np.ascontiguousarray(fv_trgls, dtype=np.uint32)
-
-        self.trgl_index_size = trgls.size
-
-        nbytes = trgls.size*trgls.itemsize
-        self.ibo.allocate(trgls, nbytes)
-
-        # print("nodes, trgls", pts3d.shape, trgls.shape)
-
-        self.vao.release()
-        
-        # do not release ibo before vao is released!
-        self.ibo.release()
-
-        return self.vao
-
-
 class GLDataWindow(DataWindow):
     def __init__(self, window, axis):
         super(GLDataWindow, self).__init__(window, axis)
@@ -174,33 +93,22 @@ class GLDataWindow(DataWindow):
         xyl = (xy[0]-d, xy[1]-d)
         xyg = (xy[0]+d, xy[1]+d)
 
-        # ijl = self.xyToIj(xyl)
-        # ijg = self.xyToIj(xyg)
-
         stxy = self.stxyInBounds(xyl, xyg, tf)
         if stxy is not None:
             self.volume_view.setStxyTf(stxy)
-
-    def ptInTrglBbox(self, ijk, tindex):
-        pv = self.window.project_view
-        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
-        trgl = mfv.trgls()[tindex]
-        vpts = mfv.vpoints[trgl]
-        ijkmin = vpts[:,:3].min(axis=0)
-        ijkmax = vpts[:,:3].max(axis=0)
-        return (ijkmin <= ijk).all() and (ijk <= ijkmax).all()
 
     def ptToBary(self, ijk, vs):
         v01 = vs[1]-vs[0]
         v02 = vs[2]-vs[0]
         tnorm = np.cross(v01,v02)
-        # tnormlen = np.sqrt(npla.norm(tnorm))
         tnormlen = npla.norm(tnorm)
         if tnormlen != 0:
             tnorm /= tnormlen
         vcs = vs - ijk
-        # bs = np.inner(tnorm, np.cross(vcs, np.roll(vcs, -1, axis=0)))/tnormlen
-        bs = np.inner(tnorm, np.cross(np.roll(vcs, 2, axis=0), np.roll(vcs, 1, axis=0)))/tnormlen
+        bs = np.inner(tnorm, 
+                      np.cross(
+                          np.roll(vcs, 2, axis=0), 
+                          np.roll(vcs, 1, axis=0)))/tnormlen
         return bs
 
     def ptInTrgl(self, ijk, tindex):
@@ -208,17 +116,6 @@ class GLDataWindow(DataWindow):
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         trgl = mfv.trgls()[tindex]
         vs = mfv.vpoints[trgl][:,:3]
-        '''
-        v01 = vs[1]-vs[0]
-        v02 = vs[2]-vs[0]
-        tnorm = np.cross(v01,v02)
-        # tnormlen = np.sqrt(npla.norm(tnorm))
-        tnormlen = npla.norm(tnorm)
-        if tnormlen != 0:
-            tnorm /= tnormlen
-        vcs = vs - ijk
-        bs = np.inner(tnorm, np.cross(vcs, np.roll(vcs, -1, axis=0)))/tnormlen
-        '''
         bs = self.ptToBary(ijk, vs)
         # print("bs", bs, bs.sum())
         return (bs>=0).all() and (bs<=1).all()
@@ -241,17 +138,12 @@ class GLDataWindow(DataWindow):
         if mfvi < 0:
             return None
         # need a lot of parentheses because the & operator
-        # has very low precedence
+        # has higher precedence than comparison operators
         matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
         if len(matches) == 0:
             return None
 
         mrows = xyfvs[matches]
-        # print(xymin, xymax)
-        # print(xyfvs[0])
-        # print(matches[0])
-        # print(xyfvs.shape, matches.shape, len(matches), mrows.shape)
-        # print(mrows.shape)
 
         trgls = mrows[:,3]
         uniques = np.unique(trgls)
@@ -265,7 +157,6 @@ class GLDataWindow(DataWindow):
             return None
         # print("mirows", mirows)
         xys = mirows[:,:2]
-        # ds = npla.norm(xys-np.array(xycenter), axis=1)
         ds = npla.norm(xys-xycenter, axis=1)
         imin = np.argmin(ds)
         # print(mrows[imin])
@@ -276,15 +167,8 @@ class GLDataWindow(DataWindow):
         vpts = mfv.vpoints[trgl][:,:3]
         # print(ijk)
         # print(vpts)
-        # print(self.ptInTrglBbox(ijk, trgl_index))
-        # print(self.ptInTrglBbox(ijk, trgl_index-1))
-        # print(self.ptInTrglBbox(ijk, trgl_index+1))
         # print(trgl_index)
         # print(self.ptInTrgl(ijk, trgl_index))
-        # print(self.ptInTrgl(ijk, trgl_index+2))
-        # print(self.ptInTrgl(ijk, trgl_index+1))
-        # print(self.ptInTrgl(ijk, trgl_index-1))
-        # print(self.ptInTrgl(ijk, trgl_index-2))
 
         bs = self.ptToBary(ijk, vpts)
         sts = mfv.stpoints[trgl]
@@ -293,6 +177,7 @@ class GLDataWindow(DataWindow):
         stxy = (sts*bs.reshape(-1,1)).sum(axis=0)
         # print(stxy)
         return stxy
+
 
 slice_code = {
     "name": "slice",
@@ -791,23 +676,26 @@ class GLDataWindowChild(QOpenGLWidget):
         self.gldw = gldw
         self.setMouseTracking(True)
         self.fragment_vaos = {}
-        # self.multi_fragment_vao = None
+
         # 0: asynchronous mode, 1: synch mode
         # synch mode is said to be much slower
         self.logging_mode = 1
+        self.localInit()
+
+    def localInit(self):
         self.xyfvs = None
         self.indexed_fvs = None
         # Location of "position" variable in vertex shaders.
         # This is specified by the shader line:
         # layout(location=3) in vec3 postion;
         self.position_location = 3
-        # self.logging_mode = 0
+        self.message_prefix = "dw"
 
     def dwKeyPressEvent(self, e):
         self.gldw.dwKeyPressEvent(e)
 
     def initializeGL(self):
-        print("initializeGL")
+        print(self.message_prefix, "initializeGL")
         self.context().aboutToBeDestroyed.connect(self.destroyingContext)
         self.gl = self.context().versionFunctions()
         self.main_context = self.context()
@@ -815,28 +703,20 @@ class GLDataWindowChild(QOpenGLWidget):
         # surface format option "DebugContext" is set
         self.logger = QOpenGLDebugLogger()
         self.logger.initialize()
-        self.logger.messageLogged.connect(lambda m: self.onLogMessage("dc", m))
+        self.logger.messageLogged.connect(lambda m: self.onLogMessage(self.message_prefix, m))
         self.logger.startLogging(self.logging_mode)
         msg = QOpenGLDebugMessage.createApplicationMessage("test debug messaging")
         self.logger.logMessage(msg)
-        # self.buildBordersVao()
+        self.localInitializeGL()
 
-        # self.createGLSurfaces()
-        
+    def localInitializeGL(self):
         f = self.gl
-        # self.gl.glClearColor(.3,.6,.3,1.)
         f.glClearColor(.6,.3,.3,1.)
 
         self.buildPrograms()
         self.buildSliceVao()
 
         self.fragment_fbo = None
-        self.frag_last_check = 0
-        self.frag_last_change = 0
-        self.frag_timer = QTimer()
-        # self.frag_timer.timeout.connect(self.getPicks)
-        # self.frag_timer.start(1000)
-        # self.frag_timer.start(200)
 
     def resizeGL(self, width, height):
         # print("resize", width, height)
@@ -966,8 +846,6 @@ class GLDataWindowChild(QOpenGLWidget):
                 continue
             # self.fragment_trgls_program.setUniformValue("icolor", 1.,0.,0.,1.)
             if fv not in self.fragment_vaos:
-                # fvao = FragmentVao(fv, self.fragment_trgls_program, self.gl)
-                # fvao = FragmentVao(fv, self.position_location, self.gl, self.fragment_trgls_program)
                 fvao = FragmentVao(fv, self.position_location, self.gl)
                 self.fragment_vaos[fv] = fvao
             fvao = self.fragment_vaos[fv]
@@ -981,7 +859,7 @@ class GLDataWindowChild(QOpenGLWidget):
             rgba = list(qcolor.getRgbF())
             rgba[3] = line_alpha
             iindex = len(self.indexed_fvs)
-            findex = iindex/65536.
+            findex = iindex/65535.
             self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
             self.fragment_trgls_program.setUniformValue("icolor", findex,0.,0.,1.)
             vao = fvao.getVao()
@@ -1004,7 +882,7 @@ class GLDataWindowChild(QOpenGLWidget):
                 rgba = list(qcolor.getRgbF())
                 rgba[3] = line_alpha
                 iindex = self.indexed_fvs.index(fv)
-                findex = iindex/65536.
+                findex = iindex/65535.
                 self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
                 self.fragment_trgls_program.setUniformValue("icolor", findex,0.,0.,1.)
                 vao = fvao.getVao()
@@ -1092,28 +970,6 @@ class GLDataWindowChild(QOpenGLWidget):
             xyptslist.append(xypts)
             dw.cur_frag_pts_fv.extend([fv]*len(pts))
 
-
-            '''
-            nearby_node_id = -1
-            if fv == pv.nearby_node_fv:
-                nearby_node_id = -1
-                pts = fv.getPointsOnSlice(dw.axis, dw.positionOnAxis())
-                ind = pv.nearby_node_index
-                nz = np.nonzero(pts[:,3] == ind)[0]
-                if len(nz) > 0:
-                    ind = nz[0]
-                    self.nearbyNode = i0 + ind
-                    nearby_node_id = int(pts[ind,3])
-                ijs = dw.tijksToIjs(pts)
-                xys = dw.ijsToXys(ijs)
-                # print(pts.shape, xys.shape)
-                xypts = np.concatenate((xys, pts), axis=1)
-                xyptslist.append(xypts)
-                dw.cur_frag_pts_fv.extend([fv]*len(pts))
-
-            self.fragment_pts_program.setUniformValue("nearby_node_id", nearby_node_id)
-            '''
-
             if fv not in self.fragment_vaos:
                 fvao = FragmentVao(fv, self.position_location, self.gl)
                 self.fragment_vaos[fv] = fvao
@@ -1139,7 +995,7 @@ class GLDataWindowChild(QOpenGLWidget):
         ''''''
         QOpenGLFramebufferObject.bindDefault()
         # self.getPicks()
-        self.frag_last_change = time.time()
+        # self.frag_last_change = time.time()
 
     # The toImage() call in this routine can be time-consuming,
     # since it requires the GPU to pause and export data.
@@ -1150,9 +1006,9 @@ class GLDataWindowChild(QOpenGLWidget):
     def getPicks(self):
         if self.fragment_fbo is None:
             return
-        if self.frag_last_change < self.frag_last_check:
-            return
-        self.frag_last_check = time.time()
+        # if self.frag_last_change < self.frag_last_check:
+        #     return
+        # self.frag_last_check = time.time()
         # print(self.frag_last_check)
         dw = self.gldw
         f = self.gl
@@ -1169,19 +1025,9 @@ class GLDataWindowChild(QOpenGLWidget):
         timerb.time(axstr+"get image")
 
         arr = self.npArrayFromQImage(im)
-        '''
-        # In the loop above, findex (iindex/65536) is stored in 
-        # the red color component (element 0), thus the 0 here.
-        pick_array = arr[:,:,0]
-        pts = np.nonzero(pick_array > 0)
-        # Then subtract 1 from value in pick_array, 
-        # because the stored iindex value starts at 1, not 0.
-        self.xyfvs = np.stack(
-                (pts[1], pts[0], pick_array[pts[0], pts[1]]-1), axis=1)
-                # (pick_array[pts[0], pts[1]], pts[0], pts[1]), axis=1)
-        timerb.time(axstr+"get picks")
-        '''
 
+        # In the loop above, findex (iindex/65535) is stored in 
+        # the red color component (element 0), thus the 0 here.
         pts = np.nonzero(arr[:,:,0] > 0)
         nonzeros = np.concatenate(
                 (pts[1].reshape(-1,1), 
@@ -1191,26 +1037,14 @@ class GLDataWindowChild(QOpenGLWidget):
 
         self.xyfvs = np.zeros((nonzeros.shape[0], 4), nonzeros.dtype)
         self.xyfvs[:,0:2] = nonzeros[:,0:2]
+        # Subtract 1 from value in nonzeros, 
+        # because the stored iindex value starts at 1, not 0.
         self.xyfvs[:,2] = nonzeros[:,2] - 1
         msid = nonzeros[:,3]
         lsid = nonzeros[:,4]
         trglid = msid*65536 + lsid
         self.xyfvs[:,3] = trglid
         # print("nz", nonzeros.shape, self.xyfvs.shape)
-        # self.xyfvs = np.stack(
-        #         (pts[1], pts[0], arr[pts[0], pts[1], 0]-1), axis=1)
-
-        ''''''
-
-        # vij = np.sort(vij, axis=0)
-        # One approach: split by v, create dw.fv2zpoints dict, where fv is
-        # the fragment view and zpoints is from getZsurfPoints:
-        '''
-    # returns zsurf points, as array of [ipos, jpos] values
-    # for the slice with the given axis and axis position
-    # (axis and position relative to volume-view axes)
-    def getZsurfPoints(self, vaxis, vaxisPosition):
-        '''
 
         # print("ijv", ijv.shape)
         # print(frag_points[0], frag_points[-1])
@@ -1221,6 +1055,11 @@ class GLDataWindowChild(QOpenGLWidget):
         timerb.time(axstr+"done")
 
 
+    # Create a texture map from data (a numpy arrary), by first
+    # converting it to the QImage format specified by qiformat,
+    # and then creating a texture map from the QImage.
+    # On of the main purposes of this function is to set
+    # defaults that are suitable for this program.
     def texFromData(self, data, qiformat):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
         img = QImage(data, data.shape[1], data.shape[0],
@@ -1414,13 +1253,6 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glBindTexture(f.GL_TEXTURE_2D, fragments_tex_id)
         self.slice_program.setUniformValue(floc, funit)
 
-        opacity = dw.getDrawOpacity("overlay")
-        apply_line_opacity = dw.getDrawApplyOpacity("line")
-        line_alpha = 1.
-        # if apply_line_opacity:
-        #     line_alpha = opacity
-        # self.slice_program.setUniformValue("frag_opacity", line_alpha)
-
         f.glActiveTexture(f.GL_TEXTURE0)
         vaoBinder = QOpenGLVertexArrayObject.Binder(self.slice_vao)
         self.slice_program.bind()
@@ -1539,3 +1371,82 @@ class GLDataWindowChild(QOpenGLWidget):
         ibo.release()
 
 
+class FragmentVao:
+    def __init__(self, fragment_view, position_location, gl):
+        self.fragment_view = fragment_view
+        self.gl = gl
+        self.vao = None
+        self.vao_modified = ""
+        self.is_line = False
+        self.position_location = position_location
+        self.getVao()
+
+    def getVao(self):
+        fv = self.fragment_view
+        if self.vao_modified > fv.modified and self.vao_modified > fv.fragment.modified and self.vao_modified > fv.local_points_modified:
+            # print("returning existing vao")
+            return self.vao
+
+        self.vao_modified = Utils.timestamp()
+
+        if self.vao is None:
+            self.vao = QOpenGLVertexArrayObject()
+            self.vao.create()
+            # print("creating new vao")
+
+        # print("updating vao")
+        self.vao.bind()
+
+        self.vbo = QOpenGLBuffer()
+        self.vbo.create()
+        self.vbo.bind()
+        pts3d = np.ascontiguousarray(fv.vpoints[:,:3], dtype=np.float32)
+        self.pts_size = pts3d.size
+
+        nbytes = pts3d.size*pts3d.itemsize
+        self.vbo.allocate(pts3d, nbytes)
+
+        vloc = self.position_location
+        f = self.gl
+        f.glVertexAttribPointer(
+                vloc,
+                pts3d.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
+                0, 0)
+        self.vbo.release()
+
+        # This needs to be called while the current VAO is bound
+        f.glEnableVertexAttribArray(vloc)
+
+        self.ibo = QOpenGLBuffer(QOpenGLBuffer.IndexBuffer)
+        self.ibo.create()
+        self.ibo.bind()
+
+        # We may have a line, not a triangulated surface.
+        # Notice that indices must be uint8, uint16, or uint32
+        fv_trgls = fv.trgls()
+        self.is_line = False
+        if fv_trgls is None:
+            fv_line = fv.line
+            if fv_line is not None:
+                self.is_line = True
+                # Despite the name "fv_trgls",
+                # this contains a line strip if self.is_line is True.
+                fv_trgls = fv.line[:,2]
+            else:
+                fv_trgls = np.zeros((0,3), dtype=np.uint32)
+        
+        trgls = np.ascontiguousarray(fv_trgls, dtype=np.uint32)
+
+        self.trgl_index_size = trgls.size
+
+        nbytes = trgls.size*trgls.itemsize
+        self.ibo.allocate(trgls, nbytes)
+
+        # print("nodes, trgls", pts3d.shape, trgls.shape)
+
+        self.vao.release()
+        
+        # do not release ibo before vao is released!
+        self.ibo.release()
+
+        return self.vao
