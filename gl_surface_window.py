@@ -71,6 +71,55 @@ class GLSurfaceWindow(DataWindow):
         self.window.setFocus()
         self.glw.update()
 
+slice_code = {
+    "name": "slice",
+
+    "vertex": '''
+      #version 410 core
+
+      in vec2 position;
+      in vec2 vtxt;
+      out vec2 ftxt;
+      void main() {
+        gl_Position = vec4(position, 0.0, 1.0);
+        ftxt = vtxt;
+      }
+    ''',
+
+    "fragment": '''
+      #version 410 core
+
+      uniform sampler2D base_sampler;
+      uniform sampler2D underlay_sampler;
+      uniform sampler2D overlay_sampler;
+      uniform sampler2D fragments_sampler;
+      // uniform float frag_opacity = 1.;
+      in vec2 ftxt;
+      out vec4 fColor;
+
+      void main()
+      {
+        float alpha;
+        fColor = texture(base_sampler, ftxt);
+        // fColor = .1*fColor + .9*vec4(.5,.5,1.,1.);
+
+        vec4 uColor = texture(underlay_sampler, ftxt);
+        alpha = uColor.a;
+        fColor = (1.-alpha)*fColor + alpha*uColor;
+
+        /*
+        vec4 frColor = texture(fragments_sampler, ftxt);
+        // alpha = frag_opacity*frColor.a;
+        alpha = frColor.a;
+        fColor = (1.-alpha)*fColor + alpha*frColor;
+        */
+
+        vec4 oColor = texture(overlay_sampler, ftxt);
+        alpha = oColor.a;
+        fColor = (1.-alpha)*fColor + alpha*oColor;
+      }
+    ''',
+}
 
 trgl_code = {
     "name": "trgl",
@@ -179,11 +228,15 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.active_vao = None
 
         self.buildPrograms()
+        self.buildSliceVao()
+        self.fragment_fbo = None
     
+    '''
     def resizeGL(self, width, height):
         f = self.gl
         # print("resizeGL (surface)", width, height)
         f.glViewport(0, 0, width, height)
+    '''
 
     def paintGL(self):
         if self.gldw.volume_view is None:
@@ -193,12 +246,75 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f = self.gl
         f.glClearColor(.6,.3,.6,1.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
-        self.drawTrgls()
+        # self.drawTrgls()
+        self.paintSlice()
 
     def buildPrograms(self):
         self.trgl_program = self.buildProgram(trgl_code)
+        self.slice_program = self.buildProgram(slice_code)
+
+    def paintSlice(self):
+        dw = self.gldw
+        volume_view = dw.volume_view
+        f = self.gl
+
+        # viewing window width
+        ww = self.size().width()
+        wh = self.size().height()
+        # viewing window half width
+        whw = ww//2
+        whh = wh//2
+
+        self.drawTrgls()
+
+        self.slice_program.bind()
+        base_tex = self.fragment_fbo.texture()
+        bloc = self.slice_program.uniformLocation("base_sampler")
+        if bloc < 0:
+            print("couldn't get loc for base sampler")
+            return
+        bunit = 1
+        f.glActiveTexture(f.GL_TEXTURE0+bunit)
+        f.glBindTexture(f.GL_TEXTURE_2D, base_tex)
+        self.slice_program.setUniformValue(bloc, bunit)
+
+        self.slice_program.setUniformValue(bloc, bunit)
+
+        underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
+        self.drawUnderlays(underlay_data)
+        underlay_tex = self.texFromData(underlay_data, QImage.Format_RGBA64)
+        uloc = self.slice_program.uniformLocation("underlay_sampler")
+        if uloc < 0:
+            print("couldn't get loc for underlay sampler")
+            return
+        uunit = 2
+        f.glActiveTexture(f.GL_TEXTURE0+uunit)
+        underlay_tex.bind()
+        self.slice_program.setUniformValue(uloc, uunit)
+
+        overlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
+        self.drawOverlays(overlay_data)
+        overlay_tex = self.texFromData(overlay_data, QImage.Format_RGBA64)
+        oloc = self.slice_program.uniformLocation("overlay_sampler")
+        if oloc < 0:
+            print("couldn't get loc for overlay sampler")
+            return
+        ounit = 3
+        f.glActiveTexture(f.GL_TEXTURE0+ounit)
+        overlay_tex.bind()
+        self.slice_program.setUniformValue(oloc, ounit)
+
+        f.glActiveTexture(f.GL_TEXTURE0)
+        vaoBinder = QOpenGLVertexArrayObject.Binder(self.slice_vao)
+        self.slice_program.bind()
+        f.glDrawElements(f.GL_TRIANGLES, 
+                         self.slice_indices.size, f.GL_UNSIGNED_INT, None)
+        self.slice_program.release()
+        vaoBinder = None
+
 
     def drawTrgls(self):
+        self.fragment_fbo.bind()
         f = self.gl
 
         # Be sure to clear with alpha = 0
@@ -260,6 +376,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         vao.release()
         self.trgl_program.release()
 
+        QOpenGLFramebufferObject.bindDefault()
 
 
 # two attribute buffers: xyz, and stxy (st = scaled texture)
