@@ -1813,7 +1813,8 @@ class MainWindow(QMainWindow):
             # print("match!")
             # dialog.done(sdir)
             dialog.khartes_directory = sdir
-            dialog.done(1)
+            # dialog.done(1)
+            dialog.accept()
 
     # override
     def closeEvent(self, e):
@@ -2359,9 +2360,14 @@ class MainWindow(QMainWindow):
         dialog.setLabelText(QFileDialog.Accept, "Open selected .khprj folder")
         # see comment at def of onDirectoryEntered
         dialog.directoryEntered.connect(lambda d: self.onDirectoryEntered(d, dialog))
+        '''
         if not dialog.exec():
             print("No khprj directory selected")
             return
+        '''
+
+        de = dialog.exec()
+        print("*** File dialog returned", de, dialog.result(), time.time())
 
         file_names = dialog.selectedFiles()
         khartes_directory = getattr(dialog, "khartes_directory", None)
