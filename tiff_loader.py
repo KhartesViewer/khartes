@@ -298,7 +298,8 @@ class TiffLoader(QMainWindow):
         if len(dirs) == 0 and len(tifs) > 0:
             # print("match", sdir)
             dialog.khartes_directory = sdir
-            dialog.done(1)
+            # dialog.done(1)
+            dialog.accept()
         
     def onNameEdited(self, txt):
         vol_names = set(v.name for v in self.main_window.project_view.volumes.keys())
@@ -324,7 +325,9 @@ class TiffLoader(QMainWindow):
         dialog.setFileMode(QFileDialog.Directory)
         dialog.setLabelText(QFileDialog.Accept, "Open folder containing TIFF files")
         dialog.directoryEntered.connect(lambda d: self.onDirectoryEntered(d, dialog))
-        if not dialog.exec():
+        de = dialog.exec()
+        khartes_directory = getattr(dialog, "khartes_directory", None)
+        if not de and khartes_directory is None:
             print("No tiff directory selected")
             msg = QMessageBox()
             msg.setWindowTitle(title)
@@ -336,7 +339,6 @@ class TiffLoader(QMainWindow):
             return
 
         file_names = dialog.selectedFiles()
-        khartes_directory = getattr(dialog, "khartes_directory", None)
         if khartes_directory is not None:
             file_names = [khartes_directory]
         if len(file_names) < 1:

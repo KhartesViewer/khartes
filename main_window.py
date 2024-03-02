@@ -1808,12 +1808,13 @@ class MainWindow(QMainWindow):
     # the dialog's caller, rather than having the QFileDialog 
     # descend into the selected directory
     def onDirectoryEntered(self, sdir, dialog):
-        # print("directory entered", sdir)
+        print("directory entered", sdir)
         if sdir.endswith(".khprj"):
             # print("match!")
             # dialog.done(sdir)
             dialog.khartes_directory = sdir
             # dialog.done(1)
+            print("calling dialog.accept()")
             dialog.accept()
 
     # override
@@ -1864,7 +1865,17 @@ class MainWindow(QMainWindow):
         dialog.setNameFilter("Khartes project directories (*.khprj)")
         dialog.setLabelText(QFileDialog.Accept, "Create new project")
         dialog.directoryEntered.connect(lambda d: self.onDirectoryEntered(d, dialog))
+
+        '''
         if not dialog.exec():
+            print("No khprj directory selected")
+            return
+        '''
+
+        de = dialog.exec()
+        print("File dialog returned", de, dialog.result())
+        khartes_directory = getattr(dialog, "khartes_directory", None)
+        if not de and khartes_directory is None:
             print("No khprj directory selected")
             return
 
@@ -1939,7 +1950,17 @@ class MainWindow(QMainWindow):
         # dialog.directoryEntered.connect(self.onDirectoryEntered)
         # see comment at def of onDirectoryEntered
         dialog.directoryEntered.connect(lambda d: self.onDirectoryEntered(d, dialog))
+
+        '''
         if not dialog.exec():
+            print("No khprj directory selected")
+            return
+        '''
+
+        de = dialog.exec()
+        print("File dialog returned", de, dialog.result())
+        khartes_directory = getattr(dialog, "khartes_directory", None)
+        if not de and khartes_directory is None:
             print("No khprj directory selected")
             return
 
@@ -2360,6 +2381,7 @@ class MainWindow(QMainWindow):
         dialog.setLabelText(QFileDialog.Accept, "Open selected .khprj folder")
         # see comment at def of onDirectoryEntered
         dialog.directoryEntered.connect(lambda d: self.onDirectoryEntered(d, dialog))
+
         '''
         if not dialog.exec():
             print("No khprj directory selected")
@@ -2367,10 +2389,13 @@ class MainWindow(QMainWindow):
         '''
 
         de = dialog.exec()
-        print("*** File dialog returned", de, dialog.result(), time.time())
+        print("File dialog returned", de, dialog.result())
+        khartes_directory = getattr(dialog, "khartes_directory", None)
+        if not de and khartes_directory is None:
+            print("No khprj directory selected")
+            return
 
         file_names = dialog.selectedFiles()
-        khartes_directory = getattr(dialog, "khartes_directory", None)
         if khartes_directory is not None:
             file_names = [khartes_directory]
         #print(file_names)

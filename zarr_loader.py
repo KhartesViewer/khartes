@@ -123,7 +123,8 @@ class ZarrLoader(QMainWindow):
         # doesn't end in .zarr, if it contains certain dot files.
         if sdir.endswith(".zarr"):
             dialog.zarr_directory = sdir
-            dialog.done(1)
+            # dialog.done(1)
+            dialog.accept()
 
         # if not, then see if directory contains TIFF files:
         # if sdir has no sub-directories
@@ -142,7 +143,8 @@ class ZarrLoader(QMainWindow):
         if len(dirs) == 0 and len(tifs) > 0:
             # print("match", sdir)
             dialog.zarr_directory = sdir
-            dialog.done(1)
+            # dialog.done(1)
+            dialog.accept()
         return None
 
     def onDirButtonClicked(self, s):
@@ -159,7 +161,9 @@ class ZarrLoader(QMainWindow):
         dialog.setFileMode(QFileDialog.Directory)
         dialog.setLabelText(QFileDialog.Accept, "Select .zarr folder or folder containing TIFF files")
         dialog.directoryEntered.connect(lambda d: self.onDirectoryEntered(d, dialog))
-        if not dialog.exec():
+        de = dialog.exec()
+        zarr_directory = getattr(dialog, "zarr_directory", None)
+        if not de and zarr_directory is None:
             print("No directory selected")
             msg = QMessageBox()
             msg.setWindowTitle(title)
@@ -176,7 +180,6 @@ class ZarrLoader(QMainWindow):
         print("file_names", file_names)
         # otherwise, if user double-clicked on a zarr or tiff directory,
         # dialog.zarr_directory is set
-        zarr_directory = getattr(dialog, "zarr_directory", None)
         if zarr_directory is not None:
             file_names = [zarr_directory]
         if len(file_names) < 1:
