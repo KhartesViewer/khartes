@@ -121,8 +121,8 @@ slice_code = {
     ''',
 }
 
-trgl_code = {
-    "name": "trgl",
+data_code = {
+    "name": "data",
 
     "vertex": '''
       #version 410 core
@@ -206,6 +206,35 @@ trgl_code = {
     ''',
 }
 
+xyz_code = {
+    "name": "xyz",
+
+    "vertex": '''
+      #version 410 core
+
+      uniform mat4 xform;
+      layout(location=3) in vec3 xyz;
+      layout(location=4) in vec2 stxy;
+      out vec3 fxyz;
+      void main() {
+        gl_Position = xform*vec4(stxy, 0., 1.);
+        fxyz = xyz;
+      }
+    ''',
+
+    "fragment": '''
+      #version 410 core
+
+      in vec3 fxyz;
+      out vec4 fColor;
+
+      void main() {
+          fColor = vec4(fxyz, 1.);
+      }
+
+    ''',
+}
+
     
 class GLSurfaceWindowChild(GLDataWindowChild):
     def __init__(self, gldw, parent=None):
@@ -229,15 +258,38 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         self.buildPrograms()
         self.buildSliceVao()
-        self.fragment_fbo = None
+        self.data_fbo = None
+        self.xyz_fbo = None
     
-    '''
     def resizeGL(self, width, height):
         f = self.gl
         # print("resizeGL (surface)", width, height)
-        f.glViewport(0, 0, width, height)
-    '''
+        # f.glViewport(0, 0, width, height)
 
+        # based on https://stackoverflow.com/questions/59338015/minimal-opengl-offscreen-rendering-using-qt
+        vp_size = QSize(width, height)
+        fbo_format = QOpenGLFramebufferObjectFormat()
+        fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
+        f = self.gl
+        fbo_format.setInternalTextureFormat(f.GL_RGB32F)
+        self.xyz_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
+        self.xyz_fbo.bind()
+        draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
+        f.glDrawBuffers(len(draw_buffers), draw_buffers)
+
+        fbo_format = QOpenGLFramebufferObjectFormat()
+        fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
+        f = self.gl
+        fbo_format.setInternalTextureFormat(f.GL_RGBA16)
+        self.data_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
+        self.data_fbo.bind()
+        draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
+        f.glDrawBuffers(len(draw_buffers), draw_buffers)
+
+        QOpenGLFramebufferObject.bindDefault()
+
+        f.glViewport(0, 0, vp_size.width(), vp_size.height())
+        
     def paintGL(self):
         if self.gldw.volume_view is None:
             return
@@ -246,11 +298,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f = self.gl
         f.glClearColor(.6,.3,.6,1.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
-        # self.drawTrgls()
         self.paintSlice()
 
     def buildPrograms(self):
-        self.trgl_program = self.buildProgram(trgl_code)
+        self.data_program = self.buildProgram(data_code)
+        self.xyz_program = self.buildProgram(xyz_code)
         self.slice_program = self.buildProgram(slice_code)
 
     def paintSlice(self):
@@ -265,10 +317,28 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         whw = ww//2
         whh = wh//2
 
-        self.drawTrgls()
+        pv = dw.window.project_view
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            # print("No currently active fragment")
+            return
+
+        if self.active_vao is None or self.active_vao.fragment_view != mfv:
+            self.active_vao = FragmentMapVao(
+                    mfv, self.xyz_location, self.stxy_location, self.gl)
+
+        fvao = self.active_vao
+
+        vao = fvao.getVao()
+        vao.bind()
+
+        self.drawXyz()
+        self.drawData()
+
+        vao.release()
 
         self.slice_program.bind()
-        base_tex = self.fragment_fbo.texture()
+        base_tex = self.data_fbo.texture()
         bloc = self.slice_program.uniformLocation("base_sampler")
         if bloc < 0:
             print("couldn't get loc for base sampler")
@@ -305,29 +375,22 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.slice_program.setUniformValue(oloc, ounit)
 
         f.glActiveTexture(f.GL_TEXTURE0)
-        vaoBinder = QOpenGLVertexArrayObject.Binder(self.slice_vao)
+        self.slice_vao.bind()
         self.slice_program.bind()
         f.glDrawElements(f.GL_TRIANGLES, 
                          self.slice_indices.size, f.GL_UNSIGNED_INT, None)
         self.slice_program.release()
-        vaoBinder = None
+        self.slice_vao.release()
 
+        im = self.xyz_fbo.toImage(True)
+        # print("im format", im.format())
 
-    def drawTrgls(self):
-        self.fragment_fbo.bind()
-        f = self.gl
-
-        # Be sure to clear with alpha = 0
-        # so that the slice view isn't blocked!
-        f.glClearColor(0.,0.,0.,0.)
-        f.glClear(f.GL_COLOR_BUFFER_BIT)
-
+    def stxyXform(self):
         dw = self.gldw
 
         ww = dw.size().width()
         wh = dw.size().height()
         volume_view = dw.volume_view
-        xform = QMatrix4x4()
 
         zoom = dw.getZoom()
         cij = volume_view.stxytf
@@ -342,12 +405,25 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         mat[1][1] = -hf
         mat[1][3] = hf*cij[1]
         mat[3][3] = 1.
-
-        ''' '''
         xform = QMatrix4x4(mat.flatten().tolist())
-        
-        self.trgl_program.bind()
-        self.trgl_program.setUniformValue("xform", xform)
+        return xform
+
+
+    def drawDataOrig(self):
+        f = self.gl
+        dw = self.gldw
+
+        self.data_fbo.bind()
+
+        # Be sure to clear with alpha = 0
+        # so that the slice view isn't blocked!
+        f.glClearColor(0.,0.,0.,0.)
+        f.glClear(f.GL_COLOR_BUFFER_BIT)
+
+        self.data_program.bind()
+
+        xform = self.stxyXform()
+        self.data_program.setUniformValue("xform", xform)
 
         pv = dw.window.project_view
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
@@ -360,12 +436,14 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                     mfv, self.xyz_location, self.stxy_location, self.gl)
 
         fvao = self.active_vao
+        '''
         qcolor = mfv.fragment.color
         rgba = list(qcolor.getRgbF())
         rgba[3] = 1.
         self.trgl_program.setUniformValue("color", *rgba)
         # self.trgl_program.setUniformValue("xyzmin", *mfv.xyzmin)
         # self.trgl_program.setUniformValue("xyzmax", *mfv.xyzmax)
+        '''
 
         vao = fvao.getVao()
         vao.bind()
@@ -375,6 +453,52 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                        f.GL_UNSIGNED_INT, None)
         vao.release()
         self.trgl_program.release()
+
+        QOpenGLFramebufferObject.bindDefault()
+
+    def drawData(self):
+        f = self.gl
+        dw = self.gldw
+        fvao = self.active_vao
+
+        self.data_fbo.bind()
+
+        # Be sure to clear with alpha = 0
+        # so that the slice view isn't blocked!
+        f.glClearColor(0.,0.,0.,0.)
+        f.glClear(f.GL_COLOR_BUFFER_BIT)
+
+        self.data_program.bind()
+
+        xform = self.stxyXform()
+        self.data_program.setUniformValue("xform", xform)
+
+        f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
+                       f.GL_UNSIGNED_INT, None)
+        self.data_program.release()
+
+        QOpenGLFramebufferObject.bindDefault()
+
+    def drawXyz(self):
+        f = self.gl
+        dw = self.gldw
+        fvao = self.active_vao
+
+        self.xyz_fbo.bind()
+
+        # Be sure to clear with alpha = 0
+        # so that the slice view isn't blocked!
+        f.glClearColor(0.,0.,0.,0.)
+        f.glClear(f.GL_COLOR_BUFFER_BIT)
+
+        self.xyz_program.bind()
+
+        xform = self.stxyXform()
+        self.xyz_program.setUniformValue("xform", xform)
+
+        f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
+                       f.GL_UNSIGNED_INT, None)
+        self.xyz_program.release()
 
         QOpenGLFramebufferObject.bindDefault()
 
