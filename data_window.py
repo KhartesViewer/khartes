@@ -1249,16 +1249,23 @@ class DataWindow(QLabel):
 
         length = int(length)
         wh = outrgbx.shape[0]
+        ww = outrgbx.shape[1]  # get the width of the window
         y0 = wh - 10
-        x0 = 10
         color = (65535,65535,65535,65535)
         text = "%g mm" % value
-        cv2.line(outrgbx, (x0, y0), (x0+length, y0), color, 1)
-        for i in range(0,2):
-            xi = int(x0+i*length)
-            cv2.line(outrgbx, (xi,y0-2), (xi, y0+2), color, 1)
-        cv2.putText(outrgbx, text, (x0+length+10, y0+3), cv2.FONT_HERSHEY_PLAIN, .8, color)
 
+        # calculate how many scale bars will fit into the width
+        num_bars = ww // length
+
+        for i in range(1,num_bars-1):
+            x0 = i * length  # start of the current scale bar
+            cv2.line(outrgbx, (x0, y0), (x0+length, y0), color, 1)
+            cv2.line(outrgbx, (x0,y0-2), (x0, y0+2), color, 1)
+            cv2.line(outrgbx, (x0+length,y0-2), (x0+length, y0+2), color, 1)
+            if i == 1:
+                cv2.putText(outrgbx, text, (x0, y0-10), cv2.FONT_HERSHEY_PLAIN, .8, color)
+
+                
     def innerResetText(self, text, ptsize):
         if ptsize > 0:
             font = self.font()
