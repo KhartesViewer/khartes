@@ -281,6 +281,8 @@ class TiffLoader(QMainWindow):
     # the dialog's caller, rather than having the QFileDialog 
     # descend into the selected directory
     def onDirectoryEntered(self, sdir, dialog):
+        if self.main_window.is_macos:
+            return
         # print("directory entered", sdir)
         # if sdir has no sub-directories
         # and sdir has .tif files,
