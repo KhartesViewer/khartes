@@ -5,6 +5,7 @@ import os
 import json
 import time
 import numpy as np
+import platform
 
 from PyQt5.QtWidgets import (
         QAction, QApplication, QAbstractItemView,
@@ -822,6 +823,9 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
 
         self.app = app
+        self.platform = platform.system()
+        print("Running on", self.platform)
+        self.is_macos = (self.platform == "Darwin")
         self.settings = QSettings(QSettings.IniFormat, QSettings.UserScope, 'khartes.org', 'khartes')
         print("Loaded settings from", self.settings.fileName())
         qv = [int(x) for x in qVersion().split('.')]
@@ -1809,6 +1813,9 @@ class MainWindow(QMainWindow):
     # descend into the selected directory
     def onDirectoryEntered(self, sdir, dialog):
         print("directory entered", sdir)
+        if (self.is_macos):
+            print("ignoring because running on MacOS")
+            return
         if sdir.endswith(".khprj"):
             # print("match!")
             # dialog.done(sdir)

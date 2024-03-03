@@ -112,7 +112,10 @@ class ZarrLoader(QMainWindow):
     # the dialog's caller, rather than having the QFileDialog 
     # descend into the selected directory
     def onDirectoryEntered(self, sdir, dialog):
-        # print("directory entered", sdir)
+        print("zarr/tiff directory entered", sdir)
+        if self.main_window.is_macos:
+            print("ignoring because running MacOS")
+            return
         ignore_directory = getattr(dialog, "khartes_ignore_directory", None)
         # print("ignore_directory", ignore_directory)
         if ignore_directory is not None and Path(sdir) == Path(ignore_directory):
@@ -206,6 +209,7 @@ class ZarrLoader(QMainWindow):
             msg.setIcon(QMessageBox.Critical)
             msg.setText("Directory %s does not exist"%pdir)
             msg.exec()
+            return
 
         # At this point we don't know whether the directory
         # is zarr, OME, or contains TIFFs
