@@ -382,8 +382,21 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.slice_program.release()
         self.slice_vao.release()
 
-        im = self.xyz_fbo.toImage(True)
+        fbo = self.xyz_fbo
+        # im = fbo.toImage(True)
         # print("im format", im.format())
+        w = fbo.width()
+        h = fbo.height()
+        return
+        iptr = f.glReadPixels(0, 0, fbo.width(), fbo.height(), f.GL_RGBA, f.GL_FLOAT)
+        # print("iptr", len(iptr), w, h, w*h*4)
+        arr = np.array(iptr)
+        arr.resize(h, w, 4)
+        # print(arr.shape, arr.dtype)
+        print(arr[0,0])
+        print(arr[200,200])
+        # iptr.setSize(w*h*4*4)
+        # arr = np.frombuffer(iptr, dtype=np.float32)
 
     def stxyXform(self):
         dw = self.gldw
