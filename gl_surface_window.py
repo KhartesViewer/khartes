@@ -229,7 +229,7 @@ xyz_code = {
       out vec4 fColor;
 
       void main() {
-          fColor = vec4(fxyz, 1.);
+          fColor = vec4(fxyz/65535., 1.);
       }
 
     ''',
@@ -248,6 +248,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # layout(location=4) in vec3 stxy;
         self.stxy_location = 4
         self.message_prefix = "sw"
+        # TODO: should set prev_larr to None
+        # whenever fragment shape changes
+        self.prev_larr = None
+        self.prev_zoom_level = None
 
     def localInitializeGL(self):
         f = self.gl
@@ -271,7 +275,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
         f = self.gl
-        fbo_format.setInternalTextureFormat(f.GL_RGB32F)
+        # In Qt5, QFrameworkBufferObject.toImage() creates
+        # a uint8 QImage from a float32 fbo.
+        # fbo_format.setInternalTextureFormat(f.GL_RGB32F)
+        fbo_format.setInternalTextureFormat(f.GL_RGBA16)
         self.xyz_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.xyz_fbo.bind()
         draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
@@ -306,6 +313,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.slice_program = self.buildProgram(slice_code)
 
     def paintSlice(self):
+        timera = Utils.Timer()
+        timera.active = False
         dw = self.gldw
         volume_view = dw.volume_view
         f = self.gl
@@ -333,7 +342,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         vao.bind()
 
         self.drawXyz()
+        timera.time("xyz")
         self.drawData()
+        timera.time("data")
 
         vao.release()
 
@@ -381,12 +392,74 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                          self.slice_indices.size, f.GL_UNSIGNED_INT, None)
         self.slice_program.release()
         self.slice_vao.release()
+        timera.time("combine")
+        self.getBlocks()
+
+    def getBlocks(self):
+        timera = Utils.Timer()
+        timera.active = False
+        dw = self.gldw
+        # volume_view = dw.volume_view
+        f = self.gl
 
         fbo = self.xyz_fbo
-        # im = fbo.toImage(True)
+        im = fbo.toImage(True)
+        timera.time("get image")
         # print("im format", im.format())
-        w = fbo.width()
-        h = fbo.height()
+        # w = fbo.width()
+        # h = fbo.height()
+        arr = self.npArrayFromQImage(im)
+        timera.time("array from image")
+        # print("arr", arr.shape, arr.dtype)
+        zoom = dw.getZoom()
+        iscale = 1
+        for izoom in range(7):
+            lzoom = 1./iscale
+            if lzoom < 2*zoom:
+                break
+            iscale *= 2
+
+        # 1/zoom, scale
+        # 0. - 2. 1
+        # 2. - 4. 2
+        # 4. - 8. 4
+        # 8. - 16. 8
+        # 16. - 32. 16
+        # print("zoom", zoom, iscale)
+        dv = 128*iscale
+        zoom_level = izoom
+        nzarr = arr[arr[:,:,3] > 0][:,:3] // dv
+
+        if len(nzarr) > 0:
+            # print("nzarr", nzarr.shape, nzarr.dtype)
+            nzmin = nzarr.min(axis=0)
+            nzmax = nzarr.max(axis=0)
+            # print(nzmin, nzmax)
+            nzsarr = nzarr-nzmin
+            # print(nzsarr.min(axis=0), nzsarr.max(axis=0))
+            dvarr = np.zeros(nzmax-nzmin+1, dtype=np.uint32)[:,:,:,np.newaxis]
+            indices = np.indices(nzmax-nzmin+1).transpose(1,2,3,0)
+            # print(dvarr.shape, indices.shape)
+            dvarr = np.concatenate((dvarr, indices), axis=3)
+            # print(dvarr.shape)
+            # print("dvarr", dvarr.shape, nzsarr.shape)
+            # print((nzarr)[:5])
+            # print((nzsarr)[:5])
+            dvarr[nzsarr[:,0],nzsarr[:,1], nzsarr[:,2],0] = 1
+            # print("dvarr", dvarr.size, dvarr.sum())
+            larr = dvarr[dvarr[:,:,:,0] == 1][:,1:]+nzmin
+            # print("dvarr, larr", dvarr.shape, larr.shape)
+            # print(larr)
+            if self.prev_zoom_level != zoom_level or self.prev_larr is None or len(self.prev_larr) != len(larr) or (self.prev_larr[:,:] != larr[:,:]).any():
+                # print("change", zoom_level, len(larr))
+                self.prev_larr = larr
+                self.prev_zoom_level = zoom_level
+
+            # nzu = np.unique(nzarr//128, axis=0)
+            # print(len(nzarr),len(nzu), nzu[0], nzu[-1])
+            timera.time("process image")
+
+        '''
         return
         iptr = f.glReadPixels(0, 0, fbo.width(), fbo.height(), f.GL_RGBA, f.GL_FLOAT)
         # print("iptr", len(iptr), w, h, w*h*4)
@@ -397,6 +470,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         print(arr[200,200])
         # iptr.setSize(w*h*4*4)
         # arr = np.frombuffer(iptr, dtype=np.float32)
+        '''
 
     def stxyXform(self):
         dw = self.gldw
