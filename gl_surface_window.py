@@ -36,10 +36,11 @@ from PyQt5.QtCore import (
         )
 
 import time
+from collections import OrderedDict
 import numpy as np
 import cv2
-from utils import Utils
 
+from utils import Utils
 from data_window import DataWindow
 from gl_data_window import GLDataWindowChild
 
@@ -53,7 +54,8 @@ class GLSurfaceWindow(DataWindow):
         self.setLayout(layout)
         self.glw = GLSurfaceWindowChild(self)
         layout.addWidget(self.glw)
-        self.zoomMult = .5
+        # self.zoomMult = .5
+        self.zoomMult = 2
 
     # see comments for this function in DataWindow
     def nodeMovementAllowedInK(self):
@@ -252,6 +254,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # whenever fragment shape changes
         self.prev_larr = None
         self.prev_zoom_level = None
+        self.volume_view =  None
+        self.volume_view_direction = -1
+        self.atlas = None
 
     def localInitializeGL(self):
         f = self.gl
@@ -298,7 +303,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f.glViewport(0, 0, vp_size.width(), vp_size.height())
         
     def paintGL(self):
-        if self.gldw.volume_view is None:
+        self.checkAtlas()
+        if self.volume_view is None:
             return
 
         # print("paintGL (surface)")
@@ -312,11 +318,24 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.xyz_program = self.buildProgram(xyz_code)
         self.slice_program = self.buildProgram(slice_code)
 
+    def checkAtlas(self):
+        # if self.volume_view is None or self.atlas is None or 
+        dw = self.gldw
+        if dw.volume_view is None:
+            self.volume_view = None
+            self.volume_view_direction = -1
+            self.atlas = None
+            return
+        if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction:
+            self.volume_view = dw.volume_view
+            self.volume_view_direction = self.volume_view.direction
+            self.atlas = Atlas(self.volume_view)
+
     def paintSlice(self):
         timera = Utils.Timer()
         timera.active = False
         dw = self.gldw
-        volume_view = dw.volume_view
+        volume_view = self.volume_view
         f = self.gl
 
         # viewing window width
@@ -450,10 +469,15 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             larr = dvarr[dvarr[:,:,:,0] == 1][:,1:]+nzmin
             # print("dvarr, larr", dvarr.shape, larr.shape)
             # print(larr)
+            '''
             if self.prev_zoom_level != zoom_level or self.prev_larr is None or len(self.prev_larr) != len(larr) or (self.prev_larr[:,:] != larr[:,:]).any():
-                # print("change", zoom_level, len(larr))
+                print("change", zoom_level, len(larr))
                 self.prev_larr = larr
                 self.prev_zoom_level = zoom_level
+            '''
+            print("larr", zoom_level, len(larr))
+            if self.atlas is not None:
+                self.atlas.displayBlocks(zoom_level, larr)
 
             # nzu = np.unique(nzarr//128, axis=0)
             # print(len(nzarr),len(nzu), nzu[0], nzu[-1])
@@ -477,7 +501,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         ww = dw.size().width()
         wh = dw.size().height()
-        volume_view = dw.volume_view
+        volume_view = self.volume_view
 
         zoom = dw.getZoom()
         cij = volume_view.stxytf
@@ -689,4 +713,260 @@ class FragmentMapVao:
 
         return self.vao
 
+
+
+        self.makeCurrent()
+        self.logger.stopLogging()
+        print("stopped logging")
+        # e.accept()
+
+
+# d: data, a: atlas, c: chunk, pc: padded chunk
+# _: corner, k: key, l: level
+# _: coords, sz: size, e: single coord, r: rect
+#
+# coordinates are (x, y, z);
+# data value at (x, y, z) is data[z][y][x]
+
+class Chunk:
+    def __init__(self, atlas, ak, dk, dl):
+        # atlas, ak, dk, dl
+        # Given atlas, atlas key, data key, data level
+        # copy chunk from data to atlas_data
+        # compute xform
+
+        # Atlas
+        self.atlas = atlas
+        # Chunk key (position) in atlas (3 coords)
+        self.ak = ak
+        # Chunk key (position) in input data (3 coords: x, y, z)
+
+        # atlas chunk size (3 coords, usually 130,130,130)
+        acsz = atlas.acsz
+        # atlas rectangle
+        ar = self.k2r(ak, acsz)
+        self.ar = ar
+        # atlas corner
+        a = ar[0]
+
+        # padding (scalar, usually 1)
+        self.pad = atlas.pad
+
+        # size of the atlas (3 coords: nx, ny, nz)
+        asz = atlas.asz
+        # rectangle of the entire data set
+
+        self.setData(dk, dl)
+        self.in_use = False
+
+
+    def setData(self, dk, dl):
+        self.dk = dk
+        self.dl = dl
+        if dl < 0:
+            return
+
+        # data chunk size (3 coords, usually 128,128,128)
+        dcsz = self.atlas.dcsz 
+        # data rectangle
+        dr = self.k2r(dk, dcsz)
+        # data corner
+        d = dr[0]
+
+        # padded data rectangle
+        pdr = self.padRect(dr, self.pad)
+        # size of the data on the data's level (3 coords: nx, ny, nz)
+        dsz = self.atlas.dsz[dl]
+        all_dr = ((0, 0, 0), (dsz[0], dsz[1], dsz[2]))
+        # intersection of the padded data rectangle with the data
+        int_dr = self.rectIntersection(pdr, all_dr)
+        # print(pdr, all_dr, int_dr)
+
+        # Compute change in pdr (padded data-chunk rectangle) 
+        # due to intersection with edges of data array:
+        # Difference in min corner:
+        # skip0 = (int_dr[0][0]-pdr[0][0], int_dr[0][1]-pdr[0][1])
+        skip0 = tuple(int_dr[0][i]-pdr[0][i] for i in range(len(int_dr[0])))
+        # Difference in max corner:
+        # skip1 = (pdr[1][0]-int_dr[1][0], pdr[1][1]-int_dr[1][1])
+        skip1 = tuple(pdr[1][i]-int_dr[1][i] for i in range(len(pdr[1])))
+
+        # print(pdr, skip0)
+        # print(ar, int_dr, skip0, skip1)
+        # TODO: copy into atlas texture
+        '''
+        atlas.atlas_data[
+                (ar[0][1]+skip0[1]):(ar[1][1]-skip1[1]), 
+                (ar[0][0]+skip0[0]):(ar[1][0]-skip1[0])
+                ] = atlas.data[
+                        (int_dr[0][1]):int_dr[1][1], 
+                        (int_dr[0][0]):int_dr[1][0]
+                        ]
+        '''
+
+        # TODO: fix errors
+        xform = QMatrix4x4()
+        # xform.scale(1./asz[0], 1./asz[1], 1./asz[2])
+        asz = self.atlas.asz
+        xform.scale(*(1./asz[i] for i in range(len(asz))))
+        # xform.translate(ar[0][0]+pad-dr[0][0], ar[0][1]+pad-dr[0][1])
+        xform.translate(*(self.ar[0][i]+self.pad-dr[0][i] for i in range(len(self.ar))))
+        # xform.scale(dsz[0], dsz[1])
+        xform.scale(*(dsz[i] for i in range(len(dsz))))
+        self.xform = xform
+        # self.tmin = ((dr[0][0])/dsz[0], (dr[0][1])/dsz[1])
+        self.tmin = ((dr[0][i])/dsz[i] for i in range(len(dsz)))
+        # self.tmax = ((dr[1][0])/dsz[0], (dr[1][1])/dsz[1])
+        self.tmax = ((dr[1][i])/dsz[i] for i in range(len(dsz)))
+        # self.tmin = (0.01, 0.)
+        # self.tmax = (1., 1.)
+        # if ak[0] == 0 and ak[1] == 0:
+        #     print("tm", self.tmin, self.tmax)
+
+        self.in_use = True
+
+    @staticmethod
+    def k2r(k, csz):
+        # c = (k[0]*csz[0], k[1]*csz[1])
+        # r = (c, (c[0]+csz[0], c[1]+csz[1]))
+        c = tuple(k[i]*csz[i] for i in range(len(k)))
+        r = (c, tuple(c[i]+csz[i] for i in range(len(c))))
+        return r
+
+    # padded rectangle
+    @staticmethod
+    def padRect(rect, pad):
+        # return ((rect[0][0]-pad, rect[0][1]-pad), 
+        #    (rect[1][0]+pad, rect[1][1]+pad))
+        r = (tuple(rect[0][i]-pad for i in range(len(rect[0]))),
+             tuple(rect[1][i]-pad for i in range(len(rect[1]))))
+        return r
+
+    # adapted from https://stackoverflow.com/questions/25068538/intersection-and-difference-of-two-rectangles/25068722#25068722
+    @staticmethod
+    def rectIntersection(ra, rb):
+        # if not Utils.rectIsValid(ra) or not Utils.rectIsValid(rb):
+        #     return Utils.emptyRect()
+        (ax1, ay1, az1), (ax2, ay2, az2) = ra
+        (bx1, by1, bz1), (bx2, by2, bz2) = rb
+        # print(ra, rb)
+        x1 = max(min(ax1, ax2), min(bx1, bx2))
+        y1 = max(min(ay1, ay2), min(by1, by2))
+        z1 = max(min(az1, az2), min(bz1, bz2))
+        x2 = min(max(ax1, ax2), max(bx1, bx2))
+        y2 = min(max(ay1, ay2), max(by1, by2))
+        z2 = min(max(az1, az2), max(bz1, bz2))
+        if (x1<x2) and (y1<y2) and (z1<z2):
+            r = ((x1, y1, z1), (x2, y2, z2))
+            # print(r)
+            return r
+
+
+class Atlas:
+    def __init__(self, volume_view, tex3dsz=(2048,2048,300), dcsz=(128,128,128)):
+        # self.created = Utils.timestamp()
+        pad = 1
+        self.pad = pad
+        self.volume_view = volume_view
+        self.dcsz = dcsz
+        acsz = tuple(dcsz[i]+2*pad for i in range(len(dcsz)))
+        self.acsz = acsz
+        vol = volume_view.volume
+        vdir = volume_view.direction
+        is_zarr = vol.is_zarr
+        dsz = []
+        if not is_zarr:
+            shape = vol.trdatas[vdir].shape
+            dsz.append(tuple(shape[::-1]))
+        else:
+            for level in vol.levels:
+                shape = level.trdatas[vdir].shape
+                dsz.append(tuple(shape[::-1]))
+        # dcsz = [(data.shape[2], data.shape[1], data.shape[0])]
+        print("dsz")
+        print(dsz)
+        self.dsz = dsz
+        ksz = []
+        for l in range(len(dsz)):
+            lksz = tuple(self.ke(dsz[l][i],dcsz[i]) for i in range(len(dcsz)))
+            ksz.append(lksz)
+        print("ksz")
+        print(ksz)
+        self.ksz = ksz
+        # aksz = tuple(self.ke(2048, acsz[0]), self.ke(2048, acsz[1]), 2*acsz[2])
+        aksz = tuple(tex3dsz[i]//acsz[i] for i in range(len(acsz)))
+        self.asz = tuple(aksz[i]*acsz[i] for i in range(len(acsz)))
+        print("asz", self.asz)
+
+        self.chunks = OrderedDict()
+
+        for k in range(aksz[2]):
+            for j in range(aksz[1]):
+                for i in range(aksz[0]):
+                    ak = (i,j,k)
+                    dk = (i,j,k)
+                    dl = -1
+                    chunk = Chunk(self, ak, dk, dl)
+                    key = self.key(dk, dl)
+                    self.chunks[key] = chunk
+
+        # allocate 3D texture 
+        tex3d = QOpenGLTexture(QOpenGLTexture.Target3D)
+        tex3d.setWrapMode(QOpenGLTexture.ClampToBorder)
+        tex3d.setAutoMipMapGenerationEnabled(False)
+        tex3d.setMagnificationFilter(QOpenGLTexture.Linear)
+        tex3d.setMinificationFilter(QOpenGLTexture.Linear)
+        # width, height, depth
+        tex3d.setSize(*self.asz)
+        # print("immutable", tex3d.hasFeature(QOpenGLTexture.ImmutableStorage))
+        # see https://stackoverflow.com/questions/23533749/difference-between-gl-r16-and-gl-r16ui
+        tex3d.setFormat(QOpenGLTexture.R16_UNorm)
+        tex3d.allocateStorage()
+        self.tex3d = tex3d
+
+    def key(self, dk, dl):
+        return (dl, dk[2], dk[1], dk[0])
+
+    def index(self, dk):
+        dksz = self.dksz
+        return (dk[2]*dksz[1] + dk[1])*dksz[0] + dk[0]
+
+    # Number of chunks (in 1D) given data size, chunk size.
+    # This gives the number of chunks needed to cover the
+    # entire data set; the last chunk may stretch beyond
+    # the end of the data.
+    def ke(self, e, ce):
+        ke = 1 + (e-1)//ce
+        return ke
+
+    def addBlocks(self, zoom_level, blocks):
+        for chunk in reversed(self.chunks.values()):
+            if chunk.in_use == False:
+                break
+            chunk.in_use = False
+        for block in blocks:
+            key = self.key(block, zoom_level)
+            chunk = self.chunks.get(key, None)
+            if chunk is None:
+                # chunk = self.chunks.pop()
+                # chunk = self.chunks[next(iter(self.chunks))]
+                # self.chunks.pop(self.key(chunk.dk, chunk.dl))
+                _, chunk = self.chunks.popitem(last=False)
+                chunk.setData(block, zoom_level)
+                print("set data", chunk.dk, chunk.dl)
+                self.chunks[key] = chunk
+            else:
+                self.chunks.move_to_end(key)
+            chunk.in_use = True
+            # moves it to the end
+            # self.chunks[key] = chunk
+
+        for key,chunk in reversed(self.chunks.items()):
+            # TODO: this doesn't seem efficient!
+            if not chunk.in_use:
+                break
+            print(chunk.dl, chunk.dk)
+            
+    def displayBlocks(self, zoom_level, blocks):
+        self.addBlocks(zoom_level, blocks)
 
