@@ -269,9 +269,16 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.buildSliceVao()
         self.data_fbo = None
         self.xyz_fbo = None
+        self.xyz_fbo_decimated = None
+
+    def setDefaultViewport(self):
+        f = self.gl
+        f.glViewport(0, 0, self.vp_width, self.vp_height)
     
     def resizeGL(self, width, height):
         f = self.gl
+        self.vp_width = width
+        self.vp_height = height
         # print("resizeGL (surface)", width, height)
         # f.glViewport(0, 0, width, height)
 
@@ -289,6 +296,20 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
 
+        self.xyz_decimation = 4
+        vp_size_decimated = QSize(width//self.xyz_decimation, height//self.xyz_decimation)
+        fbo_format = QOpenGLFramebufferObjectFormat()
+        fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
+        f = self.gl
+        # In Qt5, QFrameworkBufferObject.toImage() creates
+        # a uint8 QImage from a float32 fbo.
+        # fbo_format.setInternalTextureFormat(f.GL_RGB32F)
+        fbo_format.setInternalTextureFormat(f.GL_RGBA16)
+        self.xyz_fbo_decimated = QOpenGLFramebufferObject(vp_size_decimated, fbo_format)
+        self.xyz_fbo_decimated.bind()
+        draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
+        f.glDrawBuffers(len(draw_buffers), draw_buffers)
+
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
         f = self.gl
@@ -300,7 +321,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         QOpenGLFramebufferObject.bindDefault()
 
-        f.glViewport(0, 0, vp_size.width(), vp_size.height())
+        self.setDefaultViewport()
         
     def paintGL(self):
         self.checkAtlas()
@@ -360,8 +381,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         vao = fvao.getVao()
         vao.bind()
 
-        self.drawXyz()
-        timera.time("xyz")
+        # self.drawXyz(self.xyz_fbo)
+        # timera.time("xyz")
+        self.drawXyz(self.xyz_fbo_decimated)
+        timera.time("xyz 2")
         self.drawData()
         timera.time("data")
 
@@ -412,16 +435,46 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.slice_program.release()
         self.slice_vao.release()
         timera.time("combine")
-        self.getBlocks()
 
-    def getBlocks(self):
+        '''
+        zoom_level, larr = self.getBlocks(self.xyz_fbo)
+        zoom_level2, larr2 = self.getBlocks(self.xyz_fbo_decimated)
+        if zoom_level >= 0:
+            # print("xyz larr", zoom_level, len(larr))
+            # print("xyz 2 larr", zoom_level2, len(larr2))
+            # self.printBlocks(larr2)
+            lset = self.blocksToSet(larr)
+            lset2 = self.blocksToSet(larr2)
+            dset = lset.symmetric_difference(lset2)
+            # print("sym diff", dset)
+            if len(dset) > 0:
+                print(zoom_level, len(larr), len(larr2), dset)
+        '''
+
+        zoom_level, larr = self.getBlocks(self.xyz_fbo_decimated)
+        if zoom_level >= 0 and self.atlas is not None:
+            self.atlas.displayBlocks(zoom_level, larr)
+
+
+    def printBlocks(self, blocks):
+        for block in blocks:
+            print(block)
+
+    def blocksToSet(self, blocks):
+        bset = set()
+        for block in blocks:
+            bset.add(tuple(block))
+        return bset
+        
+
+    def getBlocks(self, fbo):
         timera = Utils.Timer()
         timera.active = False
         dw = self.gldw
         # volume_view = dw.volume_view
         f = self.gl
 
-        fbo = self.xyz_fbo
+        # fbo = self.xyz_fbo
         im = fbo.toImage(True)
         timera.time("get image")
         # print("im format", im.format())
@@ -449,39 +502,43 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         zoom_level = izoom
         nzarr = arr[arr[:,:,3] > 0][:,:3] // dv
 
-        if len(nzarr) > 0:
-            # print("nzarr", nzarr.shape, nzarr.dtype)
-            nzmin = nzarr.min(axis=0)
-            nzmax = nzarr.max(axis=0)
-            # print(nzmin, nzmax)
-            nzsarr = nzarr-nzmin
-            # print(nzsarr.min(axis=0), nzsarr.max(axis=0))
-            dvarr = np.zeros(nzmax-nzmin+1, dtype=np.uint32)[:,:,:,np.newaxis]
-            indices = np.indices(nzmax-nzmin+1).transpose(1,2,3,0)
-            # print(dvarr.shape, indices.shape)
-            dvarr = np.concatenate((dvarr, indices), axis=3)
-            # print(dvarr.shape)
-            # print("dvarr", dvarr.shape, nzsarr.shape)
-            # print((nzarr)[:5])
-            # print((nzsarr)[:5])
-            dvarr[nzsarr[:,0],nzsarr[:,1], nzsarr[:,2],0] = 1
-            # print("dvarr", dvarr.size, dvarr.sum())
-            larr = dvarr[dvarr[:,:,:,0] == 1][:,1:]+nzmin
-            # print("dvarr, larr", dvarr.shape, larr.shape)
-            # print(larr)
-            '''
-            if self.prev_zoom_level != zoom_level or self.prev_larr is None or len(self.prev_larr) != len(larr) or (self.prev_larr[:,:] != larr[:,:]).any():
-                print("change", zoom_level, len(larr))
-                self.prev_larr = larr
-                self.prev_zoom_level = zoom_level
-            '''
-            print("larr", zoom_level, len(larr))
-            if self.atlas is not None:
-                self.atlas.displayBlocks(zoom_level, larr)
+        if len(nzarr) == 0:
+            return -1, None
 
-            # nzu = np.unique(nzarr//128, axis=0)
-            # print(len(nzarr),len(nzu), nzu[0], nzu[-1])
-            timera.time("process image")
+        # print("nzarr", nzarr.shape, nzarr.dtype)
+        nzmin = nzarr.min(axis=0)
+        nzmax = nzarr.max(axis=0)
+        # print(nzmin, nzmax)
+        nzsarr = nzarr-nzmin
+        # print(nzsarr.min(axis=0), nzsarr.max(axis=0))
+        dvarr = np.zeros(nzmax-nzmin+1, dtype=np.uint32)[:,:,:,np.newaxis]
+        indices = np.indices(nzmax-nzmin+1).transpose(1,2,3,0)
+        # print(dvarr.shape, indices.shape)
+        dvarr = np.concatenate((dvarr, indices), axis=3)
+        # print(dvarr.shape)
+        # print("dvarr", dvarr.shape, nzsarr.shape)
+        # print((nzarr)[:5])
+        # print((nzsarr)[:5])
+        dvarr[nzsarr[:,0],nzsarr[:,1], nzsarr[:,2],0] = 1
+        # print("dvarr", dvarr.size, dvarr.sum())
+        larr = dvarr[dvarr[:,:,:,0] == 1][:,1:]+nzmin
+        # print("dvarr, larr", dvarr.shape, larr.shape)
+        # print(larr)
+        '''
+        if self.prev_zoom_level != zoom_level or self.prev_larr is None or len(self.prev_larr) != len(larr) or (self.prev_larr[:,:] != larr[:,:]).any():
+            print("change", zoom_level, len(larr))
+            self.prev_larr = larr
+            self.prev_zoom_level = zoom_level
+        '''
+        # print("larr", zoom_level, len(larr))
+        # if self.atlas is not None:
+        #     self.atlas.displayBlocks(zoom_level, larr)
+
+        # nzu = np.unique(nzarr//128, axis=0)
+        # print(len(nzarr),len(nzu), nzu[0], nzu[-1])
+        timera.time("process image")
+
+        return zoom_level, larr
 
         '''
         return
@@ -507,8 +564,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         cij = volume_view.stxytf
         # print("cij", cij)
         mat = np.zeros((4,4), dtype=np.float32)
-        ww = dw.size().width()
-        wh = dw.size().height()
+        # ww = dw.size().width()
+        # wh = dw.size().height()
         wf = zoom/(.5*ww)
         hf = zoom/(.5*wh)
         mat[0][0] = wf
@@ -590,17 +647,19 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         QOpenGLFramebufferObject.bindDefault()
 
-    def drawXyz(self):
+    def drawXyz(self, fbo):
         f = self.gl
         dw = self.gldw
         fvao = self.active_vao
 
-        self.xyz_fbo.bind()
+        # self.xyz_fbo.bind()
+        fbo.bind()
 
         # Be sure to clear with alpha = 0
         # so that the slice view isn't blocked!
         f.glClearColor(0.,0.,0.,0.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
+        f.glViewport(0, 0, fbo.width(), fbo.height())
 
         self.xyz_program.bind()
 
@@ -612,6 +671,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.xyz_program.release()
 
         QOpenGLFramebufferObject.bindDefault()
+        self.setDefaultViewport()
 
 
 # two attribute buffers: xyz, and stxy (st = scaled texture)
@@ -721,12 +781,16 @@ class FragmentMapVao:
         # e.accept()
 
 
+# The Chunk class is used by the Atlas class
+# see below) to keep track of data stored in
+# the 3D texture atlas.
+# Variable naming conventions:
 # d: data, a: atlas, c: chunk, pc: padded chunk
 # _: corner, k: key, l: level
 # _: coords, sz: size, e: single coord, r: rect
 #
 # coordinates are (x, y, z);
-# data value at (x, y, z) is data[z][y][x]
+# the data value at (x, y, z) is accessed by data[z][y][x]
 
 class Chunk:
     def __init__(self, atlas, ak, dk, dl):
@@ -861,6 +925,20 @@ class Chunk:
             # print(r)
             return r
 
+# Atlas implements a 3D texture atlas.  The 3D OpenGL texture
+# (the atlas) is subdivided into chunks; each atlas chunk stores
+# a scroll data chunk (conventionally 128^3 in size).  
+# NOTE that the data chunk size used in Atlas is NOT related
+# to the zarr chunk size, if any, that is used to store
+# the scroll data on disk.
+# Each atlas chunk # is padded (to prevent texture bleeding) so 
+# by default each atlas chunk is 130^ in size.
+# The Atlas class keeps track of which data chunk is stored in
+# whice atlas chunk.  As new data chunks are added, old data
+# chunks are removed as needed.
+# The chunks (with scroll data location and texture location)
+# are stored in an OrderedDict.  In-use chunks are kept at the
+# end of this dict.
 
 class Atlas:
     def __init__(self, volume_view, tex3dsz=(2048,2048,300), dcsz=(128,128,128)):
@@ -939,6 +1017,8 @@ class Atlas:
         ke = 1 + (e-1)//ce
         return ke
 
+    # Given a list of blocks, add the blocks that are
+    # not already in the atlas. 
     def addBlocks(self, zoom_level, blocks):
         for chunk in reversed(self.chunks.values()):
             if chunk.in_use == False:
@@ -947,25 +1027,30 @@ class Atlas:
         for block in blocks:
             key = self.key(block, zoom_level)
             chunk = self.chunks.get(key, None)
+            # If the data chunk is not currently stored in the atlas:
             if chunk is None:
                 # chunk = self.chunks.pop()
                 # chunk = self.chunks[next(iter(self.chunks))]
                 # self.chunks.pop(self.key(chunk.dk, chunk.dl))
+                # Get the first Chunk in the OrderedDict: 
                 _, chunk = self.chunks.popitem(last=False)
                 chunk.setData(block, zoom_level)
-                print("set data", chunk.dk, chunk.dl)
+                # print("set data", chunk.dk, chunk.dl)
                 self.chunks[key] = chunk
-            else:
+            else: # If the data is alread in the Atlas
+                # move the chunk to the end of the OrderedDict
                 self.chunks.move_to_end(key)
             chunk.in_use = True
-            # moves it to the end
-            # self.chunks[key] = chunk
 
+        cnt = 0
+        # To get all the active chunks, search backwards from
+        # the end
         for key,chunk in reversed(self.chunks.items()):
-            # TODO: this doesn't seem efficient!
             if not chunk.in_use:
                 break
-            print(chunk.dl, chunk.dk)
+            # print(chunk.dl, chunk.dk)
+            cnt += 1
+        # print(zoom_level, cnt, len(blocks))
             
     def displayBlocks(self, zoom_level, blocks):
         self.addBlocks(zoom_level, blocks)
