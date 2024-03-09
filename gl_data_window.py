@@ -1267,7 +1267,8 @@ class GLDataWindowChild(QOpenGLWidget):
     def onLogMessage(self, head, msg):
         print(head, "log:", msg.message())
 
-    def buildProgram(self, sdict):
+    @staticmethod
+    def buildProgram(sdict):
         edict = {
             "vertex": QOpenGLShader.Vertex,
             "fragment": QOpenGLShader.Fragment,

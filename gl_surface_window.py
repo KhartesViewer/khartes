@@ -250,10 +250,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # layout(location=4) in vec3 stxy;
         self.stxy_location = 4
         self.message_prefix = "sw"
-        # TODO: should set prev_larr to None
-        # whenever fragment shape changes
-        self.prev_larr = None
-        self.prev_zoom_level = None
+        # self.prev_larr = None
+        # self.prev_zoom_level = None
+        # Cache these so we can recalculate the atlas 
+        # whenever volume_view or volume_view.direction change
         self.volume_view =  None
         self.volume_view_direction = -1
         self.atlas = None
@@ -279,11 +279,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f = self.gl
         self.vp_width = width
         self.vp_height = height
-        # print("resizeGL (surface)", width, height)
-        # f.glViewport(0, 0, width, height)
-
-        # based on https://stackoverflow.com/questions/59338015/minimal-opengl-offscreen-rendering-using-qt
         vp_size = QSize(width, height)
+        # print("resizeGL (surface)", width, height)
+
+        '''
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
         f = self.gl
@@ -295,14 +294,25 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.xyz_fbo.bind()
         draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
+        '''
 
+        # fbo where xyz positions are drawn; this information is used
+        # to determine which data chunks to load.
+        # The fbo is decimated relative to the display window,
+        # in order to speed up some parts of this, which are done
+        # (at the moment) in the CPU rather than the GPU.
+        # based on https://stackoverflow.com/questions/59338015/minimal-opengl-offscreen-rendering-using-qt
         self.xyz_decimation = 4
         vp_size_decimated = QSize(width//self.xyz_decimation, height//self.xyz_decimation)
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
         f = self.gl
-        # In Qt5, QFrameworkBufferObject.toImage() creates
-        # a uint8 QImage from a float32 fbo.
+        # We would prefer to store the xyz information as floats.
+        # However, in Qt5, QFrameworkBufferObject.toImage() creates
+        # a uint8 QImage from a float32 fbo.  uint8 is too low
+        # a resolution for our purposes!
+        # The uint16 format can store xyz at a resolution of 1
+        # pixel, which is good enough for our purposes.
         # fbo_format.setInternalTextureFormat(f.GL_RGB32F)
         fbo_format.setInternalTextureFormat(f.GL_RGBA16)
         self.xyz_fbo_decimated = QOpenGLFramebufferObject(vp_size_decimated, fbo_format)
@@ -310,6 +320,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
 
+        # fbo where the data will be drawn
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
         f = self.gl
@@ -339,8 +350,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.xyz_program = self.buildProgram(xyz_code)
         self.slice_program = self.buildProgram(slice_code)
 
+    # Rebuild atlas if volume_view or volume_view.direction
+    # changes
     def checkAtlas(self):
-        # if self.volume_view is None or self.atlas is None or 
         dw = self.gldw
         if dw.volume_view is None:
             self.volume_view = None
@@ -436,24 +448,14 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.slice_vao.release()
         timera.time("combine")
 
-        '''
-        zoom_level, larr = self.getBlocks(self.xyz_fbo)
-        zoom_level2, larr2 = self.getBlocks(self.xyz_fbo_decimated)
-        if zoom_level >= 0:
-            # print("xyz larr", zoom_level, len(larr))
-            # print("xyz 2 larr", zoom_level2, len(larr2))
-            # self.printBlocks(larr2)
-            lset = self.blocksToSet(larr)
-            lset2 = self.blocksToSet(larr2)
-            dset = lset.symmetric_difference(lset2)
-            # print("sym diff", dset)
-            if len(dset) > 0:
-                print(zoom_level, len(larr), len(larr2), dset)
-        '''
-
+        # TODO: the texture atlas should be updated at the end (here),
+        # in order to avoid a round trip to the GPU.
+        # However, the scroll data should be drawn onto data_fbo
+        # further up, even though this means that the data will be
+        # drawn using a texture atlas that is out of date by one frame.
         zoom_level, larr = self.getBlocks(self.xyz_fbo_decimated)
         if zoom_level >= 0 and self.atlas is not None:
-            self.atlas.displayBlocks(zoom_level, larr)
+            self.atlas.addBlocks(zoom_level, larr)
 
 
     def printBlocks(self, blocks):
@@ -624,7 +626,15 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         QOpenGLFramebufferObject.bindDefault()
 
+    # TODO: drawData should call self.atlas.displayData
+    # with arguments data_fbo, fvao, stxy_xform.
+    # data_program should belong to self.atlas, not self.
     def drawData(self):
+        if self.atlas is None:
+            return
+        xform = self.stxyXform()
+        self.atlas.displayBlocks(self.gl, self.data_fbo, self.active_vao, xform)
+        '''
         f = self.gl
         dw = self.gldw
         fvao = self.active_vao
@@ -646,6 +656,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.data_program.release()
 
         QOpenGLFramebufferObject.bindDefault()
+        '''
 
     def drawXyz(self, fbo):
         f = self.gl
@@ -925,6 +936,91 @@ class Chunk:
             # print(r)
             return r
 
+atlas_data_code = {
+    "name": "atlas_data",
+
+    "vertex": '''
+      #version 410 core
+
+      uniform mat4 xform;
+      layout(location=3) in vec3 xyz;
+      layout(location=4) in vec2 stxy;
+      out vec3 fxyz;
+      void main() {
+        gl_Position = xform*vec4(stxy, 0., 1.);
+        fxyz = xyz;
+      }
+    ''',
+
+    "geometry": '''
+      #version 410 core
+      
+      layout(triangles) in;
+      layout(triangle_strip, max_vertices=3) out;
+      // out vec3 bary;
+      out vec2 bary2;
+
+      void main() {
+        for (int i=0; i<3; i++) {
+          // vec3 ob = vec3(0.,0.,0.);
+          vec3 ob = vec3(0.);
+          ob[i] = 1.;
+          vec4 pos = gl_in[i].gl_Position;
+          gl_Position = pos;
+          // bary = ob;
+          bary2 = vec2(ob[0],ob[1]);
+          EmitVertex();
+        }
+      }
+    ''',
+
+    "fragment": '''
+      #version 410 core
+
+      in vec3 fxyz;
+      // in vec3 bary;
+      in vec2 bary2;
+      uniform vec4 color;
+      // uniform vec3 xyzmin;
+      // uniform vec3 xyzmax;
+      // float dz = xyzmax.y - xyzmin.y;
+      // float dx = xyzmax.x - xyzmin.x;
+      out vec4 fColor;
+
+      void main() {
+        /*
+        vec4 cmin = vec4(0.,1.,0.,1.);
+        vec4 cmax = vec4(1.,0.,1.,1.);
+        float z = (fxyz.y-xyzmin.y)/dz;
+        z = floor(z*10)/10;
+
+        fColor = z*cmin + (1.-z)*cmax;
+        */
+        /*
+        float factor = 10;
+        float z = (fxyz.y-xyzmin.y)/dz;
+        z = floor(z*factor)/factor;
+        float x = (fxyz.x-xyzmin.x)/dx;
+        x = floor(x*factor)/factor;
+        fColor = vec4(.5+.5*x, .5+.5*z, .5, 1.);
+        */
+        vec3 bary = vec3(bary2, 1.-bary2[0]-bary2[1]);
+        if (
+          bary[0]<=0. || bary[0]>=1. ||
+          bary[1]<=0. || bary[1]>=1. ||
+          bary[2]<=0. || bary[2]>=1.) {
+            discard;
+        }
+        fColor = vec4(bary, 1.);
+        // fColor = vec4(1.,1.,1., 1.);
+
+
+        // fColor = color;
+        // fColor = vec4(0.,1.,0.,1.);
+      }
+    ''',
+}
+
 # Atlas implements a 3D texture atlas.  The 3D OpenGL texture
 # (the atlas) is subdivided into chunks; each atlas chunk stores
 # a scroll data chunk (conventionally 128^3 in size).  
@@ -988,6 +1084,7 @@ class Atlas:
                     key = self.key(dk, dl)
                     self.chunks[key] = chunk
 
+        self.program = GLDataWindowChild.buildProgram(atlas_data_code)
         # allocate 3D texture 
         tex3d = QOpenGLTexture(QOpenGLTexture.Target3D)
         tex3d.setWrapMode(QOpenGLTexture.ClampToBorder)
@@ -1052,6 +1149,29 @@ class Atlas:
             cnt += 1
         # print(zoom_level, cnt, len(blocks))
             
-    def displayBlocks(self, zoom_level, blocks):
-        self.addBlocks(zoom_level, blocks)
+    # TODO: displayBlocks should be a separate operation
+    # than addBlocks, because addBlocks needs to be called later
+    # than displayBlocks, to prevent GPU round trips
+    # TODO: displayBlocks should take the data_fbo as an argument
+    # self.atlas.displayBlocks(self.data_fbo, self.active_vao, xform)
+    def displayBlocks(self, gl, data_fbo, fvao, xform):
+        # self.addBlocks(zoom_level, blocks)
+        # dw = self.gldw
+
+        data_fbo.bind()
+
+        # Be sure to clear with alpha = 0
+        # so that the slice view isn't blocked!
+        gl.glClearColor(0.,0.,0.,0.)
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+
+        self.program.bind()
+
+        self.program.setUniformValue("xform", xform)
+
+        gl.glDrawElements(gl.GL_TRIANGLES, fvao.trgl_index_size,
+                       gl.GL_UNSIGNED_INT, None)
+        self.program.release()
+
+        QOpenGLFramebufferObject.bindDefault()
 
