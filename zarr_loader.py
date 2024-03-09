@@ -330,3 +330,4 @@ class ZarrLoader(QMainWindow):
         else:
             self.gobutton.setEnabled(False)
             self.gobutton.setDefault(False)
+        self.raise_()
