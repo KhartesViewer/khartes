@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+import traceback
 import numpy as np
 from volume import Volume
 from volume_zarr import CachedZarrVolume
@@ -308,6 +309,12 @@ class ZarrLoader(QMainWindow):
     
     def onCancelClicked(self, s):
         self.hide()
+
+    def hideEvent(self, e):
+        print("Hiding self; spontaneous:", e.spontaneous())
+        print("Traceback:")
+        traceback.print_stack()
+        print("End of traceback")
 
     def areValid(self):
         if not self.name_valid:
