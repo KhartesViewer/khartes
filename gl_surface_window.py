@@ -763,18 +763,24 @@ class Chunk:
         # print(dr, int_dr)
         # TODO: copy into atlas texture
         acsz = self.atlas.acsz
-        buf = np.zeros((acsz[2], acsz[1], acsz[0], 4), np.uint16)
+        # buf = np.zeros((acsz[2], acsz[1], acsz[0], 4), np.uint16)
+        buf = np.zeros((acsz[2], acsz[1], acsz[0]), np.uint16)
         c0 = skip0
         c1 = tuple(acsz[i]-skip1[i] for i in range(len(acsz)))
         data = self.atlas.datas[dl]
-        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], :3] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]][:,:,:,np.newaxis]
+
+        self.atlas.volume_view.volume.setImmediateDataMode(True)
+        # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], :3] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]][:,:,:,np.newaxis]
+        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+        self.atlas.volume_view.volume.setImmediateDataMode(False)
         # TODO: for testing:
         # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], :3] = 32000
-        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], 3] = 65535
+        # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], 3] = 65535
         # print("buf", buf.min(), buf.max())
         a = self.ar[0]
         # print(a, acsz)
-        self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.RGBA, QOpenGLTexture.UInt16, buf.tobytes())
+        # self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.RGBA, QOpenGLTexture.UInt16, buf.tobytes())
+        self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, buf.tobytes())
 
         asz = self.atlas.asz
 
@@ -879,6 +885,8 @@ atlas_data_code = {
              fxyz.z >= tmin.z && fxyz.z <= tmax.z) {{
               vec3 txyz = (xforms[id]*fxyz).xyz;
               fColor = texture(atlas, txyz);
+              fColor.g = fColor.r;
+              fColor.b = fColor.r;
               fColor.a = 1.;
             }}
         }}
@@ -979,8 +987,8 @@ class Atlas:
         # width, height, depth
         tex3d.setSize(*self.asz)
         # see https://stackoverflow.com/questions/23533749/difference-between-gl-r16-and-gl-r16ui
-        # tex3d.setFormat(QOpenGLTexture.R16_UNorm)
-        tex3d.setFormat(QOpenGLTexture.RGBA16_UNorm)
+        tex3d.setFormat(QOpenGLTexture.R16_UNorm)
+        # tex3d.setFormat(QOpenGLTexture.RGBA16_UNorm)
         tex3d.allocateStorage()
         self.tex3d = tex3d
         aunit = 4
