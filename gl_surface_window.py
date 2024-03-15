@@ -96,7 +96,6 @@ slice_code = {
       uniform sampler2D underlay_sampler;
       uniform sampler2D overlay_sampler;
       uniform sampler2D fragments_sampler;
-      // uniform float frag_opacity = 1.;
       in vec2 ftxt;
       out vec4 fColor;
 
@@ -104,18 +103,10 @@ slice_code = {
       {
         float alpha;
         fColor = texture(base_sampler, ftxt);
-        // fColor = .1*fColor + .9*vec4(.5,.5,1.,1.);
 
         vec4 uColor = texture(underlay_sampler, ftxt);
         alpha = uColor.a;
         fColor = (1.-alpha)*fColor + alpha*uColor;
-
-        /*
-        vec4 frColor = texture(fragments_sampler, ftxt);
-        // alpha = frag_opacity*frColor.a;
-        alpha = frColor.a;
-        fColor = (1.-alpha)*fColor + alpha*frColor;
-        */
 
         vec4 oColor = texture(overlay_sampler, ftxt);
         alpha = oColor.a;
@@ -145,17 +136,14 @@ data_code = {
       
       layout(triangles) in;
       layout(triangle_strip, max_vertices=3) out;
-      // out vec3 bary;
       out vec2 bary2;
 
       void main() {
         for (int i=0; i<3; i++) {
-          // vec3 ob = vec3(0.,0.,0.);
           vec3 ob = vec3(0.);
           ob[i] = 1.;
           vec4 pos = gl_in[i].gl_Position;
           gl_Position = pos;
-          // bary = ob;
           bary2 = vec2(ob[0],ob[1]);
           EmitVertex();
         }
@@ -166,32 +154,11 @@ data_code = {
       #version 410 core
 
       in vec3 fxyz;
-      // in vec3 bary;
       in vec2 bary2;
       uniform vec4 color;
-      // uniform vec3 xyzmin;
-      // uniform vec3 xyzmax;
-      // float dz = xyzmax.y - xyzmin.y;
-      // float dx = xyzmax.x - xyzmin.x;
       out vec4 fColor;
 
       void main() {
-        /*
-        vec4 cmin = vec4(0.,1.,0.,1.);
-        vec4 cmax = vec4(1.,0.,1.,1.);
-        float z = (fxyz.y-xyzmin.y)/dz;
-        z = floor(z*10)/10;
-
-        fColor = z*cmin + (1.-z)*cmax;
-        */
-        /*
-        float factor = 10;
-        float z = (fxyz.y-xyzmin.y)/dz;
-        z = floor(z*factor)/factor;
-        float x = (fxyz.x-xyzmin.x)/dx;
-        x = floor(x*factor)/factor;
-        fColor = vec4(.5+.5*x, .5+.5*z, .5, 1.);
-        */
         vec3 bary = vec3(bary2, 1.-bary2[0]-bary2[1]);
         if (
           bary[0]<=0. || bary[0]>=1. ||
@@ -200,11 +167,6 @@ data_code = {
             discard;
         }
         fColor = vec4(bary, 1.);
-        // fColor = vec4(1.,1.,1., 1.);
-
-
-        // fColor = color;
-        // fColor = vec4(0.,1.,0.,1.);
       }
     ''',
 }
@@ -282,20 +244,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.vp_height = height
         vp_size = QSize(width, height)
         # print("resizeGL (surface)", width, height)
-
-        '''
-        fbo_format = QOpenGLFramebufferObjectFormat()
-        fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
-        f = self.gl
-        # In Qt5, QFrameworkBufferObject.toImage() creates
-        # a uint8 QImage from a float32 fbo.
-        # fbo_format.setInternalTextureFormat(f.GL_RGB32F)
-        fbo_format.setInternalTextureFormat(f.GL_RGBA16)
-        self.xyz_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
-        self.xyz_fbo.bind()
-        draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
-        f.glDrawBuffers(len(draw_buffers), draw_buffers)
-        '''
 
         # fbo where xyz positions are drawn; this information is used
         # to determine which data chunks to load.
@@ -395,7 +343,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         vao = fvao.getVao()
         vao.bind()
 
-        # self.drawXyz(self.xyz_fbo)
         # timera.time("xyz")
         self.drawXyz(self.xyz_fbo_decimated)
         timera.time("xyz 2")
@@ -450,9 +397,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.slice_vao.release()
         timera.time("combine")
 
-        # TODO: the texture atlas should be updated at the end (here),
+        # The texture atlas is updated at the end (here),
         # in order to avoid a round trip to the GPU.
-        # However, the scroll data should be drawn onto data_fbo
+        # However, the scroll data is drawn onto data_fbo
         # further up, even though this means that the data will be
         # drawn using a texture atlas that is out of date by one frame.
         zoom_level, larr = self.getBlocks(self.xyz_fbo_decimated)
@@ -476,10 +423,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         timera = Utils.Timer()
         timera.active = False
         dw = self.gldw
-        # volume_view = dw.volume_view
         f = self.gl
 
-        # fbo = self.xyz_fbo
         im = fbo.toImage(True)
         timera.time("get image")
         # print("im format", im.format())
@@ -499,7 +444,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                 break
             iscale *= 2
 
-        # 1/zoom, scale
+        # 1/zoom, scale (assuming fuzz = 1.0)
         # 0. - 2. 1
         # 2. - 4. 2
         # 4. - 8. 4
@@ -532,34 +477,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         larr = dvarr[dvarr[:,:,:,0] == 1][:,1:]+nzmin
         # print("dvarr, larr", dvarr.shape, larr.shape)
         # print(larr)
-        '''
-        if self.prev_zoom_level != zoom_level or self.prev_larr is None or len(self.prev_larr) != len(larr) or (self.prev_larr[:,:] != larr[:,:]).any():
-            print("change", zoom_level, len(larr))
-            self.prev_larr = larr
-            self.prev_zoom_level = zoom_level
-        '''
         # print("larr", zoom_level, len(larr))
-        # if self.atlas is not None:
-        #     self.atlas.displayBlocks(zoom_level, larr)
 
-        # nzu = np.unique(nzarr//128, axis=0)
-        # print(len(nzarr),len(nzu), nzu[0], nzu[-1])
         timera.time("process image")
 
         return zoom_level, larr
-
-        '''
-        return
-        iptr = f.glReadPixels(0, 0, fbo.width(), fbo.height(), f.GL_RGBA, f.GL_FLOAT)
-        # print("iptr", len(iptr), w, h, w*h*4)
-        arr = np.array(iptr)
-        arr.resize(h, w, 4)
-        # print(arr.shape, arr.dtype)
-        print(arr[0,0])
-        print(arr[200,200])
-        # iptr.setSize(w*h*4*4)
-        # arr = np.frombuffer(iptr, dtype=np.float32)
-        '''
 
     def stxyXform(self):
         dw = self.gldw
@@ -572,8 +494,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         cij = volume_view.stxytf
         # print("cij", cij)
         mat = np.zeros((4,4), dtype=np.float32)
-        # ww = dw.size().width()
-        # wh = dw.size().height()
         wf = zoom/(.5*ww)
         hf = zoom/(.5*wh)
         mat[0][0] = wf
@@ -611,19 +531,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                     mfv, self.xyz_location, self.stxy_location, self.gl)
 
         fvao = self.active_vao
-        '''
-        qcolor = mfv.fragment.color
-        rgba = list(qcolor.getRgbF())
-        rgba[3] = 1.
-        self.trgl_program.setUniformValue("color", *rgba)
-        # self.trgl_program.setUniformValue("xyzmin", *mfv.xyzmin)
-        # self.trgl_program.setUniformValue("xyzmax", *mfv.xyzmax)
-        '''
 
         vao = fvao.getVao()
         vao.bind()
 
-        # f.glPolygonMode(f.GL_FRONT_AND_BACK, f.GL_LINE)
         f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
                        f.GL_UNSIGNED_INT, None)
         vao.release()
@@ -639,36 +550,12 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             return
         stxy_xform = self.stxyXform()
         self.atlas.displayBlocks(self.data_fbo, self.active_vao, stxy_xform)
-        '''
-        f = self.gl
-        dw = self.gldw
-        fvao = self.active_vao
-
-        self.data_fbo.bind()
-
-        # Be sure to clear with alpha = 0
-        # so that the slice view isn't blocked!
-        f.glClearColor(0.,0.,0.,0.)
-        f.glClear(f.GL_COLOR_BUFFER_BIT)
-
-        self.data_program.bind()
-
-        xform = self.stxyXform()
-        self.data_program.setUniformValue("xform", xform)
-
-        f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
-                       f.GL_UNSIGNED_INT, None)
-        self.data_program.release()
-
-        QOpenGLFramebufferObject.bindDefault()
-        '''
 
     def drawXyz(self, fbo):
         f = self.gl
         dw = self.gldw
         fvao = self.active_vao
 
-        # self.xyz_fbo.bind()
         fbo.bind()
 
         # Be sure to clear with alpha = 0
@@ -887,35 +774,15 @@ class Chunk:
         # print("buf", buf.min(), buf.max())
         a = self.ar[0]
         # print(a, acsz)
-        # self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], 0, 0, QOpenGLTexture.RGBA, QOpenGLTexture.UInt16, buf.tobytes())
-        # self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], 0, 0, QOpenGLTexture.RGBA, QOpenGLTexture.UInt16, buf)
         self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.RGBA, QOpenGLTexture.UInt16, buf.tobytes())
-
-
-
-        '''
-        atlas.atlas_data[
-                (ar[0][1]+skip0[1]):(ar[1][1]-skip1[1]), 
-                (ar[0][0]+skip0[0]):(ar[1][0]-skip1[0])
-                ] = atlas.data[
-                        (int_dr[0][1]):int_dr[1][1], 
-                        (int_dr[0][0]):int_dr[1][0]
-                        ]
-        '''
 
         asz = self.atlas.asz
 
         xform = QMatrix4x4()
-        '''
-        xform.scale(*tuple(1./asz[i] for i in range(len(asz))))
-        xform.translate(*tuple(self.ar[0][i]+self.pad-dr[0][i] for i in range(len(self.ar))))
-        xform.scale(*tuple(dsz[i] for i in range(len(dsz))))
-        '''
         xform.scale(*(1./asz[i] for i in range(len(asz))))
         xform.translate(*(self.ar[0][i]+self.pad-dr[0][i] for i in range(len(self.ar[0]))))
         xform.scale(*(dsz[i] for i in range(len(dsz))))
         self.xform = xform
-        # self.xform,success = xform.inverted()
         # print("dsz", dsz)
         # print("xform", self.xform)
 
@@ -925,9 +792,6 @@ class Chunk:
         # print("xtmin", self.xform*QVector4D(*self.tmin, 1.))
         # print("xtmax", self.xform*QVector4D(*self.tmax, 1.))
 
-        # print(QVector3D(*self.tmin), QVector3D(*self.tmax))
-        # self.tmin = (0.01, 0.)
-        # self.tmax = (1., 1.)
         # if ak[0] == 0 and ak[1] == 0:
         #     print("tm", self.tmin, self.tmax)
         self.atlas.program.bind()
@@ -946,8 +810,6 @@ class Chunk:
 
     @staticmethod
     def k2r(k, csz):
-        # c = (k[0]*csz[0], k[1]*csz[1])
-        # r = (c, (c[0]+csz[0], c[1]+csz[1]))
         c = tuple(k[i]*csz[i] for i in range(len(k)))
         r = (c, tuple(c[i]+csz[i] for i in range(len(c))))
         return r
@@ -955,8 +817,6 @@ class Chunk:
     # padded rectangle
     @staticmethod
     def padRect(rect, pad):
-        # return ((rect[0][0]-pad, rect[0][1]-pad), 
-        #    (rect[1][0]+pad, rect[1][1]+pad))
         r = (tuple(rect[0][i]-pad for i in range(len(rect[0]))),
              tuple(rect[1][i]+pad for i in range(len(rect[1]))))
         return r
@@ -964,8 +824,6 @@ class Chunk:
     # adapted from https://stackoverflow.com/questions/25068538/intersection-and-difference-of-two-rectangles/25068722#25068722
     @staticmethod
     def rectIntersection(ra, rb):
-        # if not Utils.rectIsValid(ra) or not Utils.rectIsValid(rb):
-        #     return Utils.emptyRect()
         (ax1, ay1, az1), (ax2, ay2, az2) = ra
         (bx1, by1, bz1), (bx2, by2, bz2) = rb
         # print(ra, rb)
@@ -994,127 +852,9 @@ atlas_data_code = {
       void main() {
         gl_Position = stxy_xform*vec4(stxy, 0., 1.);
         fxyz = xyz_xform*vec4(xyz, 1.);
-        // fxyz = vec4(xyz, 1.);
       }
     ''',
 
-    "geometry_old": '''
-      #version 410 core
-      
-      layout(triangles) in;
-      layout(triangle_strip, max_vertices=3) out;
-      // out vec3 bary;
-      out vec2 bary2;
-
-      void main() {
-        for (int i=0; i<3; i++) {
-          // vec3 ob = vec3(0.,0.,0.);
-          vec3 ob = vec3(0.);
-          ob[i] = 1.;
-          vec4 pos = gl_in[i].gl_Position;
-          gl_Position = pos;
-          // bary = ob;
-          bary2 = vec2(ob[0],ob[1]);
-          EmitVertex();
-        }
-      }
-    ''',
-
-    "fragment_old": '''
-      #version 410 core
-
-      in vec3 fxyz;
-      // in vec3 bary;
-      in vec2 bary2;
-      uniform vec4 color;
-      // uniform vec3 xyzmin;
-      // uniform vec3 xyzmax;
-      // float dz = xyzmax.y - xyzmin.y;
-      // float dx = xyzmax.x - xyzmin.x;
-      out vec4 fColor;
-
-      void main() {
-        /*
-        vec4 cmin = vec4(0.,1.,0.,1.);
-        vec4 cmax = vec4(1.,0.,1.,1.);
-        float z = (fxyz.y-xyzmin.y)/dz;
-        z = floor(z*10)/10;
-
-        fColor = z*cmin + (1.-z)*cmax;
-        */
-        /*
-        float factor = 10;
-        float z = (fxyz.y-xyzmin.y)/dz;
-        z = floor(z*factor)/factor;
-        float x = (fxyz.x-xyzmin.x)/dx;
-        x = floor(x*factor)/factor;
-        fColor = vec4(.5+.5*x, .5+.5*z, .5, 1.);
-        */
-        vec3 bary = vec3(bary2, 1.-bary2[0]-bary2[1]);
-        if (
-          bary[0]<=0. || bary[0]>=1. ||
-          bary[1]<=0. || bary[1]>=1. ||
-          bary[2]<=0. || bary[2]>=1.) {
-            discard;
-        }
-        fColor = vec4(bary, 1.);
-        // fColor = vec4(1.,1.,1., 1.);
-
-
-        // fColor = color;
-        // fColor = vec4(0.,1.,0.,1.);
-      }
-    ''',
-
-    "fragment_old2": '''
-      #version 410 core
-
-      in vec4 fxyz;
-      // vec3 xyzmin=vec3(0,0,0);
-      // vec3 xyzmax=vec3(15000,15000,15000);
-      // float dx = xyzmax.x - xyzmin.x;
-      // float dz = xyzmax.y - xyzmin.y;
-      out vec4 fColor;
-
-      void main() {
-        vec4 cmin = vec4(0.,1.,0.,1.);
-        vec4 cmax = vec4(1.,0.,1.,1.);
-        // float z = (fxyz.y-xyzmin.y)/dz;
-        // z = floor(z*100)/100;
-        float z = fxyz.y;
-        // z = floor(z*10)/10;
-        z = floor(int(z*100)%10)/10;
-        float x = fxyz.x;
-        // x = floor(x*10)/10;
-        x = floor(int(x*100)%10)/10;
-
-        // fColor = z*cmin + (1.-z)*cmax;
-        fColor = vec4(.5+.5*x, .5+.5*z, .5, 1.);
-        /*
-        float factor = 10;
-        float z = (fxyz.y-xyzmin.y)/dz;
-        z = floor(z*factor)/factor;
-        float x = (fxyz.x-xyzmin.x)/dx;
-        x = floor(x*factor)/factor;
-        fColor = vec4(.5+.5*x, .5+.5*z, .5, 1.);
-        */
-        /*
-        vec3 bary = vec3(bary2, 1.-bary2[0]-bary2[1]);
-        if (
-          bary[0]<=0. || bary[0]>=1. ||
-          bary[1]<=0. || bary[1]>=1. ||
-          bary[2]<=0. || bary[2]>=1.) {
-            discard;
-        }
-        fColor = vec4(bary, 1.);
-        // fColor = vec4(1.,1.,1., 1.);
-
-
-        // fColor = color;
-        // fColor = vec4(0.,1.,0.,1.);
-        */
-      }
-    ''',
     "fragment_template": '''
       #version 410 core
 
@@ -1122,20 +862,6 @@ atlas_data_code = {
       uniform mat4 xforms[{max_nchunks}];
       uniform vec3 tmins[{max_nchunks}];
       uniform vec3 tmaxs[{max_nchunks}];
-      /*
-      uniform Chunks {{
-        mat4 xforms[{max_nchunks}];
-        vec3 tmins[{max_nchunks}];
-        vec3 tmaxs[{max_nchunks}];
-      }};
-      */
-      /*
-      uniform Chunks {{
-        mat4 xform;
-        vec3 tmin;
-        vec3 tmax;
-      }} chunks[{max_nchunks}];
-      */
       uniform int chart_ids[{max_nchunks}];
       uniform int ncharts;
 
@@ -1143,32 +869,17 @@ atlas_data_code = {
       out vec4 fColor;
 
       void main() {{
-        /*
-        float z = fxyz.y;
-        z = floor(int(z*100)%10)/10;
-        float x = fxyz.x;
-        x = floor(int(x*100)%10)/10;
-        fColor = vec4(.5+.5*x, .5+.5*z, .5, 1.);
-        */
         fColor = vec4(.5,0.,.5,1.);
         for (int i=0; i<ncharts; i++) {{
             int id = chart_ids[i];
             vec3 tmin = tmins[id];
             vec3 tmax = tmaxs[id];
-            // vec3 tmin = chunks[id].tmin;
-            // vec3 tmax = chunks[id].tmax;
             if (fxyz.x >= tmin.x && fxyz.x <= tmax.x &&
              fxyz.y >= tmin.y && fxyz.y <= tmax.y &&
              fxyz.z >= tmin.z && fxyz.z <= tmax.z) {{
-              // mat4 xform = chunks[id].xform;
-              // vec3 txyz = (xform*fxyz).xyz;
               vec3 txyz = (xforms[id]*fxyz).xyz;
               fColor = texture(atlas, txyz);
-              // fColor.rgb = txyz;
               fColor.a = 1.;
-              // fColor = vec4(txyz, 1.);
-              // fColor = vec4(float(id%2),float(id%4)/3.,float(id)/7., 1.);
-              // fColor = vec4(float(id)/float(ncharts),0.,0., 1.);
             }}
         }}
 
@@ -1204,20 +915,15 @@ class Atlas:
         vol = volume_view.volume
         vdir = volume_view.direction
         is_zarr = vol.is_zarr
-        # data size
+
         datas = []
         if not is_zarr:
             data = vol.trdatas[vdir]
-            # shape = data.shape
-            # dsz.append(tuple(shape[::-1]))
             datas.append(data)
         else:
             for level in vol.levels:
                 data = level.trdatas[vdir]
-                # shape = data.shape
-                # dsz.append(tuple(shape[::-1]))
                 datas.append(data)
-        # dcsz = [(data.shape[2], data.shape[1], data.shape[0])]
         dsz = []
         for data in datas:
             shape = data.shape
@@ -1234,7 +940,6 @@ class Atlas:
         # print("ksz")
         # print(ksz)
         self.ksz = ksz
-        # aksz = tuple(self.ke(2048, acsz[0]), self.ke(2048, acsz[1]), 2*acsz[2])
         # number of atlas chunks in each direction
         aksz = tuple(tex3dsz[i]//acsz[i] for i in range(len(acsz)))
         # size of atlas in each direction
@@ -1264,9 +969,6 @@ class Atlas:
         self.program.setUniformValue("xyz_xform", xyz_xform)
         pid = self.program.programId()
         print("program id", pid)
-        # ubi = gl.glGetUniformBlockIndex(pid, "Chunks")
-        # ubi = gl.glGetUniformLocation(pid, "Chunks")
-        # print("ubi", ubi)
 
         # allocate 3D texture 
         tex3d = QOpenGLTexture(QOpenGLTexture.Target3D)
@@ -1276,7 +978,6 @@ class Atlas:
         tex3d.setMinificationFilter(QOpenGLTexture.Linear)
         # width, height, depth
         tex3d.setSize(*self.asz)
-        # print("immutable", tex3d.hasFeature(QOpenGLTexture.ImmutableStorage))
         # see https://stackoverflow.com/questions/23533749/difference-between-gl-r16-and-gl-r16ui
         # tex3d.setFormat(QOpenGLTexture.R16_UNorm)
         tex3d.setFormat(QOpenGLTexture.RGBA16_UNorm)
@@ -1329,15 +1030,12 @@ class Atlas:
             chunk = self.chunks.get(key, None)
             # If the data chunk is not currently stored in the atlas:
             if chunk is None:
-                # chunk = self.chunks.pop()
-                # chunk = self.chunks[next(iter(self.chunks))]
-                # self.chunks.pop(self.key(chunk.dk, chunk.dl))
                 # Get the first Chunk in the OrderedDict: 
                 _, chunk = self.chunks.popitem(last=False)
                 chunk.setData(block, zoom_level)
                 # print("set data", chunk.dk, chunk.dl)
                 self.chunks[key] = chunk
-            else: # If the data is alread in the Atlas
+            else: # If the data is already in the Atlas
                 # move the chunk to the end of the OrderedDict
                 self.chunks.move_to_end(key)
             chunk.in_use = True
@@ -1352,11 +1050,9 @@ class Atlas:
             cnt += 1
         # print(zoom_level, cnt, len(blocks))
             
-    # TODO: displayBlocks should be a separate operation
+    # displayBlocks is in a separate operation
     # than addBlocks, because addBlocks needs to be called later
     # than displayBlocks, to prevent GPU round trips
-    # TODO: displayBlocks should take the data_fbo as an argument
-    # self.atlas.displayBlocks(self.data_fbo, self.active_vao, xform)
     def displayBlocks(self, data_fbo, fvao, stxy_xform):
         # self.addBlocks(zoom_level, blocks)
         # dw = self.gldw
