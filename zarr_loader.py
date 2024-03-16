@@ -123,12 +123,12 @@ class ZarrLoader(QMainWindow):
         # doesn't end in .zarr, if it contains certain dot files.
         if sdir.endswith(".zarr"):
             dialog.zarr_directory = sdir
-            #dialog.done(1)
+            dialog.done(1)
 
         # if not, then see if directory contains TIFF files:
         # if sdir has no sub-directories
         # and sdir has .tif files,
-        # call #dialog.done(1)
+        # call dialog.done(1)
         # else return None
         pdir = Path(sdir)
         # note that the following globs are enclosed in list()
@@ -142,7 +142,7 @@ class ZarrLoader(QMainWindow):
         if len(dirs) == 0 and len(tifs) > 0:
             # print("match", sdir)
             dialog.zarr_directory = sdir
-            #dialog.done(1)
+            dialog.done(1)
         return None
 
     def onDirButtonClicked(self, s):
