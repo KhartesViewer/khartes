@@ -284,7 +284,7 @@ class TiffLoader(QMainWindow):
         # print("directory entered", sdir)
         # if sdir has no sub-directories
         # and sdir has .tif files,
-        # call dialog.done(1)
+        # call #dialog.done(1)
         # else return None
         pdir = Path(sdir)
         # note that the following globs are enclosed in list()
@@ -298,7 +298,7 @@ class TiffLoader(QMainWindow):
         if len(dirs) == 0 and len(tifs) > 0:
             # print("match", sdir)
             dialog.khartes_directory = sdir
-            dialog.done(1)
+            #dialog.done(1)
         
     def onNameEdited(self, txt):
         vol_names = set(v.name for v in self.main_window.project_view.volumes.keys())

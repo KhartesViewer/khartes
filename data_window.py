@@ -1253,17 +1253,30 @@ class DataWindow(QLabel):
         y0 = wh - 10
         color = (65535,65535,65535,65535)
         text = "%g mm" % value
+        text_scale = .8
+        text_font = cv2.FONT_HERSHEY_PLAIN
+        text_thickness = 1
+        text_size, text_baseline = cv2.getTextSize(text, text_font, text_scale, text_thickness)
+        text_half_width = text_size[0]/2
 
         # calculate how many scale bars will fit into the width
-        num_bars = ww // length
+        num_bars = round(ww/length)
 
-        for i in range(1,num_bars-1):
-            x0 = i * length  # start of the current scale bar
-            cv2.line(outrgbx, (x0, y0), (x0+length, y0), color, 1)
-            cv2.line(outrgbx, (x0,y0-2), (x0, y0+2), color, 1)
-            cv2.line(outrgbx, (x0+length,y0-2), (x0+length, y0+2), color, 1)
-            if i == 1:
-                cv2.putText(outrgbx, text, (x0, y0-10), cv2.FONT_HERSHEY_PLAIN, .8, color)
+        x0 = round(length)
+        x0p1 = round(2*length)
+        # -6: height of major tick mark.  +3: slightly lower than major/minor tick mark
+        cv2.line(outrgbx, (x0,y0-6), (x0, y0+3), color, 1)
+        # -3: slightly higher than height of minor tick mark.  +3: see above
+        cv2.line(outrgbx, (x0p1,y0-3), (x0p1, y0+3), color, 1)
+        cv2.line(outrgbx, (x0, y0), (x0p1, y0), color, 1)
+        cv2.putText(outrgbx, text, (x0+round(length/2-text_half_width), y0-10), text_font, text_scale, color, text_thickness)
+
+        for i in range(2,num_bars):
+            x0 = round(i * length)  # location of the current tick mark
+            if i%5 == 1: # major tick mark
+                cv2.line(outrgbx, (x0,y0-6), (x0, y0+2), color, 1)
+            else: # minor tick mark
+                cv2.line(outrgbx, (x0,y0-2), (x0, y0+2), color, 1)                
 
                 
     def innerResetText(self, text, ptsize):

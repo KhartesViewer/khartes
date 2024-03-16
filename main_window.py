@@ -1811,9 +1811,9 @@ class MainWindow(QMainWindow):
         # print("directory entered", sdir)
         if sdir.endswith(".khprj"):
             # print("match!")
-            # dialog.done(sdir)
+            # #dialog.done(sdir)
             dialog.khartes_directory = sdir
-            dialog.done(1)
+            #dialog.done(1)
 
     # override
     def closeEvent(self, e):
