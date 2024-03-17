@@ -171,6 +171,36 @@ data_code = {
     ''',
 }
 
+trgl_id_code = {
+    "name": "trgl_id",
+
+    "vertex": '''
+      #version 410 core
+
+      uniform mat4 xform;
+      // layout(location=3) in vec3 xyz;
+      layout(location=4) in vec2 stxy;
+      // in vec2 stxy;
+      // out vec3 fxyz;
+      void main() {
+        gl_Position = xform*vec4(stxy, 0., 1.);
+        // fxyz = xyz;
+      }
+    ''',
+
+    "fragment": '''
+      #version 410 core
+
+      out vec4 fColor;
+
+      void main() {
+        uint lsid = gl_PrimitiveID & 0xffff;
+        uint msid = (gl_PrimitiveID>>16) & 0xffff;
+        fColor = vec4(float(msid)/65535., float(lsid)/65535., 0., 1.);
+      }
+    ''',
+}
+
 xyz_code = {
     "name": "xyz",
 
@@ -231,8 +261,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.buildPrograms()
         self.buildSliceVao()
         self.data_fbo = None
-        self.xyz_fbo = None
+        # self.xyz_fbo = None
+        self.trgl_id_fbo = None
         self.xyz_fbo_decimated = None
+        self.trgl_ids = None
 
     def setDefaultViewport(self):
         f = self.gl
@@ -251,12 +283,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # in order to speed up some parts of this, which are done
         # (at the moment) in the CPU rather than the GPU.
         # based on https://stackoverflow.com/questions/59338015/minimal-opengl-offscreen-rendering-using-qt
-        self.xyz_decimation = 4
-        # self.xyz_decimation = 1
+        # self.xyz_decimation = 4
+        self.xyz_decimation = 1
         vp_size_decimated = QSize(width//self.xyz_decimation, height//self.xyz_decimation)
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
-        f = self.gl
         # We would prefer to store the xyz information as floats.
         # However, in Qt5, QFrameworkBufferObject.toImage() creates
         # a uint8 QImage from a float32 fbo.  uint8 is too low
@@ -270,10 +301,18 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
 
+        # fbo where the trgl_id's will be drawn
+        fbo_format = QOpenGLFramebufferObjectFormat()
+        fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
+        fbo_format.setInternalTextureFormat(f.GL_RGBA16)
+        self.trgl_id_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
+        self.trgl_id_fbo.bind()
+        draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
+        f.glDrawBuffers(len(draw_buffers), draw_buffers)
+
         # fbo where the data will be drawn
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
-        f = self.gl
         fbo_format.setInternalTextureFormat(f.GL_RGBA16)
         self.data_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.data_fbo.bind()
@@ -296,8 +335,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.paintSlice()
 
     def buildPrograms(self):
-        self.data_program = self.buildProgram(data_code)
+        # self.data_program = self.buildProgram(data_code)
         self.xyz_program = self.buildProgram(xyz_code)
+        self.trgl_id_program = self.buildProgram(trgl_id_code)
         self.slice_program = self.buildProgram(slice_code)
 
     # Rebuild atlas if volume_view or volume_view.direction
@@ -317,6 +357,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
     def paintSlice(self):
         timera = Utils.Timer()
         timera.active = False
+        timerb = Utils.Timer()
+        # timerb.active = False
         dw = self.gldw
         volume_view = self.volume_view
         f = self.gl
@@ -344,8 +386,25 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         vao.bind()
 
         # timera.time("xyz")
-        self.drawXyz(self.xyz_fbo_decimated)
+        # self.drawXyz(self.xyz_fbo_decimated)
+        self.drawTrgls(self.xyz_fbo_decimated, self.xyz_program)
         timera.time("xyz 2")
+
+        ''''''
+        zoom_level, larr, self.xyz_arr = self.getBlocks(self.xyz_fbo_decimated)
+        if zoom_level >= 0 and self.atlas is not None:
+            if len(larr) >= self.atlas.max_nchunks-1:
+                larr = larr[:self.atlas.max_nchunks-1]
+            self.atlas.addBlocks(zoom_level, larr)
+        ''''''
+
+        '''
+        self.drawTrgls(self.trgl_id_fbo, self.trgl_id_program)
+        timera.time("trgl ids")
+        self.trgl_ids = self.getTrglIds(self.trgl_id_fbo)
+        # print(self.trgl_ids.shape, self.trgl_ids.min(), self.trgl_ids.max())
+        '''
+
         self.drawData()
         timera.time("data")
 
@@ -402,11 +461,14 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # However, the scroll data is drawn onto data_fbo
         # further up, even though this means that the data will be
         # drawn using a texture atlas that is out of date by one frame.
+        '''
         zoom_level, larr = self.getBlocks(self.xyz_fbo_decimated)
         if zoom_level >= 0 and self.atlas is not None:
             if len(larr) >= self.atlas.max_nchunks-1:
                 larr = larr[:self.atlas.max_nchunks-1]
             self.atlas.addBlocks(zoom_level, larr)
+        '''
+        timerb.time("done")
 
     def printBlocks(self, blocks):
         for block in blocks:
@@ -418,6 +480,23 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             bset.add(tuple(block))
         return bset
         
+    def getTrglIds(self, fbo):
+        dw = self.gldw
+        f = self.gl
+
+        im = fbo.toImage(True)
+        im_arr = self.npArrayFromQImage(im)
+        w = fbo.width()
+        h = fbo.height()
+        trgl_ids = np.full((h,w), -2, dtype=np.int32)
+        # print("im_arr[3]", im_arr[:,:,3].min(), im_arr[:,:,3].max())
+        non_zeros = im_arr[:,:,3] > 0
+        msid = im_arr[:,:,0]
+        lsid = im_arr[:,:,1]
+        tid = msid*65536 + lsid
+        trgl_ids[non_zeros] = tid[:,:][non_zeros]
+        # print("trgl_ids", trgl_ids.shape)
+        return trgl_ids
 
     def getBlocks(self, fbo):
         timera = Utils.Timer()
@@ -430,7 +509,13 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # print("im format", im.format())
         # w = fbo.width()
         # h = fbo.height()
-        arr = self.npArrayFromQImage(im)
+        # arr = self.npArrayFromQImage(im)
+        # decimation factor
+        # arr = self.npArrayFromQImage(im)
+        farr = self.npArrayFromQImage(im)
+        df = 4
+        arr = farr[::df,::df,:]
+        print(farr.shape, arr.shape)
         timera.time("array from image")
         # print("arr", arr.shape, arr.dtype)
         zoom = dw.getZoom()
@@ -453,10 +538,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # print("zoom", zoom, iscale)
         dv = 128*iscale
         zoom_level = izoom
+        # look for xyz values where alpha is not zero
         nzarr = arr[arr[:,:,3] > 0][:,:3] // dv
 
         if len(nzarr) == 0:
-            return -1, None
+            return -1, None, farr
 
         # print("nzarr", nzarr.shape, nzarr.dtype)
         nzmin = nzarr.min(axis=0)
@@ -481,7 +567,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         timera.time("process image")
 
-        return zoom_level, larr
+        return zoom_level, larr, farr
 
     def stxyXform(self):
         dw = self.gldw
@@ -515,10 +601,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f.glClearColor(0.,0.,0.,0.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
 
-        self.data_program.bind()
+        # self.data_program.bind()
 
-        xform = self.stxyXform()
-        self.data_program.setUniformValue("xform", xform)
+        # xform = self.stxyXform()
+        # self.data_program.setUniformValue("xform", xform)
 
         pv = dw.window.project_view
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
@@ -551,6 +637,34 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         stxy_xform = self.stxyXform()
         self.atlas.displayBlocks(self.data_fbo, self.active_vao, stxy_xform)
 
+    def drawTrgls(self, fbo, program):
+        f = self.gl
+        dw = self.gldw
+        fvao = self.active_vao
+
+        fbo.bind()
+
+        # Be sure to clear with alpha = 0
+        # so that the slice view isn't blocked!
+        f.glClearColor(0.,0.,0.,0.)
+        f.glClear(f.GL_COLOR_BUFFER_BIT)
+        f.glViewport(0, 0, fbo.width(), fbo.height())
+
+        program.bind()
+
+        xform = self.stxyXform()
+        program.setUniformValue("xform", xform)
+        # print("fbo w h", fbo.width(), fbo.height())
+        # print("xform", xform)
+        # print("tis", fvao.trgl_index_size)
+
+        f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
+                       f.GL_UNSIGNED_INT, None)
+        program.release()
+
+        QOpenGLFramebufferObject.bindDefault()
+        self.setDefaultViewport()
+
     def drawXyz(self, fbo):
         f = self.gl
         dw = self.gldw
@@ -568,6 +682,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         xform = self.stxyXform()
         self.xyz_program.setUniformValue("xform", xform)
+        # print("fbo w h", fbo.width(), fbo.height())
+        # print("xform", xform)
+        # print("tis", fvao.trgl_index_size)
 
         f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
                        f.GL_UNSIGNED_INT, None)
