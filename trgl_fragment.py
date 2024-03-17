@@ -362,6 +362,8 @@ class TrglFragmentView(BaseFragmentView):
         self.line = None
         self.setWorkingRegion(-1, 0.)
         self.has_working_non_working = (False, False)
+        self.prev_pt_count = 0
+        self.stpoints = None
         if len(trgl_fragment.trgls) == 0:
             self.mesh_visible = False
 
@@ -445,7 +447,10 @@ class TrglFragmentView(BaseFragmentView):
 
     def setScaledTexturePoints(self):
         f = self.fragment
+        if self.stpoints is not None and len(f.gpoints) == self.prev_pt_count:
+            return
         self.stpoints = None
+        self.prev_pt_count = len(f.gpoints)
         if len(f.gtpoints) != len(f.gpoints):
             return
 
@@ -688,10 +693,12 @@ class TrglFragmentView(BaseFragmentView):
         
     def setVolumeViewDirection(self, direction):
         self.setWorkingRegion(-1, 0.)
+        self.prev_pt_count = 0
         super(TrglFragmentView, self).setVolumeViewDirection(direction)
         
     def setVolumeView(self, vol_view):
         self.setWorkingRegion(-1, 0.)
+        self.prev_pt_count = 0
         super(TrglFragmentView, self).setVolumeView(vol_view)
 
     def setWorkingRegion(self, index, max_angle):
