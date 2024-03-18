@@ -767,7 +767,9 @@ class GLDataWindowChild(QOpenGLWidget):
         ih = im.height()
         iptr = im.constBits()
         iptr.setsize(im.sizeInBytes())
-        arr = np.frombuffer(iptr, dtype=np.uint16)
+        # make copy because the buffer from im will be deleted
+        # at some point
+        arr = np.frombuffer(iptr, dtype=np.uint16).copy()
         arr.resize(ih, iw, 4)
         return arr
 
