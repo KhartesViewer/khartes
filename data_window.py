@@ -172,6 +172,11 @@ class DataWindow(QLabel):
         j = tijk[self.jIndex] + int(dy/zoom)
         return (i, j)
 
+    def xyToTijk(self, xy):
+        ij = self.xyToIj(xy)
+        tijk = self.ijToTijk(ij)
+        return tijk
+
     # slice ij position to window xy position
     def ijToXy(self, ij):
         i,j = ij
@@ -409,6 +414,9 @@ class DataWindow(QLabel):
     def allowMouseToDragNode(self):
         return True
 
+    def computeTfStartPoint(self):
+        return self.volume_view.ijktf
+
     def mousePressEvent(self, e):
         if self.volume_view is None:
             return
@@ -420,8 +428,9 @@ class DataWindow(QLabel):
 
             if self.inAddNodeMode():
                 # print('Shift+Click')
-                ij = self.xyToIj(wxy)
-                tijk = self.ijToTijk(ij)
+                # ij = self.xyToIj(wxy)
+                # tijk = self.ijToTijk(ij)
+                tijk = self.xyToTijk(wxy)
                 # print("adding point at",tijk)
                 if self.currentFragmentView() is not None:
                     self.setWaitCursor()
@@ -445,7 +454,8 @@ class DataWindow(QLabel):
                     self.isPanning = False
                     self.isMovingNode = True
                 '''
-                self.tfStartPoint = self.volume_view.ijktf
+                # self.tfStartPoint = self.volume_view.ijktf
+                self.tfStartPoint = self.computeTfStartPoint()
                 self.isPanning = True
                 self.isMovingNode = False
                 self.isMovingTiff = False
@@ -536,8 +546,9 @@ class DataWindow(QLabel):
     def setStatusText(self, xy):
         if self.volume_view is None:
             return
-        ij = self.xyToIj(xy)
-        ijk = self.ijToTijk(ij)
+        # ij = self.xyToIj(xy)
+        # ijk = self.ijToTijk(ij)
+        ijk = self.xyToTijk(xy)
         gijk = self.volume_view.transposedIjkToGlobalPosition(ijk)
         # gi,gj,gk = gijk
         vol = self.volume_view.volume
@@ -635,6 +646,9 @@ class DataWindow(QLabel):
     def setIjkTf(self, tf):
         self.volume_view.setIjkTf(tf)
 
+    def setIjkOrStxyTf(self, tf):
+        self.setIjkTf(tf)
+
     def mouseMoveEvent(self, e):
         # print("move", e.localPos())
         if self.volume_view is None:
@@ -643,14 +657,18 @@ class DataWindow(QLabel):
         self.setStatusTextFromMousePosition()
         if self.isPanning:
             self.window.zarrResetActiveTimer()
-            delta = e.localPos()-self.mouseStartPoint
+            pos = e.localPos()
+            delta = pos-self.mouseStartPoint
             dx,dy = delta.x(), delta.y()
             # print("delta", dx, dy)
             tf = list(self.tfStartPoint)
             zoom = self.getZoom()
             tf[self.iIndex] -= int(dx/zoom)
             tf[self.jIndex] -= int(dy/zoom)
-            self.setIjkTf(tf)
+            # self.setIjkTf(tf)
+            self.setIjkOrStxyTf(tf)
+            # self.tfStartPoint = self.volume_view.ijktf
+            # self.mouseStartPoint = pos
             self.window.drawSlices()
         elif self.isMovingNode:
             # print("moving node")
@@ -694,8 +712,9 @@ class DataWindow(QLabel):
             # print("mxy", mxy, nearbyNode)
             self.setNearbyNode(nearbyNode)
             '''
-        ij = self.xyToIj(mxy)
-        tijk = self.ijToTijk(ij)
+        # ij = self.xyToIj(mxy)
+        # tijk = self.ijToTijk(ij)
+        tijk = self.xyToTijk(mxy)
         self.window.setCursorPosition(self, tijk)
         self.checkCursor()
 
@@ -916,8 +935,9 @@ class DataWindow(QLabel):
             if ijk is None:
                 pt = self.mapFromGlobal(QCursor.pos())
                 mxy = (pt.x(), pt.y())
-                ij = self.xyToIj(mxy)
-                tijk = self.ijToTijk(ij)
+                # ij = self.xyToIj(mxy)
+                # tijk = self.ijToTijk(ij)
+                tijk = self.xyToTijk(mxy)
             else:
                 # print("ijk", ijk)
                 # tijk = self.ijToTijk(ijk[0:2])
@@ -950,8 +970,9 @@ class DataWindow(QLabel):
         elif key == Qt.Key_T:
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
-            ij = self.xyToIj(mxy)
-            tijk = self.ijToTijk(ij)
+            # ij = self.xyToIj(mxy)
+            # tijk = self.ijToTijk(ij)
+            tijk = self.xyToTijk(mxy)
             self.window.setCursorPosition(self, tijk)
         elif key == Qt.Key_V:
             pt = self.mapFromGlobal(QCursor.pos())

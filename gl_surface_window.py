@@ -65,6 +65,77 @@ class GLSurfaceWindow(DataWindow):
     def allowMouseToDragNode(self):
         return False
 
+    def setIjkTf(self, tf):
+        oijk = self.volume_view.ijktf
+        iind = self.iIndex
+        jind = self.jIndex
+        kind = self.kIndex
+        di = tf[iind] - oijk[iind]
+        dj = tf[jind] - oijk[jind]
+        zoom = self.getZoom()
+        dx = di*zoom
+        dy = dj*zoom
+        ww, wh = self.width(), self.height()
+        ox, oy = ww/2, wh/2
+        nx, ny = ox+dx, oy+dy
+        nijk = self.xyToTijk((nx,ny))
+        self.volume_view.setIjkTf(nijk)
+        ostxy = self.volume_view.stxytf
+        nstxy = (ostxy[0]+di, ostxy[1]+dj)
+        self.volume_view.setStxyTf(nstxy)
+
+    def setIjkOrStxyTf(self, tf):
+        ostxy = self.volume_view.stxytf
+        iind = self.iIndex
+        jind = self.jIndex
+        kind = self.kIndex
+        di = tf[iind]-ostxy[iind]
+        dj = tf[jind]-ostxy[jind]
+        zoom = self.getZoom()
+        dx = di*zoom
+        dy = dj*zoom
+        ww, wh = self.width(), self.height()
+        ox, oy = ww/2, wh/2
+        nx, ny = ox+dx, oy+dy
+        nijk = self.xyToTijk((nx,ny))
+        self.volume_view.setIjkTf(nijk)
+        self.volume_view.setStxyTf(tf)
+
+    def computeTfStartPoint(self):
+        return self.volume_view.stxytf
+
+    def xyToTijk(self, xy):
+        # print(xy)
+        # return super(GLSurfaceWindow, self).xyToTijk(xy)
+        x, y = xy
+        # ww, wh = self.width(), self.height()
+        # wcx, wcy = ww//2, wh//2
+        # dx, dy = x-wcx, y-wcy
+        # dx, dy = x, y
+        iind = self.iIndex
+        jind = self.jIndex
+        kind = self.kIndex
+        xyz_arr = self.glw.xyz_arr
+        if xyz_arr is None:
+            print("returning vv.ijktf")
+            return self.volume_view.ijktf
+        # print(wcx, wcy, xyz_arr.shape)
+        # idx = round(dx)
+        # idy = round(dy)
+        ix = round(x)
+        iy = round(y)
+        if iy < 0 or iy >= xyz_arr.shape[0] or ix < 0 or ix >= xyz_arr.shape[1]:
+            print("error", x, y, xyz_arr.shape)
+            return self.volume_view.ijktf
+        xyza = xyz_arr[iy, ix]
+        if xyza[3] == 0:
+            return self.volume_view.ijktf
+        i = xyza[iind]
+        j = xyza[jind]
+        k = xyza[kind]
+        # print("ijk", i,j,k)
+        return (i,j,k)
+
     def drawSlice(self):
         # the MainWindow.edit widget overlays the
         # fragment map; it was used for displaying 
@@ -171,7 +242,7 @@ data_code = {
     ''',
 }
 
-trgl_id_code = {
+trgl_id_code_no_longer_used = {
     "name": "trgl_id",
 
     "vertex": '''
@@ -250,21 +321,20 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.volume_view =  None
         self.volume_view_direction = -1
         self.atlas = None
+        self.active_vao = None
+        self.data_fbo = None
+        # self.xyz_fbo = None
+        self.trgl_id_fbo = None
+        self.xyz_fbo_decimated = None
+        # self.trgl_ids = None
+        self.xyz_arr = None
 
     def localInitializeGL(self):
         f = self.gl
         # self.gl.glClearColor(.3,.6,.3,1.)
         f.glClearColor(.6,.3,.3,1.)
-
-        self.active_vao = None
-
         self.buildPrograms()
         self.buildSliceVao()
-        self.data_fbo = None
-        # self.xyz_fbo = None
-        self.trgl_id_fbo = None
-        self.xyz_fbo_decimated = None
-        self.trgl_ids = None
 
     def setDefaultViewport(self):
         f = self.gl
@@ -301,6 +371,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
 
+        '''
         # fbo where the trgl_id's will be drawn
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
@@ -309,6 +380,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.trgl_id_fbo.bind()
         draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
+        '''
 
         # fbo where the data will be drawn
         fbo_format = QOpenGLFramebufferObjectFormat()
@@ -337,7 +409,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
     def buildPrograms(self):
         # self.data_program = self.buildProgram(data_code)
         self.xyz_program = self.buildProgram(xyz_code)
-        self.trgl_id_program = self.buildProgram(trgl_id_code)
+        # self.trgl_id_program = self.buildProgram(trgl_id_code)
         self.slice_program = self.buildProgram(slice_code)
 
     # Rebuild atlas if volume_view or volume_view.direction
@@ -480,6 +552,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             bset.add(tuple(block))
         return bset
         
+    '''
     def getTrglIds(self, fbo):
         dw = self.gldw
         f = self.gl
@@ -497,6 +570,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         trgl_ids[non_zeros] = tid[:,:][non_zeros]
         # print("trgl_ids", trgl_ids.shape)
         return trgl_ids
+    '''
 
     def getBlocks(self, fbo):
         timera = Utils.Timer()
@@ -515,7 +589,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         farr = self.npArrayFromQImage(im)
         df = 4
         arr = farr[::df,::df,:]
-        print(farr.shape, arr.shape)
+        # print(farr.shape, arr.shape)
         timera.time("array from image")
         # print("arr", arr.shape, arr.dtype)
         zoom = dw.getZoom()
