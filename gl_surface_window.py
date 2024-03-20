@@ -328,6 +328,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.xyz_fbo_decimated = None
         # self.trgl_ids = None
         self.xyz_arr = None
+        self.atlas_chunk_size = 256
 
     def localInitializeGL(self):
         f = self.gl
@@ -424,7 +425,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction:
             self.volume_view = dw.volume_view
             self.volume_view_direction = self.volume_view.direction
-            self.atlas = Atlas(self.volume_view, self.gl)
+            self.atlas = Atlas(self.volume_view, self.gl, chunk_size=self.atlas_chunk_size)
 
     def paintSlice(self):
         timera = Utils.Timer()
@@ -595,11 +596,16 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         zoom = dw.getZoom()
         # fuzz = 1.0 for full resolution; smaller fuzz values
         # give less resolution
+        vol = dw.volume_view.volume
+        if vol.is_zarr:
+            nlevels = len(vol.levels)
+        else:
+            nlevels = 1
         fuzz = .75
         iscale = 1
-        for izoom in range(7):
+        for izoom in range(nlevels):
             lzoom = 1./iscale
-            if lzoom < 2*zoom*fuzz:
+            if lzoom < 2*zoom*fuzz or izoom == nlevels-1:
                 break
             iscale *= 2
 
@@ -610,7 +616,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # 8. - 16. 8
         # 16. - 32. 16
         # print("zoom", zoom, iscale)
-        dv = 128*iscale
+        # dv = 128*iscale
+        dv = self.atlas_chunk_size*iscale
         zoom_level = izoom
         # look for xyz values where alpha is not zero
         nzarr = arr[arr[:,:,3] > 0][:,:3] // dv
@@ -1000,6 +1007,7 @@ class Chunk:
         # print("unf loc", ind, self.atlas.program.uniformLocation("tmaxs[%d]"%ind))
         # print("setting tmin", ind)
         self.atlas.program.setUniformValue("tmins[%d]"%ind, QVector3D(*self.tmin))
+        # self.atlas.program.setUniformValue("dtmin", QVector3D(*[dcsz[i]/dsz[i] for i in range(3)]))
         # print("setting tmax", ind)
         self.atlas.program.setUniformValue("tmaxs[%d]"%ind, QVector3D(*self.tmax))
 
@@ -1059,6 +1067,7 @@ atlas_data_code = {
       uniform mat4 xforms[{max_nchunks}];
       uniform vec3 tmins[{max_nchunks}];
       uniform vec3 tmaxs[{max_nchunks}];
+      // uniform vec3 dtmin;
       uniform int chart_ids[{max_nchunks}];
       uniform int ncharts;
 
@@ -1071,6 +1080,7 @@ atlas_data_code = {
             int id = chart_ids[i];
             vec3 tmin = tmins[id];
             vec3 tmax = tmaxs[id];
+            // vec3 tmax = tmin + dtmin;
             if (fxyz.x >= tmin.x && fxyz.x <= tmax.x &&
              fxyz.y >= tmin.y && fxyz.y <= tmax.y &&
              fxyz.z >= tmin.z && fxyz.z <= tmax.z) {{
@@ -1102,7 +1112,10 @@ atlas_data_code = {
 # end of this dict.
 
 class Atlas:
-    def __init__(self, volume_view, gl, tex3dsz=(2048,1500,150), dcsz=(128,128,128)):
+    # def __init__(self, volume_view, gl, tex3dsz=(2048,1500,150), dcsz=(128,128,128)):
+    # def __init__(self, volume_view, gl, tex3dsz=(2048,2048,600), dcsz=(256,256,256)):
+    def __init__(self, volume_view, gl, tex3dsz=(2048,2048,600), chunk_size=128):
+        dcsz = (chunk_size, chunk_size, chunk_size)
         # self.created = Utils.timestamp()
         self.gl = gl
         pad = 1
