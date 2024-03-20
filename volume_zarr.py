@@ -141,6 +141,17 @@ class TransposedDataView():
         elif self.direction == 1:
             return (shape[1], shape[0], shape[2])
 
+    def getDataAndMisses(self, slice0, slice1, slice2, immediate=False):
+        klru = self.data.store
+        old_immediate_mode = klru.getImmediateDataMode()
+        klru.setImmediateDataMode(immediate)
+        misses0 = klru.nz_misses
+        data = self[slice0, slice1, slice2]
+        misses1 = klru.nz_misses
+        klru.setImmediateDataMode(old_immediate_mode)
+        return data, misses1-misses0
+
+
     # Two steps:
     # First, select the data from the original data cube
     # (need to transpose the selection into global coordinates
@@ -233,6 +244,10 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
     def setImmediateDataMode(self, flag):
         with self._mutex:
             self.immediate_data_mode = flag
+
+    def getImmediateDataMode(self):
+        with self._mutex:
+            return self.immediate_data_mode
 
     def __contains__(self, key):
         try:

@@ -328,7 +328,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.xyz_fbo_decimated = None
         # self.trgl_ids = None
         self.xyz_arr = None
-        self.atlas_chunk_size = 256
+        # self.atlas_chunk_size = 256
+        # self.atlas_chunk_size = 128
+        self.atlas_chunk_size = 126
+        # self.atlas_chunk_size = 254
 
     def localInitializeGL(self):
         f = self.gl
@@ -425,7 +428,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction:
             self.volume_view = dw.volume_view
             self.volume_view_direction = self.volume_view.direction
-            self.atlas = Atlas(self.volume_view, self.gl, chunk_size=self.atlas_chunk_size)
+            self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,1500,150), chunk_size=self.atlas_chunk_size)
+            # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,300), chunk_size=self.atlas_chunk_size)
 
     def paintSlice(self):
         timera = Utils.Timer()
@@ -468,7 +472,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if zoom_level >= 0 and self.atlas is not None:
             if len(larr) >= self.atlas.max_nchunks-1:
                 larr = larr[:self.atlas.max_nchunks-1]
-            self.atlas.addBlocks(zoom_level, larr)
+            maxxed_out = self.atlas.addBlocks(zoom_level, larr)
+            if maxxed_out:
+                dw.window.zarrSlot(None)
         ''''''
 
         '''
@@ -923,14 +929,15 @@ class Chunk:
 
         self.setData(dk, dl)
         self.in_use = False
+        self.misses = -1
 
 
     def setData(self, dk, dl):
-        print("set data", self.ak, dk, dl)
+        # print("set data", self.ak, dk, dl)
         self.dk = dk
         self.dl = dl
         if dl < 0:
-            return
+            return None
 
         # data chunk size (3 coords, usually 128,128,128)
         dcsz = self.atlas.dcsz 
@@ -967,10 +974,22 @@ class Chunk:
         c1 = tuple(acsz[i]-skip1[i] for i in range(len(acsz)))
         data = self.atlas.datas[dl]
 
-        self.atlas.volume_view.volume.setImmediateDataMode(True)
-        # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], :3] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]][:,:,:,np.newaxis]
-        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
-        self.atlas.volume_view.volume.setImmediateDataMode(False)
+        # # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], :3] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]][:,:,:,np.newaxis]
+        timera = Utils.Timer()
+        if self.atlas.volume_view.volume.is_zarr:
+            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = data.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), False)
+            # print(self.ak, misses)
+            print(self.dk, self.dl, misses)
+        else:
+            self.atlas.volume_view.volume.setImmediateDataMode(True)
+            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+            self.atlas.volume_view.volume.setImmediateDataMode(False)
+            misses = 0
+
+        self.misses = misses
+        timera.time("get data")
+
+        texture_set = False
         # TODO: for testing:
         # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], :3] = 32000
         # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], 3] = 65535
@@ -978,7 +997,16 @@ class Chunk:
         a = self.ar[0]
         # print(a, acsz)
         # self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.RGBA, QOpenGLTexture.UInt16, buf.tobytes())
-        self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, buf.tobytes())
+        if self.misses == 0:
+            self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, buf.tobytes())
+            texture_set = True
+            self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
+            self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
+            timera.time("set texture")
+        else:
+            self.tmin = (0., 0., 0.)
+            self.tmax = (-1., -1., -1.)
+            timera.time("didn't set texture")
 
         asz = self.atlas.asz
 
@@ -990,8 +1018,6 @@ class Chunk:
         # print("dsz", dsz)
         # print("xform", self.xform)
 
-        self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
-        self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
 
         # print("xtmin", self.xform*QVector4D(*self.tmin, 1.))
         # print("xtmax", self.xform*QVector4D(*self.tmax, 1.))
@@ -1012,6 +1038,7 @@ class Chunk:
         self.atlas.program.setUniformValue("tmaxs[%d]"%ind, QVector3D(*self.tmax))
 
         self.in_use = True
+        return texture_set
 
     @staticmethod
     def k2r(k, csz):
@@ -1075,7 +1102,8 @@ atlas_data_code = {
       out vec4 fColor;
 
       void main() {{
-        fColor = vec4(.5,0.,.5,1.);
+        // fColor = vec4(.5,0.,.5,1.);
+        fColor = vec4(.5,.5,.5,1.);
         for (int i=0; i<ncharts; i++) {{
             int id = chart_ids[i];
             vec3 tmin = tmins[id];
@@ -1114,7 +1142,7 @@ atlas_data_code = {
 class Atlas:
     # def __init__(self, volume_view, gl, tex3dsz=(2048,1500,150), dcsz=(128,128,128)):
     # def __init__(self, volume_view, gl, tex3dsz=(2048,2048,600), dcsz=(256,256,256)):
-    def __init__(self, volume_view, gl, tex3dsz=(2048,2048,600), chunk_size=128):
+    def __init__(self, volume_view, gl, tex3dsz=(2048,2048,300), chunk_size=128):
         dcsz = (chunk_size, chunk_size, chunk_size)
         # self.created = Utils.timestamp()
         self.gl = gl
@@ -1127,6 +1155,7 @@ class Atlas:
         vol = volume_view.volume
         vdir = volume_view.direction
         is_zarr = vol.is_zarr
+        self.max_textures_set = 3
 
         datas = []
         if not is_zarr:
@@ -1237,18 +1266,29 @@ class Atlas:
             if chunk.in_use == False:
                 break
             chunk.in_use = False
+        textures_set = 0
         for block in blocks:
             key = self.key(block, zoom_level)
             chunk = self.chunks.get(key, None)
             # If the data chunk is not currently stored in the atlas:
             if chunk is None:
+                if textures_set >= self.max_textures_set:
+                    continue
                 # Get the first Chunk in the OrderedDict: 
                 _, chunk = self.chunks.popitem(last=False)
-                chunk.setData(block, zoom_level)
+                # print("popped", chunk.dk, chunk.dl)
+                texture_set = chunk.setData(block, zoom_level)
                 # print("set data", chunk.dk, chunk.dl)
+                if texture_set:
+                    textures_set += 1
                 self.chunks[key] = chunk
+                # if textures_set >= self.max_textures_set:
+                #     chunk.in_use = True
+                #     break
             else: # If the data is already in the Atlas
                 # move the chunk to the end of the OrderedDict
+                if chunk.misses > 0:
+                    chunk.setData(block, zoom_level)
                 self.chunks.move_to_end(key)
             chunk.in_use = True
 
@@ -1261,6 +1301,7 @@ class Atlas:
             # print(chunk.dl, chunk.dk)
             cnt += 1
         # print(zoom_level, cnt, len(blocks))
+        return textures_set >= self.max_textures_set
             
     # displayBlocks is in a separate operation
     # than addBlocks, because addBlocks needs to be called later
