@@ -1247,7 +1247,7 @@ class DataWindow(QLabel):
                 value *= .5
             cnt += 1
 
-        length = int(length)
+        # length = int(length)
         wh = outrgbx.shape[0]
         ww = outrgbx.shape[1]  # get the width of the window
         y0 = wh - 10
