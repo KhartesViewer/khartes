@@ -331,6 +331,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # self.atlas_chunk_size = 256
         # self.atlas_chunk_size = 128
         self.atlas_chunk_size = 126
+        self.atlas_chunk_size = 62
         # self.atlas_chunk_size = 254
 
     def localInitializeGL(self):
@@ -428,8 +429,12 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction:
             self.volume_view = dw.volume_view
             self.volume_view_direction = self.volume_view.direction
-            self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,1500,150), chunk_size=self.atlas_chunk_size)
-            # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,300), chunk_size=self.atlas_chunk_size)
+            # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,1500,150), chunk_size=self.atlas_chunk_size)
+            # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,400), chunk_size=self.atlas_chunk_size)
+            if self.atlas_chunk_size < 65:
+                self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,70), chunk_size=self.atlas_chunk_size)
+            else:
+                self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,400), chunk_size=self.atlas_chunk_size)
 
     def paintSlice(self):
         timera = Utils.Timer()
@@ -887,6 +892,34 @@ class FragmentMapVao:
         print("stopped logging")
         # e.accept()
 
+# gl is the OpenGL function holder
+# arr is the numpy array
+# uniform_index is the location of the uniform block in the shader
+# binding_point is the binding point
+# To use: modify values in the data member, then call setBuffer().
+class UniBuf:
+    def __init__(self, gl, arr, binding_point):
+        self.gl = gl
+        self.binding_point = binding_point
+        self.data = arr
+        self.buffer_id = gl.glGenBuffers(1)
+        gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, self.binding_point, self.buffer_id)
+        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
+        self.setBuffer()
+
+    def bindToShader(self, shader_id, uniform_index):
+        gl = self.gl
+        # gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, self.binding_point, self.buffer_id)
+        gl.glUniformBlockBinding(shader_id, uniform_index, self.binding_point)
+        # gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
+
+    def setBuffer(self):
+        gl = self.gl
+        byte_size = self.data.size * self.data.itemsize
+        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, self.buffer_id)
+        gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data.tobytes(), gl.GL_STATIC_DRAW)
+        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
+
 
 # The Chunk class is used by the Atlas class
 # see below) to keep track of data stored in
@@ -976,6 +1009,7 @@ class Chunk:
 
         # # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], :3] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]][:,:,:,np.newaxis]
         timera = Utils.Timer()
+        timera.active = False
         if self.atlas.volume_view.volume.is_zarr:
             buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = data.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), False)
             # print(self.ak, misses)
@@ -1015,6 +1049,8 @@ class Chunk:
         xform.translate(*(self.ar[0][i]+self.pad-dr[0][i] for i in range(len(self.ar[0]))))
         xform.scale(*(dsz[i] for i in range(len(dsz))))
         self.xform = xform
+        # vals = xform.copyDataTo()
+        # print("vals", vals)
         # print("dsz", dsz)
         # print("xform", self.xform)
 
@@ -1027,15 +1063,67 @@ class Chunk:
         self.atlas.program.bind()
         ind = self.atlas.index(self.ak)
         # print("setting xform", ind)
-        self.atlas.program.setUniformValue("xforms[%d]"%ind, self.xform)
+        # self.atlas.program.setUniformValue("xforms[%d]"%ind, self.xform)
         # print("unf loc", ind, self.atlas.program.uniformLocation("xforms[%d]"%ind))
         # print("unf loc", ind, self.atlas.program.uniformLocation("tmins[%d]"%ind))
         # print("unf loc", ind, self.atlas.program.uniformLocation("tmaxs[%d]"%ind))
         # print("setting tmin", ind)
-        self.atlas.program.setUniformValue("tmins[%d]"%ind, QVector3D(*self.tmin))
+        # tminvec = QVector3D(*self.tmin)
+        # self.atlas.program.setUniformValue("tmins[%d]"%ind, QVector3D(*self.tmin))
+        # self.atlas.program.setUniformValue("tmins[%d]"%ind, tminvec)
+
+        '''
+        gl = self.atlas.gl
+        dsize = self.atlas.chunk_info_sizes[0]
+        offset = self.atlas.chunk_info_offsets[0] + ind*dsize
+        # tmin4 = (self.tmin[0], self.tmin[1], self.tmin[2], 0.)
+        # tminarr = np.array(tmin4, dtype=np.float32)
+        # print("tminarr", tminarr.shape)
+        # tminbuf = tminarr.tobytes()
+        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, self.atlas.ubo_buf_id)
+        sz = gl.glGetBufferParameteriv(gl.GL_UNIFORM_BUFFER, gl.GL_BUFFER_SIZE)
+        # print("immutable", gl.glGetBufferParameteriv(gl.GL_UNIFORM_BUFFER, gl.GL_BUFFER_IMMUTABLE_STORAGE))
+        print("sz, offset, dsize", sz, offset, dsize, len(tminbuf))
+        # allarr = np.zeros((sz//4,), dtype=np.float32)
+        # allbuf = allarr.tobytes()
+        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, sz, allbuf)
+        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, sz, allbuf, gl.GL_STATIC_DRAW)
+        print("new size", gl.glGetBufferParameteriv(gl.GL_UNIFORM_BUFFER, gl.GL_BUFFER_SIZE))
+        # gl.glBufferSubData(gl.GL_UNIFORM_BUFFER, offset, dsize, tminbuf)
+        # gl.glBufferSubData(gl.GL_ARRAY_BUFFER, 0, sz, allbuf)
+        # gl.glBufferSubData(0, int(offset), int(dsize), tminbuf)
+        # print("sz2, offset, dsize", sz, offset, dsize, len(tminbuf))
+        # gl.glBufferSubData(gl.GL_UNIFORM_BUFFER, 0, 32, None)
+        # gl.glBufferSubData(gl.GL_UNIFORM_BUFFER, offset, dsize, None)
+
+        # gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
+        '''
+        # pid = self.atlas.program.programId()
+        self.atlas.tmax_ubo.data[ind, :3] = self.tmax
+        # self.atlas.tmax_ubo.data[ind, :3] = self.tmin
+        # self.atlas.tmax_ubo.setBuffer()
+        # self.atlas.tmax_ubo.bindToShader(pid, 1)
+        self.atlas.tmin_ubo.data[ind, :3] = self.tmin
+        # self.atlas.tmin_ubo.data[ind, :3] = (0.,0.,0.)
+        # self.atlas.tmin_ubo.data[ind, :3] = self.tmax
+        # self.atlas.tmin_ubo.setBuffer()
+        # self.atlas.tmin_ubo.bindToShader(pid, 0)
+
+        xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
+        self.atlas.xform_ubo.data[ind, :, :] = xformarr
+        # self.atlas.xform_ubo.setBuffer()
+
+        # TODO: should be consolidated in addBlocks, but doesn't
+        # always work there!
+        self.atlas.tmin_ubo.setBuffer()
+        self.atlas.tmax_ubo.setBuffer()
+        self.atlas.xform_ubo.setBuffer()
+
+        timera.time("set buffers")
+
         # self.atlas.program.setUniformValue("dtmin", QVector3D(*[dcsz[i]/dsz[i] for i in range(3)]))
         # print("setting tmax", ind)
-        self.atlas.program.setUniformValue("tmaxs[%d]"%ind, QVector3D(*self.tmax))
+        # self.atlas.program.setUniformValue("tmaxs[%d]"%ind, QVector3D(*self.tmax))
 
         self.in_use = True
         return texture_set
@@ -1090,12 +1178,50 @@ atlas_data_code = {
     "fragment_template": '''
       #version 410 core
 
+      const int max_nchunks = {max_nchunks};
+      // const int max_nchunks2 = max_nchunks;
+      const int max_nchunks2 = {max_nchunks};
+      // NOTE: On an XPS 9320 running PyQt5 and OpenGL 4.1,
+      // the uniform buffers below MUST be in alphabetical
+      // order!!
+      layout (std140) uniform TMaxs {{
+        vec3 tmaxs2[max_nchunks2];
+      }};
+      layout (std140) uniform TMins {{
+        vec3 tmins2[max_nchunks2];
+      }};
+      layout (std140) uniform XForms {{
+        mat4 xforms2[max_nchunks2];
+      }};
+      layout (std140) uniform ZChartIds {{
+        int chart_ids2[max_nchunks2];
+      }};
       uniform sampler3D atlas;
-      uniform mat4 xforms[{max_nchunks}];
-      uniform vec3 tmins[{max_nchunks}];
-      uniform vec3 tmaxs[{max_nchunks}];
+      // uniform vec3 test[max_nchunks];
+      // uniform mat4 xforms[max_nchunks];
+      // uniform vec3 tmins[max_nchunks];
+      // uniform vec3 tmaxs[max_nchunks];
+      /*
+      layout (std140) uniform TMaxs {{
+        vec3 tmaxs2[max_nchunks2];
+      }};
+      layout (std140) uniform XForms {{
+        vec3 xforms2[max_nchunks2];
+      }};
+      layout (std140) uniform ZChartIds {{
+        int zchart_ids2[max_nchunks2];
+      }};
+      */
+      /*
+      layout (std140) uniform ChunkInfo {{
+        vec4 tmins2[max_nchunks2];
+        vec4 tmaxs2[max_nchunks2];
+        mat4 xforms2[max_nchunks2];
+        // int chart_ids2[max_nchunks2];
+      }};
+      */
       // uniform vec3 dtmin;
-      uniform int chart_ids[{max_nchunks}];
+      // uniform int chart_ids[{max_nchunks}];
       uniform int ncharts;
 
       in vec4 fxyz;
@@ -1105,14 +1231,25 @@ atlas_data_code = {
         // fColor = vec4(.5,0.,.5,1.);
         fColor = vec4(.5,.5,.5,1.);
         for (int i=0; i<ncharts; i++) {{
-            int id = chart_ids[i];
-            vec3 tmin = tmins[id];
-            vec3 tmax = tmaxs[id];
+            // int id = chart_ids[i]+0*chart_ids2[i];
+            int id = chart_ids2[i];
+            // vec3 tmin = tmins[id];
+            vec3 tmin = tmins2[id];
+            vec3 tmax = tmaxs2[id];
+            // tmin = tmax;
+            // tmax = tmaxs[id];
+            // vec3 tmax = tmaxs2[id];
+            // tmax = tmax+tmaxs2[id].xyz;
+            // tmin = tmin+tmins2[id].xyz;
+            // tmin = tmins2[id].xyz;
+            // id = id+chart_ids2[i];
             // vec3 tmax = tmin + dtmin;
-            if (fxyz.x >= tmin.x && fxyz.x <= tmax.x &&
+            if (tmin.z != 0. && fxyz.x >= tmin.x && fxyz.x <= tmax.x &&
              fxyz.y >= tmin.y && fxyz.y <= tmax.y &&
              fxyz.z >= tmin.z && fxyz.z <= tmax.z) {{
-              vec3 txyz = (xforms[id]*fxyz).xyz;
+              // mat4 xform = xforms[id]+xforms2[id];
+              mat4 xform = xforms2[id];
+              vec3 txyz = (xform*fxyz).xyz;
               fColor = texture(atlas, txyz);
               fColor.g = fColor.r;
               fColor.b = fColor.r;
@@ -1142,7 +1279,7 @@ atlas_data_code = {
 class Atlas:
     # def __init__(self, volume_view, gl, tex3dsz=(2048,1500,150), dcsz=(128,128,128)):
     # def __init__(self, volume_view, gl, tex3dsz=(2048,2048,600), dcsz=(256,256,256)):
-    def __init__(self, volume_view, gl, tex3dsz=(2048,2048,300), chunk_size=128):
+    def __init__(self, volume_view, gl, tex3dsz=(2048,2048,300), chunk_size=126):
         dcsz = (chunk_size, chunk_size, chunk_size)
         # self.created = Utils.timestamp()
         self.gl = gl
@@ -1155,7 +1292,10 @@ class Atlas:
         vol = volume_view.volume
         vdir = volume_view.direction
         is_zarr = vol.is_zarr
-        self.max_textures_set = 3
+        if chunk_size < 65:
+            self.max_textures_set = 10
+        else:
+            self.max_textures_set = 3
 
         datas = []
         if not is_zarr:
@@ -1208,14 +1348,78 @@ class Atlas:
         self.program.bind()
         xyz_xform = self.xyzXform(dsz[0])
         self.program.setUniformValue("xyz_xform", xyz_xform)
+        # for var in ["atlas", "xyz_xform", "tmins", "tmaxs", "TMins", "TMaxs", "XForms", "ZChartIds", "chart_ids", "ncharts"]:
+        #     print(var, self.program.uniformLocation(var))
         pid = self.program.programId()
         print("program id", pid)
+
+        '''
+        # ubo_buf_ids = []
+        # gl.glGenBuffers(4, ubo_buf_ids)
+        # TMins, TMaxs, XForms, ChartIds
+        # ubo_buf_ids = gl.glGenBuffers(2)
+        # print("ubo_buf_ids", ubo_buf_ids)
+        ubo_buf_id = gl.glGenBuffers(1)
+        self.ubo_buf_id = ubo_buf_id
+        print("ubo_buf_id", ubo_buf_id)
+        # wsizes = [4, 4, 16, 1]
+        # wsizes = [4, 4, 16]
+        # sizes = [4*wsize for wsize in wsizes]
+        # sizes = [4, 4, 16]
+        row_sizes = [1, 1, 4]
+        offset = 0
+        offsets = []
+        for size in sizes:
+            offsets.append(offset)
+            offset += size*max_nchunks
+        total_words = offset
+        print("sizes", max_nchunks, total_words)
+        self.chunk_info_offsets = offsets
+        self.chunk_info_sizes = sizes
+        self.chunk_info_arr = np.zeros(
+        '''
+        self.tmax_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 0)
+        self.tmax_ubo.bindToShader(pid, 0)
+        # the 1 is the binding point, which should be unique for
+        # each UniBuf.
+        self.tmin_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 1)
+        # should use glGetUniformBlockIndex, to get ubo_index instead
+        # of hardwiring 0, but that function is missing from PyQt5
+        self.tmin_ubo.bindToShader(pid, 1)
+        self.xform_ubo = UniBuf(gl, np.zeros((max_nchunks, 4, 4), dtype=np.float32), 2)
+        self.xform_ubo.bindToShader(pid, 2)
+        # even though data in this case could be listed as a 1D
+        # array of ints, UBO layout rules require that the ints
+        # be aligned every 16 bytes.
+        self.chart_id_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.int32), 3)
+        self.chart_id_ubo.bindToShader(pid, 3)
+
+        '''
+        for i in range(len(ubo_buf_ids)):
+            gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, ubo_buf_ids[i])
+            gl.glBufferData(gl.GL_UNIFORM_BUFFER, 4*sizes[i]*max_nchunks, None, gl.GL_STATIC_DRAW)
+            gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
+        '''
+        '''
+        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, ubo_buf_id)
+        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, total_size, None, gl.GL_STATIC_DRAW)
+        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, total_size, None, gl.GL_DYNAMIC_DRAW)
+        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
+        # should use glGetUniformBlockIndex, to get ubo_index, but 
+        # that function is missing from PyQt5
+        ubo_index = 0
+        # this is arbitrary
+        ubo_binding = 0
+        gl.glUniformBlockBinding(self.program.programId(), ubo_index, ubo_binding)
+        gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, ubo_binding, ubo_buf_id)
+        '''
 
         # allocate 3D texture 
         tex3d = QOpenGLTexture(QOpenGLTexture.Target3D)
         tex3d.setWrapMode(QOpenGLTexture.ClampToBorder)
         tex3d.setAutoMipMapGenerationEnabled(False)
         tex3d.setMagnificationFilter(QOpenGLTexture.Linear)
+        # tex3d.setMagnificationFilter(QOpenGLTexture.Nearest)
         tex3d.setMinificationFilter(QOpenGLTexture.Linear)
         # width, height, depth
         tex3d.setSize(*self.asz)
@@ -1292,6 +1496,16 @@ class Atlas:
                 self.chunks.move_to_end(key)
             chunk.in_use = True
 
+        # TODO: At img 12310 x 3348 y 4539 there is a little missing piece 
+
+        '''
+        # TODO: Not sure why this doesn't work correctly;
+        # sometimes a few blocks aren't drawn.
+        if textures_set > 0:
+            self.tmin_ubo.setBuffer()
+            self.tmax_ubo.setBuffer()
+            self.xform_ubo.setBuffer()
+        '''
         cnt = 0
         # To get all the active chunks, search backwards from
         # the end
@@ -1329,13 +1543,17 @@ class Atlas:
             ak = chunk.ak
             ind = self.index(ak)
             self.program.setUniformValue("chart_ids[%d]"%nchunks, ind)
+            self.chart_id_ubo.data[nchunks,0] = ind
             # print(nchunks, ind)
             nchunks += 1
         print("nchunks", nchunks)
         self.program.setUniformValue("ncharts", nchunks)
+        self.chart_id_ubo.setBuffer()
 
+        # print("db de")
         gl.glDrawElements(gl.GL_TRIANGLES, fvao.trgl_index_size,
                        gl.GL_UNSIGNED_INT, None)
+        # print("db de finished")
         self.program.release()
 
         QOpenGLFramebufferObject.bindDefault()
