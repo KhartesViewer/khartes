@@ -105,23 +105,14 @@ class GLSurfaceWindow(DataWindow):
         return self.volume_view.stxytf
 
     def xyToTijk(self, xy):
-        # print(xy)
-        # return super(GLSurfaceWindow, self).xyToTijk(xy)
         x, y = xy
-        # ww, wh = self.width(), self.height()
-        # wcx, wcy = ww//2, wh//2
-        # dx, dy = x-wcx, y-wcy
-        # dx, dy = x, y
         iind = self.iIndex
         jind = self.jIndex
         kind = self.kIndex
         xyz_arr = self.glw.xyz_arr
         if xyz_arr is None:
-            print("returning vv.ijktf")
+            print("xyz_arr is None; returning vv.ijktf")
             return self.volume_view.ijktf
-        # print(wcx, wcy, xyz_arr.shape)
-        # idx = round(dx)
-        # idy = round(dy)
         ix = round(x)
         iy = round(y)
         if iy < 0 or iy >= xyz_arr.shape[0] or ix < 0 or ix >= xyz_arr.shape[1]:
@@ -133,7 +124,6 @@ class GLSurfaceWindow(DataWindow):
         i = xyza[iind]
         j = xyza[jind]
         k = xyza[kind]
-        # print("ijk", i,j,k)
         return (i,j,k)
 
     def drawSlice(self):
@@ -242,36 +232,6 @@ data_code = {
     ''',
 }
 
-trgl_id_code_no_longer_used = {
-    "name": "trgl_id",
-
-    "vertex": '''
-      #version 410 core
-
-      uniform mat4 xform;
-      // layout(location=3) in vec3 xyz;
-      layout(location=4) in vec2 stxy;
-      // in vec2 stxy;
-      // out vec3 fxyz;
-      void main() {
-        gl_Position = xform*vec4(stxy, 0., 1.);
-        // fxyz = xyz;
-      }
-    ''',
-
-    "fragment": '''
-      #version 410 core
-
-      out vec4 fColor;
-
-      void main() {
-        uint lsid = gl_PrimitiveID & 0xffff;
-        uint msid = (gl_PrimitiveID>>16) & 0xffff;
-        fColor = vec4(float(msid)/65535., float(lsid)/65535., 0., 1.);
-      }
-    ''',
-}
-
 xyz_code = {
     "name": "xyz",
 
@@ -314,8 +274,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # layout(location=4) in vec3 stxy;
         self.stxy_location = 4
         self.message_prefix = "sw"
-        # self.prev_larr = None
-        # self.prev_zoom_level = None
         # Cache these so we can recalculate the atlas 
         # whenever volume_view or volume_view.direction change
         self.volume_view =  None
@@ -323,20 +281,15 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.atlas = None
         self.active_vao = None
         self.data_fbo = None
-        # self.xyz_fbo = None
         self.trgl_id_fbo = None
-        self.xyz_fbo_decimated = None
-        # self.trgl_ids = None
+        self.xyz_fbo = None
         self.xyz_arr = None
-        # self.atlas_chunk_size = 256
-        # self.atlas_chunk_size = 128
-        self.atlas_chunk_size = 126
-        self.atlas_chunk_size = 62
         # self.atlas_chunk_size = 254
+        # self.atlas_chunk_size = 126
+        self.atlas_chunk_size = 62
 
     def localInitializeGL(self):
         f = self.gl
-        # self.gl.glClearColor(.3,.6,.3,1.)
         f.glClearColor(.6,.3,.3,1.)
         self.buildPrograms()
         self.buildSliceVao()
@@ -354,13 +307,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         # fbo where xyz positions are drawn; this information is used
         # to determine which data chunks to load.
-        # The fbo is decimated relative to the display window,
-        # in order to speed up some parts of this, which are done
         # (at the moment) in the CPU rather than the GPU.
         # based on https://stackoverflow.com/questions/59338015/minimal-opengl-offscreen-rendering-using-qt
-        # self.xyz_decimation = 4
-        self.xyz_decimation = 1
-        vp_size_decimated = QSize(width//self.xyz_decimation, height//self.xyz_decimation)
+        vp_size = QSize(width, height)
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
         # We would prefer to store the xyz information as floats.
@@ -371,21 +320,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # pixel, which is good enough for our purposes.
         # fbo_format.setInternalTextureFormat(f.GL_RGB32F)
         fbo_format.setInternalTextureFormat(f.GL_RGBA16)
-        self.xyz_fbo_decimated = QOpenGLFramebufferObject(vp_size_decimated, fbo_format)
-        self.xyz_fbo_decimated.bind()
+        self.xyz_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
+        self.xyz_fbo.bind()
         draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
-
-        '''
-        # fbo where the trgl_id's will be drawn
-        fbo_format = QOpenGLFramebufferObjectFormat()
-        fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
-        fbo_format.setInternalTextureFormat(f.GL_RGBA16)
-        self.trgl_id_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
-        self.trgl_id_fbo.bind()
-        draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
-        f.glDrawBuffers(len(draw_buffers), draw_buffers)
-        '''
 
         # fbo where the data will be drawn
         fbo_format = QOpenGLFramebufferObjectFormat()
@@ -412,9 +350,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.paintSlice()
 
     def buildPrograms(self):
-        # self.data_program = self.buildProgram(data_code)
         self.xyz_program = self.buildProgram(xyz_code)
-        # self.trgl_id_program = self.buildProgram(trgl_id_code)
         self.slice_program = self.buildProgram(slice_code)
 
     # Rebuild atlas if volume_view or volume_view.direction
@@ -429,8 +365,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction:
             self.volume_view = dw.volume_view
             self.volume_view_direction = self.volume_view.direction
-            # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,1500,150), chunk_size=self.atlas_chunk_size)
-            # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,400), chunk_size=self.atlas_chunk_size)
             if self.atlas_chunk_size < 65:
                 self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,70), chunk_size=self.atlas_chunk_size)
             else:
@@ -468,26 +402,16 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         vao.bind()
 
         # timera.time("xyz")
-        # self.drawXyz(self.xyz_fbo_decimated)
-        self.drawTrgls(self.xyz_fbo_decimated, self.xyz_program)
+        self.drawTrgls(self.xyz_fbo, self.xyz_program)
         timera.time("xyz 2")
 
-        ''''''
-        zoom_level, larr, self.xyz_arr = self.getBlocks(self.xyz_fbo_decimated)
+        zoom_level, larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
         if zoom_level >= 0 and self.atlas is not None:
             if len(larr) >= self.atlas.max_nchunks-1:
                 larr = larr[:self.atlas.max_nchunks-1]
             maxxed_out = self.atlas.addBlocks(zoom_level, larr)
             if maxxed_out:
                 dw.window.zarrSlot(None)
-        ''''''
-
-        '''
-        self.drawTrgls(self.trgl_id_fbo, self.trgl_id_program)
-        timera.time("trgl ids")
-        self.trgl_ids = self.getTrglIds(self.trgl_id_fbo)
-        # print(self.trgl_ids.shape, self.trgl_ids.min(), self.trgl_ids.max())
-        '''
 
         self.drawData()
         timera.time("data")
@@ -540,18 +464,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.slice_vao.release()
         timera.time("combine")
 
-        # The texture atlas is updated at the end (here),
-        # in order to avoid a round trip to the GPU.
-        # However, the scroll data is drawn onto data_fbo
-        # further up, even though this means that the data will be
-        # drawn using a texture atlas that is out of date by one frame.
-        '''
-        zoom_level, larr = self.getBlocks(self.xyz_fbo_decimated)
-        if zoom_level >= 0 and self.atlas is not None:
-            if len(larr) >= self.atlas.max_nchunks-1:
-                larr = larr[:self.atlas.max_nchunks-1]
-            self.atlas.addBlocks(zoom_level, larr)
-        '''
         timerb.time("done")
 
     def printBlocks(self, blocks):
@@ -564,26 +476,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             bset.add(tuple(block))
         return bset
         
-    '''
-    def getTrglIds(self, fbo):
-        dw = self.gldw
-        f = self.gl
-
-        im = fbo.toImage(True)
-        im_arr = self.npArrayFromQImage(im)
-        w = fbo.width()
-        h = fbo.height()
-        trgl_ids = np.full((h,w), -2, dtype=np.int32)
-        # print("im_arr[3]", im_arr[:,:,3].min(), im_arr[:,:,3].max())
-        non_zeros = im_arr[:,:,3] > 0
-        msid = im_arr[:,:,0]
-        lsid = im_arr[:,:,1]
-        tid = msid*65536 + lsid
-        trgl_ids[non_zeros] = tid[:,:][non_zeros]
-        # print("trgl_ids", trgl_ids.shape)
-        return trgl_ids
-    '''
-
     def getBlocks(self, fbo):
         timera = Utils.Timer()
         timera.active = False
@@ -593,11 +485,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         im = fbo.toImage(True)
         timera.time("get image")
         # print("im format", im.format())
-        # w = fbo.width()
-        # h = fbo.height()
-        # arr = self.npArrayFromQImage(im)
-        # decimation factor
-        # arr = self.npArrayFromQImage(im)
         farr = self.npArrayFromQImage(im)
         df = 4
         arr = farr[::df,::df,:]
@@ -627,7 +514,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # 8. - 16. 8
         # 16. - 32. 16
         # print("zoom", zoom, iscale)
-        # dv = 128*iscale
         dv = self.atlas_chunk_size*iscale
         zoom_level = izoom
         # look for xyz values where alpha is not zero
@@ -636,26 +522,14 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if len(nzarr) == 0:
             return -1, None, farr
 
-        # print("nzarr", nzarr.shape, nzarr.dtype)
         nzmin = nzarr.min(axis=0)
         nzmax = nzarr.max(axis=0)
-        # print(nzmin, nzmax)
         nzsarr = nzarr-nzmin
-        # print(nzsarr.min(axis=0), nzsarr.max(axis=0))
         dvarr = np.zeros(nzmax-nzmin+1, dtype=np.uint32)[:,:,:,np.newaxis]
         indices = np.indices(nzmax-nzmin+1).transpose(1,2,3,0)
-        # print(dvarr.shape, indices.shape)
         dvarr = np.concatenate((dvarr, indices), axis=3)
-        # print(dvarr.shape)
-        # print("dvarr", dvarr.shape, nzsarr.shape)
-        # print((nzarr)[:5])
-        # print((nzsarr)[:5])
         dvarr[nzsarr[:,0],nzsarr[:,1], nzsarr[:,2],0] = 1
-        # print("dvarr", dvarr.size, dvarr.sum())
         larr = dvarr[dvarr[:,:,:,0] == 1][:,1:]+nzmin
-        # print("dvarr, larr", dvarr.shape, larr.shape)
-        # print(larr)
-        # print("larr", zoom_level, len(larr))
 
         timera.time("process image")
 
@@ -693,11 +567,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f.glClearColor(0.,0.,0.,0.)
         f.glClear(f.GL_COLOR_BUFFER_BIT)
 
-        # self.data_program.bind()
-
-        # xform = self.stxyXform()
-        # self.data_program.setUniformValue("xform", xform)
-
         pv = dw.window.project_view
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
@@ -720,9 +589,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         QOpenGLFramebufferObject.bindDefault()
 
-    # TODO: drawData should call self.atlas.displayData
-    # with arguments data_fbo, fvao, stxy_xform.
-    # data_program should belong to self.atlas, not self.
     def drawData(self):
         if self.atlas is None:
             return
@@ -746,9 +612,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         xform = self.stxyXform()
         program.setUniformValue("xform", xform)
-        # print("fbo w h", fbo.width(), fbo.height())
-        # print("xform", xform)
-        # print("tis", fvao.trgl_index_size)
 
         f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
                        f.GL_UNSIGNED_INT, None)
@@ -774,9 +637,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         xform = self.stxyXform()
         self.xyz_program.setUniformValue("xform", xform)
-        # print("fbo w h", fbo.width(), fbo.height())
-        # print("xform", xform)
-        # print("tis", fvao.trgl_index_size)
 
         f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
                        f.GL_UNSIGNED_INT, None)
@@ -909,9 +769,7 @@ class UniBuf:
 
     def bindToShader(self, shader_id, uniform_index):
         gl = self.gl
-        # gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, self.binding_point, self.buffer_id)
         gl.glUniformBlockBinding(shader_id, uniform_index, self.binding_point)
-        # gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
 
     def setBuffer(self):
         gl = self.gl
@@ -945,7 +803,7 @@ class Chunk:
         self.ak = ak
         # Chunk key (position) in input data (3 coords: x, y, z)
 
-        # atlas chunk size (3 coords, usually 130,130,130)
+        # atlas chunk size (3 coords, usually 128,128,128)
         acsz = atlas.acsz
         # atlas rectangle
         ar = self.k2r(ak, acsz)
@@ -999,17 +857,17 @@ class Chunk:
         # print(ar, int_dr, skip0, skip1)
         # print(skip0, skip1)
         # print(dr, int_dr)
-        # TODO: copy into atlas texture
         acsz = self.atlas.acsz
-        # buf = np.zeros((acsz[2], acsz[1], acsz[0], 4), np.uint16)
         buf = np.zeros((acsz[2], acsz[1], acsz[0]), np.uint16)
         c0 = skip0
         c1 = tuple(acsz[i]-skip1[i] for i in range(len(acsz)))
         data = self.atlas.datas[dl]
 
-        # # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], :3] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]][:,:,:,np.newaxis]
         timera = Utils.Timer()
         timera.active = False
+        # TODO: eliminate need for is_zarr test by adding
+        # getDataAndMisses to VolumeView.trdata (need to make
+        # trdata into a class)
         if self.atlas.volume_view.volume.is_zarr:
             buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = data.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), False)
             # print(self.ak, misses)
@@ -1024,13 +882,9 @@ class Chunk:
         timera.time("get data")
 
         texture_set = False
-        # TODO: for testing:
-        # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], :3] = 32000
-        # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0], 3] = 65535
         # print("buf", buf.min(), buf.max())
         a = self.ar[0]
         # print(a, acsz)
-        # self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.RGBA, QOpenGLTexture.UInt16, buf.tobytes())
         if self.misses == 0:
             self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, buf.tobytes())
             texture_set = True
@@ -1049,69 +903,15 @@ class Chunk:
         xform.translate(*(self.ar[0][i]+self.pad-dr[0][i] for i in range(len(self.ar[0]))))
         xform.scale(*(dsz[i] for i in range(len(dsz))))
         self.xform = xform
-        # vals = xform.copyDataTo()
-        # print("vals", vals)
-        # print("dsz", dsz)
-        # print("xform", self.xform)
 
-
-        # print("xtmin", self.xform*QVector4D(*self.tmin, 1.))
-        # print("xtmax", self.xform*QVector4D(*self.tmax, 1.))
-
-        # if ak[0] == 0 and ak[1] == 0:
-        #     print("tm", self.tmin, self.tmax)
         self.atlas.program.bind()
         ind = self.atlas.index(self.ak)
-        # print("setting xform", ind)
-        # self.atlas.program.setUniformValue("xforms[%d]"%ind, self.xform)
-        # print("unf loc", ind, self.atlas.program.uniformLocation("xforms[%d]"%ind))
-        # print("unf loc", ind, self.atlas.program.uniformLocation("tmins[%d]"%ind))
-        # print("unf loc", ind, self.atlas.program.uniformLocation("tmaxs[%d]"%ind))
-        # print("setting tmin", ind)
-        # tminvec = QVector3D(*self.tmin)
-        # self.atlas.program.setUniformValue("tmins[%d]"%ind, QVector3D(*self.tmin))
-        # self.atlas.program.setUniformValue("tmins[%d]"%ind, tminvec)
 
-        '''
-        gl = self.atlas.gl
-        dsize = self.atlas.chunk_info_sizes[0]
-        offset = self.atlas.chunk_info_offsets[0] + ind*dsize
-        # tmin4 = (self.tmin[0], self.tmin[1], self.tmin[2], 0.)
-        # tminarr = np.array(tmin4, dtype=np.float32)
-        # print("tminarr", tminarr.shape)
-        # tminbuf = tminarr.tobytes()
-        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, self.atlas.ubo_buf_id)
-        sz = gl.glGetBufferParameteriv(gl.GL_UNIFORM_BUFFER, gl.GL_BUFFER_SIZE)
-        # print("immutable", gl.glGetBufferParameteriv(gl.GL_UNIFORM_BUFFER, gl.GL_BUFFER_IMMUTABLE_STORAGE))
-        print("sz, offset, dsize", sz, offset, dsize, len(tminbuf))
-        # allarr = np.zeros((sz//4,), dtype=np.float32)
-        # allbuf = allarr.tobytes()
-        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, sz, allbuf)
-        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, sz, allbuf, gl.GL_STATIC_DRAW)
-        print("new size", gl.glGetBufferParameteriv(gl.GL_UNIFORM_BUFFER, gl.GL_BUFFER_SIZE))
-        # gl.glBufferSubData(gl.GL_UNIFORM_BUFFER, offset, dsize, tminbuf)
-        # gl.glBufferSubData(gl.GL_ARRAY_BUFFER, 0, sz, allbuf)
-        # gl.glBufferSubData(0, int(offset), int(dsize), tminbuf)
-        # print("sz2, offset, dsize", sz, offset, dsize, len(tminbuf))
-        # gl.glBufferSubData(gl.GL_UNIFORM_BUFFER, 0, 32, None)
-        # gl.glBufferSubData(gl.GL_UNIFORM_BUFFER, offset, dsize, None)
-
-        # gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
-        '''
-        # pid = self.atlas.program.programId()
         self.atlas.tmax_ubo.data[ind, :3] = self.tmax
-        # self.atlas.tmax_ubo.data[ind, :3] = self.tmin
-        # self.atlas.tmax_ubo.setBuffer()
-        # self.atlas.tmax_ubo.bindToShader(pid, 1)
         self.atlas.tmin_ubo.data[ind, :3] = self.tmin
-        # self.atlas.tmin_ubo.data[ind, :3] = (0.,0.,0.)
-        # self.atlas.tmin_ubo.data[ind, :3] = self.tmax
-        # self.atlas.tmin_ubo.setBuffer()
-        # self.atlas.tmin_ubo.bindToShader(pid, 0)
 
         xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
         self.atlas.xform_ubo.data[ind, :, :] = xformarr
-        # self.atlas.xform_ubo.setBuffer()
 
         # TODO: should be consolidated in addBlocks, but doesn't
         # always work there!
@@ -1120,10 +920,6 @@ class Chunk:
         self.atlas.xform_ubo.setBuffer()
 
         timera.time("set buffers")
-
-        # self.atlas.program.setUniformValue("dtmin", QVector3D(*[dcsz[i]/dsz[i] for i in range(3)]))
-        # print("setting tmax", ind)
-        # self.atlas.program.setUniformValue("tmaxs[%d]"%ind, QVector3D(*self.tmax))
 
         self.in_use = True
         return texture_set
@@ -1179,76 +975,37 @@ atlas_data_code = {
       #version 410 core
 
       const int max_nchunks = {max_nchunks};
-      // const int max_nchunks2 = max_nchunks;
-      const int max_nchunks2 = {max_nchunks};
       // NOTE: On an XPS 9320 running PyQt5 and OpenGL 4.1,
       // the uniform buffers below MUST be in alphabetical
       // order!!
       layout (std140) uniform TMaxs {{
-        vec3 tmaxs2[max_nchunks2];
+        vec3 tmaxs[max_nchunks];
       }};
       layout (std140) uniform TMins {{
-        vec3 tmins2[max_nchunks2];
+        vec3 tmins[max_nchunks];
       }};
       layout (std140) uniform XForms {{
-        mat4 xforms2[max_nchunks2];
+        mat4 xforms[max_nchunks];
       }};
       layout (std140) uniform ZChartIds {{
-        int chart_ids2[max_nchunks2];
+        int chart_ids[max_nchunks];
       }};
       uniform sampler3D atlas;
-      // uniform vec3 test[max_nchunks];
-      // uniform mat4 xforms[max_nchunks];
-      // uniform vec3 tmins[max_nchunks];
-      // uniform vec3 tmaxs[max_nchunks];
-      /*
-      layout (std140) uniform TMaxs {{
-        vec3 tmaxs2[max_nchunks2];
-      }};
-      layout (std140) uniform XForms {{
-        vec3 xforms2[max_nchunks2];
-      }};
-      layout (std140) uniform ZChartIds {{
-        int zchart_ids2[max_nchunks2];
-      }};
-      */
-      /*
-      layout (std140) uniform ChunkInfo {{
-        vec4 tmins2[max_nchunks2];
-        vec4 tmaxs2[max_nchunks2];
-        mat4 xforms2[max_nchunks2];
-        // int chart_ids2[max_nchunks2];
-      }};
-      */
-      // uniform vec3 dtmin;
-      // uniform int chart_ids[{max_nchunks}];
       uniform int ncharts;
 
       in vec4 fxyz;
       out vec4 fColor;
 
       void main() {{
-        // fColor = vec4(.5,0.,.5,1.);
         fColor = vec4(.5,.5,.5,1.);
         for (int i=0; i<ncharts; i++) {{
-            // int id = chart_ids[i]+0*chart_ids2[i];
-            int id = chart_ids2[i];
-            // vec3 tmin = tmins[id];
-            vec3 tmin = tmins2[id];
-            vec3 tmax = tmaxs2[id];
-            // tmin = tmax;
-            // tmax = tmaxs[id];
-            // vec3 tmax = tmaxs2[id];
-            // tmax = tmax+tmaxs2[id].xyz;
-            // tmin = tmin+tmins2[id].xyz;
-            // tmin = tmins2[id].xyz;
-            // id = id+chart_ids2[i];
-            // vec3 tmax = tmin + dtmin;
+            int id = chart_ids[i];
+            vec3 tmin = tmins[id];
+            vec3 tmax = tmaxs[id];
             if (tmin.z != 0. && fxyz.x >= tmin.x && fxyz.x <= tmax.x &&
              fxyz.y >= tmin.y && fxyz.y <= tmax.y &&
              fxyz.z >= tmin.z && fxyz.z <= tmax.z) {{
-              // mat4 xform = xforms[id]+xforms2[id];
-              mat4 xform = xforms2[id];
+              mat4 xform = xforms[id];
               vec3 txyz = (xform*fxyz).xyz;
               fColor = texture(atlas, txyz);
               fColor.g = fColor.r;
@@ -1281,7 +1038,6 @@ class Atlas:
     # def __init__(self, volume_view, gl, tex3dsz=(2048,2048,600), dcsz=(256,256,256)):
     def __init__(self, volume_view, gl, tex3dsz=(2048,2048,300), chunk_size=126):
         dcsz = (chunk_size, chunk_size, chunk_size)
-        # self.created = Utils.timestamp()
         self.gl = gl
         pad = 1
         self.pad = pad
@@ -1309,8 +1065,6 @@ class Atlas:
         for data in datas:
             shape = data.shape
             dsz.append(tuple(shape[::-1]))
-        # print("dsz")
-        # print(dsz)
         self.datas = datas
         self.dsz = dsz
         # number of data chunks in each direction
@@ -1318,15 +1072,12 @@ class Atlas:
         for l in range(len(dsz)):
             lksz = tuple(self.ke(dsz[l][i],dcsz[i]) for i in range(len(dcsz)))
             ksz.append(lksz)
-        # print("ksz")
-        # print(ksz)
         self.ksz = ksz
         # number of atlas chunks in each direction
         aksz = tuple(tex3dsz[i]//acsz[i] for i in range(len(acsz)))
         # size of atlas in each direction
         self.asz = tuple(aksz[i]*acsz[i] for i in range(len(acsz)))
         self.aksz = aksz
-        # print("asz", self.asz)
 
         self.chunks = OrderedDict()
 
@@ -1353,66 +1104,24 @@ class Atlas:
         pid = self.program.programId()
         print("program id", pid)
 
-        '''
-        # ubo_buf_ids = []
-        # gl.glGenBuffers(4, ubo_buf_ids)
-        # TMins, TMaxs, XForms, ChartIds
-        # ubo_buf_ids = gl.glGenBuffers(2)
-        # print("ubo_buf_ids", ubo_buf_ids)
-        ubo_buf_id = gl.glGenBuffers(1)
-        self.ubo_buf_id = ubo_buf_id
-        print("ubo_buf_id", ubo_buf_id)
-        # wsizes = [4, 4, 16, 1]
-        # wsizes = [4, 4, 16]
-        # sizes = [4*wsize for wsize in wsizes]
-        # sizes = [4, 4, 16]
-        row_sizes = [1, 1, 4]
-        offset = 0
-        offsets = []
-        for size in sizes:
-            offsets.append(offset)
-            offset += size*max_nchunks
-        total_words = offset
-        print("sizes", max_nchunks, total_words)
-        self.chunk_info_offsets = offsets
-        self.chunk_info_sizes = sizes
-        self.chunk_info_arr = np.zeros(
-        '''
-        self.tmax_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 0)
-        self.tmax_ubo.bindToShader(pid, 0)
-        # the 1 is the binding point, which should be unique for
+        # the 0 is the binding point, which should be unique for
         # each UniBuf.
-        self.tmin_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 1)
         # should use glGetUniformBlockIndex, to get ubo_index instead
         # of hardwiring 0, but that function is missing from PyQt5
+        self.tmax_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 0)
+        self.tmax_ubo.bindToShader(pid, 0)
+
+        self.tmin_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 1)
         self.tmin_ubo.bindToShader(pid, 1)
+
         self.xform_ubo = UniBuf(gl, np.zeros((max_nchunks, 4, 4), dtype=np.float32), 2)
         self.xform_ubo.bindToShader(pid, 2)
+
         # even though data in this case could be listed as a 1D
         # array of ints, UBO layout rules require that the ints
         # be aligned every 16 bytes.
         self.chart_id_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.int32), 3)
         self.chart_id_ubo.bindToShader(pid, 3)
-
-        '''
-        for i in range(len(ubo_buf_ids)):
-            gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, ubo_buf_ids[i])
-            gl.glBufferData(gl.GL_UNIFORM_BUFFER, 4*sizes[i]*max_nchunks, None, gl.GL_STATIC_DRAW)
-            gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
-        '''
-        '''
-        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, ubo_buf_id)
-        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, total_size, None, gl.GL_STATIC_DRAW)
-        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, total_size, None, gl.GL_DYNAMIC_DRAW)
-        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
-        # should use glGetUniformBlockIndex, to get ubo_index, but 
-        # that function is missing from PyQt5
-        ubo_index = 0
-        # this is arbitrary
-        ubo_binding = 0
-        gl.glUniformBlockBinding(self.program.programId(), ubo_index, ubo_binding)
-        gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, ubo_binding, ubo_buf_id)
-        '''
 
         # allocate 3D texture 
         tex3d = QOpenGLTexture(QOpenGLTexture.Target3D)
@@ -1425,7 +1134,6 @@ class Atlas:
         tex3d.setSize(*self.asz)
         # see https://stackoverflow.com/questions/23533749/difference-between-gl-r16-and-gl-r16ui
         tex3d.setFormat(QOpenGLTexture.R16_UNorm)
-        # tex3d.setFormat(QOpenGLTexture.RGBA16_UNorm)
         tex3d.allocateStorage()
         self.tex3d = tex3d
         aunit = 4
@@ -1451,8 +1159,6 @@ class Atlas:
     # given an atlas chunk location, return a key
     def index(self, ak):
         aksz = self.aksz
-        # print("aksz", aksz)
-        # print("ak", ak)
         return (ak[2]*aksz[1] + ak[1])*aksz[0] + ak[0]
 
     # Number of chunks (in 1D) given data size, chunk size.
@@ -1486,9 +1192,6 @@ class Atlas:
                 if texture_set:
                     textures_set += 1
                 self.chunks[key] = chunk
-                # if textures_set >= self.max_textures_set:
-                #     chunk.in_use = True
-                #     break
             else: # If the data is already in the Atlas
                 # move the chunk to the end of the OrderedDict
                 if chunk.misses > 0:
@@ -1521,8 +1224,6 @@ class Atlas:
     # than addBlocks, because addBlocks needs to be called later
     # than displayBlocks, to prevent GPU round trips
     def displayBlocks(self, data_fbo, fvao, stxy_xform):
-        # self.addBlocks(zoom_level, blocks)
-        # dw = self.gldw
         gl = self.gl
 
         data_fbo.bind()
