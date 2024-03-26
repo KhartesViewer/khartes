@@ -285,8 +285,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.xyz_fbo = None
         self.xyz_arr = None
         # self.atlas_chunk_size = 254
-        # self.atlas_chunk_size = 126
-        self.atlas_chunk_size = 62
+        self.atlas_chunk_size = 126
+        # self.atlas_chunk_size = 62
 
     def localInitializeGL(self):
         f = self.gl
@@ -405,11 +405,12 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.drawTrgls(self.xyz_fbo, self.xyz_program)
         timera.time("xyz 2")
 
-        zoom_level, larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
-        if zoom_level >= 0 and self.atlas is not None:
+        larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
+        # if zoom_level >= 0 and self.atlas is not None:
+        if len(larr) > 0 and self.atlas is not None:
             if len(larr) >= self.atlas.max_nchunks-1:
                 larr = larr[:self.atlas.max_nchunks-1]
-            maxxed_out = self.atlas.addBlocks(zoom_level, larr)
+            maxxed_out = self.atlas.addBlocks(larr)
             if maxxed_out:
                 dw.window.zarrSlot(None)
 
@@ -520,7 +521,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         nzarr = arr[arr[:,:,3] > 0][:,:3] // dv
 
         if len(nzarr) == 0:
-            return -1, None, farr
+            return [], farr
 
         nzmin = nzarr.min(axis=0)
         nzmax = nzarr.max(axis=0)
@@ -530,10 +531,25 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         dvarr = np.concatenate((dvarr, indices), axis=3)
         dvarr[nzsarr[:,0],nzsarr[:,1], nzsarr[:,2],0] = 1
         larr = dvarr[dvarr[:,:,:,0] == 1][:,1:]+nzmin
+        larr = np.concatenate((larr, np.full((len(larr),1), izoom)), axis=1)
+        # print("larr shape", larr.shape, larr.dtype)
+        # larr = larr[:, :3]
+
+        cur_larr = larr[:,:3].copy()
+        for izoom in range(zoom_level+1, nlevels):
+            nxyzs = cur_larr // 2
+            cur_larr = np.unique(nxyzs, axis=0)
+            # print("cur_larr shape", cur_larr.shape, cur_larr.dtype)
+            clarr = np.concatenate((cur_larr, np.full((len(cur_larr),1), izoom)), axis=1)
+            # larr = np.concatenate((larr, np.concatenate((cur_larr, np.full((len(cur_larr),1), izoom)), axis=1)), axis=0)
+            # larr = np.concatenate((larr, clarr), axis=0)
+
+            larr = np.concatenate((clarr, larr), axis=0)
+            # print("new larr shape", izoom, larr.shape, larr.dtype)
 
         timera.time("process image")
 
-        return zoom_level, larr, farr
+        return larr, farr
 
     def stxyXform(self):
         dw = self.gldw
@@ -913,11 +929,10 @@ class Chunk:
         xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
         self.atlas.xform_ubo.data[ind, :, :] = xformarr
 
-        # TODO: should be consolidated in addBlocks, but doesn't
-        # always work there!
-        self.atlas.tmin_ubo.setBuffer()
-        self.atlas.tmax_ubo.setBuffer()
-        self.atlas.xform_ubo.setBuffer()
+        # Now consolidated in addBlocks
+        # self.atlas.tmin_ubo.setBuffer()
+        # self.atlas.tmax_ubo.setBuffer()
+        # self.atlas.xform_ubo.setBuffer()
 
         timera.time("set buffers")
 
@@ -999,6 +1014,7 @@ atlas_data_code = {
       void main() {{
         fColor = vec4(.5,.5,.5,1.);
         for (int i=0; i<ncharts; i++) {{
+        // for (int i=ncharts-1; i>=0; i--) {{
             int id = chart_ids[i];
             vec3 tmin = tmins[id];
             vec3 tmax = tmaxs[id];
@@ -1171,13 +1187,17 @@ class Atlas:
 
     # Given a list of blocks, add the blocks that are
     # not already in the atlas. 
-    def addBlocks(self, zoom_level, blocks):
+    def addBlocks(self, zblocks):
         for chunk in reversed(self.chunks.values()):
             if chunk.in_use == False:
                 break
             chunk.in_use = False
         textures_set = 0
-        for block in blocks:
+        for zblock in zblocks:
+            # if textures_set >= self.max_textures_set:
+            #     continue
+            block = zblock[:3]
+            zoom_level = zblock[3]
             key = self.key(block, zoom_level)
             chunk = self.chunks.get(key, None)
             # If the data chunk is not currently stored in the atlas:
@@ -1194,21 +1214,20 @@ class Atlas:
                 self.chunks[key] = chunk
             else: # If the data is already in the Atlas
                 # move the chunk to the end of the OrderedDict
-                if chunk.misses > 0:
-                    chunk.setData(block, zoom_level)
+                # if chunk.misses > 0:
+                if chunk.misses > 0 and textures_set < self.max_textures_set:
+                    texture_set = chunk.setData(block, zoom_level)
+                    if texture_set:
+                        textures_set += 1
                 self.chunks.move_to_end(key)
             chunk.in_use = True
 
         # TODO: At img 12310 x 3348 y 4539 there is a little missing piece 
 
-        '''
-        # TODO: Not sure why this doesn't work correctly;
-        # sometimes a few blocks aren't drawn.
         if textures_set > 0:
             self.tmin_ubo.setBuffer()
             self.tmax_ubo.setBuffer()
             self.xform_ubo.setBuffer()
-        '''
         cnt = 0
         # To get all the active chunks, search backwards from
         # the end
@@ -1237,16 +1256,32 @@ class Atlas:
 
         self.program.setUniformValue("stxy_xform", stxy_xform)
 
+        '''
         nchunks = 0
         for key,chunk in reversed(self.chunks.items()):
             if not chunk.in_use:
                 break
             ak = chunk.ak
             ind = self.index(ak)
-            self.program.setUniformValue("chart_ids[%d]"%nchunks, ind)
+            # self.program.setUniformValue("chart_ids[%d]"%nchunks, ind)
             self.chart_id_ubo.data[nchunks,0] = ind
             # print(nchunks, ind)
             nchunks += 1
+        '''
+        uchunks = []
+        for key,chunk in reversed(self.chunks.items()):
+            if not chunk.in_use:
+                break
+            uchunks.append(chunk)
+        uchunks.sort(reverse=True, key=lambda chunk: chunk.dl)
+        nchunks = 0
+        for chunk in uchunks:
+            ak = chunk.ak
+            ind = self.index(ak)
+            # self.program.setUniformValue("chart_ids[%d]"%nchunks, ind)
+            self.chart_id_ubo.data[nchunks,0] = ind
+            nchunks += 1
+
         print("nchunks", nchunks)
         self.program.setUniformValue("ncharts", nchunks)
         self.chart_id_ubo.setBuffer()
