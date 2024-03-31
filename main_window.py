@@ -2077,6 +2077,9 @@ class MainWindow(QMainWindow):
         for ppm in old_vpath.glob("*.ppm"):
             print ("ppm:", ppm.name)
             shutil.copy2(ppm, new_vpath / ppm.name)
+        for volzarr in old_vpath.glob("*.volzarr"):
+            print ("volzarr:", volzarr.name)
+            shutil.copy2(volzarr, new_vpath / volzarr.name)
 
         old_prj.path = new_prj.path
         old_prj.volumes_path = new_prj.volumes_path
