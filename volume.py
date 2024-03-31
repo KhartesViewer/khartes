@@ -1,8 +1,8 @@
 import pathlib
 import numpy as np
 from utils import Utils
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtCore import Qt
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtCore import Qt
 import cv2
 import nrrd
 import nrrd.writer
@@ -309,7 +309,8 @@ tiff files is aligned with the slice vertical axes""",
         #     return False
         if role == Qt.CheckStateRole and column == 0:
             # print(row, value)
-            if value != Qt.Checked:
+            cv = Qt.CheckState(value)
+            if cv != Qt.Checked:
                 self.main_window.setVolume(None)
                 return False
             volumes = self.project_view.volumes

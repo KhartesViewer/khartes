@@ -6,9 +6,10 @@ import json
 import time
 import numpy as np
 import platform
+import traceback
 
-from PyQt5.QtWidgets import (
-        QAction, QApplication, QAbstractItemView,
+from PySide6.QtWidgets import (
+        QApplication, QAbstractItemView,
         QCheckBox, QComboBox,
         QDialog, QDialogButtonBox,
         QFileDialog, QFrame,
@@ -24,16 +25,16 @@ from PyQt5.QtWidgets import (
         QVBoxLayout, 
         QWidget, 
         )
-from PyQt5.QtCore import (
+from PySide6.QtCore import (
         QAbstractTableModel, QCoreApplication, QObject,
         QThread, QSize, QTimer, Qt, qVersion, QSettings,
-        pyqtSignal
+        Signal
         )
-from PyQt5.QtGui import QPainter, QPalette, QColor, QCursor, QIcon, QPixmap, QImage
+from PySide6.QtGui import QAction, QPainter, QPalette, QColor, QCursor, QIcon, QPixmap, QImage
 
-from PyQt5.QtSvg import QSvgRenderer
+from PySide6.QtSvg import QSvgRenderer
 
-from PyQt5.QtXml import QDomDocument
+from PySide6.QtXml import QDomDocument
 
 from tiff_loader import TiffLoader
 from zarr_loader import ZarrLoader
@@ -49,8 +50,8 @@ from volume import (
 from volume_zarr import CachedZarrVolume
 from ppm import Ppm
 from utils import Utils
-from gl_data_window import GLDataWindow
-from gl_surface_window import GLSurfaceWindow
+# from gl_data_window import GLDataWindow
+# from gl_surface_window import GLSurfaceWindow
 
 class ColorBlock(QLabel):
 
@@ -82,7 +83,7 @@ class RoundnessSetter(QGroupBox):
         hlayout.addWidget(label)
         self.edit = QLineEdit()
         fm = self.edit.fontMetrics()
-        w = 7*fm.width('0')
+        w = 7*fm.horizontalAdvance('0')
         self.edit.setFixedWidth(w)
         self.edit.editingFinished.connect(self.onEditingFinished)
         self.edit.textEdited.connect(self.onTextEdited)
@@ -165,7 +166,7 @@ class InfillDialog(QDialog):
             hlayout.addWidget(QLabel("Infill spacing"))
             self.edit = QLineEdit("16")
             fm = self.edit.fontMetrics()
-            w = 7*fm.width('0')
+            w = 7*fm.horizontalAdvance('0')
             self.edit.setFixedWidth(w)
             self.edit.editingFinished.connect(self.onEditingFinished)
             self.edit.textEdited.connect(self.onTextEdited)
@@ -464,7 +465,9 @@ class VolBoxesVisibleCheckBox(QCheckBox):
         self.stateChanged.connect(self.onStateChanged)
 
     def onStateChanged(self, s):
-        self.main_window.setVolBoxesVisible(s==Qt.Checked)
+        # print("osc", s, Qt.Checked, Qt.CheckState(s), Qt.Checked.value, s==Qt.Checked)
+        cs = Qt.CheckState(s)
+        self.main_window.setVolBoxesVisible(cs==Qt.Checked)
 
 class TrackingCursorsVisibleCheckBox(QCheckBox):
     def __init__(self, main_window, parent=None):
@@ -481,7 +484,8 @@ class TrackingCursorsVisibleCheckBox(QCheckBox):
 
     def onStateChanged(self, s):
         # self.main_window.setVolBoxesVisible(s==Qt.Checked)
-        self.main_window.setTrackingCursorsVisible(s==Qt.Checked)
+        cs = Qt.CheckState(s)
+        self.main_window.setTrackingCursorsVisible(cs==Qt.Checked)
 
     def updateValue(self, value):
         self.setChecked(value)
@@ -499,7 +503,7 @@ class VoxelSizeEditor(QWidget):
         self.setLayout(layout)
         self.edit = QLineEdit()
         fm = self.edit.fontMetrics()
-        w = 7*fm.width('0')
+        w = 7*fm.horizontalAdvance('0')
         self.edit.setFixedWidth(w)
         self.edit.editingFinished.connect(self.onEditingFinished)
         self.edit.textEdited.connect(self.onTextEdited)
@@ -553,7 +557,7 @@ class ZarrMaxWindowWidthEditor(QWidget):
         self.setLayout(layout)
         self.edit = QLineEdit()
         fm = self.edit.fontMetrics()
-        w = 7*fm.width('0')
+        w = 7*fm.horizontalAdvance('0')
         self.edit.setFixedWidth(w)
         self.edit.editingFinished.connect(self.onEditingFinished)
         self.edit.textEdited.connect(self.onTextEdited)
@@ -611,7 +615,7 @@ class ZarrMaxCacheGb(QWidget):
         self.setLayout(layout)
         self.edit = QLineEdit()
         fm = self.edit.fontMetrics()
-        w = 7*fm.width('0')
+        w = 7*fm.horizontalAdvance('0')
         self.edit.setFixedWidth(w)
         self.edit.editingFinished.connect(self.onEditingFinished)
         self.edit.textEdited.connect(self.onTextEdited)
@@ -738,7 +742,8 @@ class ApplyOpacityCheckBox(QCheckBox):
         main_window.draw_settings_widgets[self.setting][self.param] = self
 
     def onStateChanged(self, s):
-        self.main_window.setDrawSettingsValue(self.setting, self.param, s==Qt.Checked)
+        cs = Qt.CheckState(s)
+        self.main_window.setDrawSettingsValue(self.setting, self.param, cs==Qt.Checked)
 
     def updateValue(self, value):
         self.setChecked(value)
@@ -819,7 +824,7 @@ class MainWindow(QMainWindow):
         },
     }
 
-    zarr_signal = pyqtSignal(str)
+    zarr_signal = Signal(str)
 
     def __init__(self, appname, app):
         super(MainWindow, self).__init__()
@@ -832,7 +837,8 @@ class MainWindow(QMainWindow):
         print("Loaded settings from", self.settings.fileName())
         qv = [int(x) for x in qVersion().split('.')]
         # print("Qt version", qv)
-        if qv[0] > 5 or qv[0] < 5 or qv[1] < 12:
+        # if qv[0] > 5 or qv[0] < 5 or qv[1] < 12:
+        if qv[0] < 5 or (qv[0] == 5 and qv[1] < 12):
             print("Need to use Qt version 5, subversion 12 or above")
             # 5.12 or above is needed for QImage::Format_RGBX64
             exit()
@@ -869,7 +875,7 @@ class MainWindow(QMainWindow):
         self.openhand_transparents = self.transparentSvgs(path+"/icons/openhand transparent.svg", 11)
         self.openhand_transparent = self.openhand_transparents[0]
 
-        case = 3
+        case = 0
 
         if case == 0:
             # x slice or y slice in data
@@ -1027,6 +1033,8 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar(self)
         self.setStatusBar(self.status_bar)
 
+        self.exiting = False
+
         # is this needed?
         self.volumes_model = VolumesModel(None, self)
         self.tiff_loader = TiffLoader(self)
@@ -1045,6 +1053,15 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(100, self.drawSlices)
             if len(args) > 2 and args[2].endswith('.obj'):
                 self.loadObjFile(args[2])
+
+    '''
+    def showEvent(self, e):
+        if self.isVisible():
+            print("showing")
+            self.activateWindow()
+            self.raise_()
+            self.setFocus()
+    '''
 
     def setCursorPosition(self, data_window, tijk):
         # show_tracking_cursors = self.draw_settings["tracking_cursors"]["show"]
@@ -1070,7 +1087,7 @@ class MainWindow(QMainWindow):
         doc = QDomDocument()
         doc.setContent(svg_txt)
         paths = doc.elementsByTagName("path")
-        # print(len(paths),"paths")
+        # print(paths.count(),"paths")
         gradients = [
                 {
                     "fill-opacity": (.2, 0.),
@@ -1089,7 +1106,7 @@ class MainWindow(QMainWindow):
                     "stroke-opacity": (0., 0.4)
                     }
                 ]
-        if len(gradients) != len(paths):
+        if len(gradients) != paths.count():
             print("gradient-path mismatch")
             return []
 
@@ -1566,12 +1583,15 @@ class MainWindow(QMainWindow):
         # vbv = 'vol_boxes_visible'
         # old_value = slices[vbv]
         old_value = self.project_view.vol_boxes_visible
+        # print("svbv", old_value, value)
         if old_value == value:
             return
         self.project_view.vol_boxes_visible = value
         # slices[vbv] = value
+        # print("checking boxes")
         self.settings_vol_boxes_visible.setChecked(self.getVolBoxesVisible())
         self.settings_vol_boxes_visible2.setChecked(self.getVolBoxesVisible())
+        # print("done checking boxes")
         self.project_view.notifyModified()
         self.drawSlices()
 
@@ -1857,14 +1877,21 @@ class MainWindow(QMainWindow):
             # dialog.done(sdir)
             dialog.khartes_directory = sdir
             # dialog.done(1)
+            # print("sleeping")
+            # The sleep is needed to prevent crashes 
+            # with PySide6
+            time.sleep(.5)
             print("calling dialog.accept()")
+            # self.app.processEvents()
+            # print("processed events")
+            # traceback.print_stack()
             dialog.accept()
 
     # override
     def closeEvent(self, e):
         # print("close event")
         e.ignore()
-        if not self.warnIfNotSaved("exit khartes"):
+        if not self.exiting and not self.warnIfNotSaved("exit khartes"):
             # print("Canceled by user after warning")
             return
         # if self.tiff_loader is not None:
@@ -2430,9 +2457,15 @@ class MainWindow(QMainWindow):
             print("No khprj directory selected")
             return
         '''
+        # attr = dialog.testAttribute(Qt.WA_DeleteOnClose)
+        # print("delete on close", attr)
 
+        print("Calling dialog exec")
+        # traceback.print_stack()
         de = dialog.exec()
+        # print("Dialog exec returned")
         print("File dialog returned", de, dialog.result())
+        # traceback.print_stack()
         khartes_directory = getattr(dialog, "khartes_directory", None)
         if not de and khartes_directory is None:
             print("No khprj directory selected")
@@ -2511,6 +2544,7 @@ class MainWindow(QMainWindow):
             # print("Canceled by user after warning")
             return
         self.settingsSaveSizePos()
+        self.exiting = True
         self.app.quit()
 
     def onNextVolumeButtonClick(self, s):

@@ -9,7 +9,7 @@ from ppm import Ppm
 from fragment import Fragment, FragmentView
 from trgl_fragment import TrglFragment, TrglFragmentView
 from base_fragment import BaseFragment, BaseFragmentView
-from PyQt5.QtGui import QColor 
+from PySide6.QtGui import QColor 
 
 
 

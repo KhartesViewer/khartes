@@ -6,8 +6,8 @@ Jeremiah 36:28
 '''
 
 import sys
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtGui import QSurfaceFormat
+from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QSurfaceFormat
 from main_window import MainWindow
 
 class Khartes():

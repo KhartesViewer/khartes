@@ -1,4 +1,5 @@
 import re
+import time
 from pathlib import Path
 # import traceback
 import numpy as np
@@ -6,8 +7,8 @@ from volume import Volume
 from volume_zarr import CachedZarrVolume
 import tifffile
 
-from PyQt5.QtWidgets import (
-        QAction, QApplication, QAbstractItemView,
+from PySide6.QtWidgets import (
+        QApplication, QAbstractItemView,
         QCheckBox, QColorDialog,
         QFileDialog,
         QGridLayout,
@@ -20,8 +21,8 @@ from PyQt5.QtWidgets import (
         QVBoxLayout, 
         QWidget, 
         )
-from PyQt5.QtCore import QSize, Qt, qVersion, QSettings
-from PyQt5.QtGui import QPalette, QColor, QCursor, QIntValidator
+from PySide6.QtCore import QSize, Qt, qVersion, QSettings
+from PySide6.QtGui import QAction, QPalette, QColor, QCursor, QIntValidator
 
 class ColorEdit(QPushButton):
 
@@ -127,6 +128,9 @@ class ZarrLoader(QMainWindow):
         # doesn't end in .zarr, if it contains certain dot files.
         if sdir.endswith(".zarr"):
             dialog.zarr_directory = sdir
+            # The sleep is needed to prevent crashes 
+            # with PySide6
+            time.sleep(.5)
             # dialog.done(1)
             dialog.accept()
 
@@ -147,6 +151,9 @@ class ZarrLoader(QMainWindow):
         if len(dirs) == 0 and len(tifs) > 0:
             # print("match", sdir)
             dialog.zarr_directory = sdir
+            # The sleep is needed to prevent crashes 
+            # with PySide6
+            time.sleep(.5)
             # dialog.done(1)
             dialog.accept()
         return None

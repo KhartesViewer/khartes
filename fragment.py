@@ -16,9 +16,9 @@ from scipy.interpolate import CubicSpline
 from utils import Utils
 from volume import Volume
 from base_fragment import BaseFragment, BaseFragmentView
-from PyQt5 import QtCore, QtGui
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from PySide6 import QtCore, QtGui
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 
 class FragmentsModel(QtCore.QAbstractTableModel):
     def __init__(self, project_view, main_window):
@@ -197,14 +197,16 @@ class FragmentsModel(QtCore.QAbstractTableModel):
                or 
                len(self.main_window.project_view.activeFragmentViews(unaligned_ok=True)) > 1):
                 exclusive = False
-            self.main_window.setFragmentActive(fragment, value==Qt.Checked, exclusive)
+            cv = Qt.CheckState(value)
+            self.main_window.setFragmentActive(fragment, cv==Qt.Checked, exclusive)
             return True
         elif role == Qt.CheckStateRole and column == 1:
             # print(row, value)
             fragments = self.project_view.fragments
             fragment = list(fragments.keys())[row]
             fragment_view = fragments[fragment]
-            self.main_window.setFragmentVisibility(fragment, value==Qt.Checked)
+            cv = Qt.CheckState(value)
+            self.main_window.setFragmentVisibility(fragment, cv==Qt.Checked)
             return True
         elif role == Qt.CheckStateRole and column == 2:
             # print(row, value)
@@ -213,7 +215,8 @@ class FragmentsModel(QtCore.QAbstractTableModel):
             fragment_view = fragments[fragment]
             # Note that column reads "Hide Mesh", but internal variable
             # is mesh_visible
-            self.main_window.setFragmentMeshVisibility(fragment, value==Qt.Unchecked)
+            cv = Qt.CheckState(value)
+            self.main_window.setFragmentMeshVisibility(fragment, cv==Qt.Unchecked)
             return True
         elif role == Qt.EditRole and column == 3:
             # print("setdata", row, value)
