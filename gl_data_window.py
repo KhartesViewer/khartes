@@ -1,17 +1,8 @@
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
         QImage,
         QMatrix4x4,
         QOffscreenSurface,
-        QOpenGLVertexArrayObject,
-        QOpenGLBuffer,
         QOpenGLContext,
-        QOpenGLDebugLogger,
-        QOpenGLDebugMessage,
-        QOpenGLFramebufferObject,
-        QOpenGLFramebufferObjectFormat,
-        QOpenGLShader,
-        QOpenGLShaderProgram,
-        QOpenGLTexture,
         QPixmap,
         QSurfaceFormat,
         QTransform,
@@ -19,16 +10,32 @@ from PyQt5.QtGui import (
         QVector4D,
         )
 
-from PyQt5.QtWidgets import (
+from PySide6.QtOpenGL import (
+        QOpenGLVertexArrayObject,
+        QOpenGLBuffer,
+        QOpenGLDebugLogger,
+        QOpenGLDebugMessage,
+        QOpenGLFramebufferObject,
+        QOpenGLFramebufferObjectFormat,
+        QOpenGLShader,
+        QOpenGLShaderProgram,
+        QOpenGLTexture,
+        QOpenGLVersionFunctionsFactory,
+        )
+
+from PySide6.QtWidgets import (
         QApplication, 
         QGridLayout,
         QHBoxLayout,
         QMainWindow,
-        QOpenGLWidget,
         QWidget,
         )
 
-from PyQt5.QtCore import (
+from PySide6.QtOpenGLWidgets import (
+        QOpenGLWidget,
+        )
+
+from PySide6.QtCore import (
         QFileInfo,
         QPointF,
         QSize,
@@ -36,11 +43,15 @@ from PyQt5.QtCore import (
         )
 
 import time
+import collections
+
 import numpy as np
 import numpy.linalg as npla
 import cv2
-from utils import Utils
+from OpenGL import GL as pygl
+from shiboken6 import VoidPtr
 
+from utils import Utils
 from data_window import DataWindow
 
 
@@ -271,7 +282,7 @@ common_offset_code = '''
 '''
 
 fragment_pts_code = {
-    "name": "fragment_trgls",
+    "name": "fragment_pts",
 
     "vertex": '''
       #version 410 core
@@ -679,7 +690,7 @@ class GLDataWindowChild(QOpenGLWidget):
 
         # 0: asynchronous mode, 1: synch mode
         # synch mode is said to be much slower
-        self.logging_mode = 1
+        self.logging_mode = QOpenGLDebugLogger.SynchronousLogging
         self.localInit()
 
     def localInit(self):
@@ -697,7 +708,8 @@ class GLDataWindowChild(QOpenGLWidget):
     def initializeGL(self):
         print(self.message_prefix, "initializeGL")
         self.context().aboutToBeDestroyed.connect(self.destroyingContext)
-        self.gl = self.context().versionFunctions()
+        # self.gl = self.context().versionFunctions()
+        self.gl = QOpenGLVersionFunctionsFactory.get()
         self.main_context = self.context()
         # Note that debug logging only takes place if the
         # surface format option "DebugContext" is set
@@ -721,18 +733,36 @@ class GLDataWindowChild(QOpenGLWidget):
     def resizeGL(self, width, height):
         # print("resize", width, height)
         # based on https://stackoverflow.com/questions/59338015/minimal-opengl-offscreen-rendering-using-qt
-        vp_size = QSize(width, height)
+        # vp_size = QSize(width, height)
+        f = self.gl
+        # f.glViewport(0, 0, vp_size.width(), vp_size.height())
+        # BUG in PySide6: can't seem to get vector info from glGet
+        # fbdims = f.glGetIntegerv(pygl.GL_VIEWPORT)
+        # fbdims = f.glGetIntegeri_v(pygl.GL_VIEWPORT, 0)
+        # fbdims = f.glGetFloatv(pygl.GL_VIEWPORT)
+        # fbdims = f.glGetFloati_v(pygl.GL_VIEWPORT, 0)
+        # fbdims = f.glGetFloati_v(pygl.GL_DEPTH_RANGE, 2)
+
+        # See https://doc.qt.io/qt-6/highdpi.html for why
+        # this is needed when working with OpenGL.
+        # I would prefer to set the size based on the size of
+        # the default framebuffer (or viewport), but because of 
+        # the PySide6 bug mentioned above, this does not seem
+        # to be possible.
+        ratio = self.screen().devicePixelRatio()
+        vp_size = QSize(int(ratio*width), int(ratio*height))
+        # print("resize", width, height, ratio)
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
-        f = self.gl
-        fbo_format.setInternalTextureFormat(f.GL_RGBA16)
+        fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
         self.fragment_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.fragment_fbo.bind()
 
-        self.fragment_fbo.addColorAttachment(width, height, f.GL_RGBA16)
-        draw_buffers = (f.GL_COLOR_ATTACHMENT0, f.GL_COLOR_ATTACHMENT0+1)
+        self.fragment_fbo.addColorAttachment(width, height, pygl.GL_RGBA16)
+        draw_buffers = (pygl.GL_COLOR_ATTACHMENT0, pygl.GL_COLOR_ATTACHMENT0+1)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
-        f.glViewport(0, 0, vp_size.width(), vp_size.height())
+        # f.glViewport(0, 0, vp_size.width(), vp_size.height())
+        # print("max vp", f.glGetIntegerv(pygl.GL_MAX_VIEWPORT_DIMS))
 
         QOpenGLFramebufferObject.bindDefault()
 
@@ -744,7 +774,7 @@ class GLDataWindowChild(QOpenGLWidget):
         
         f = self.gl
         f.glClearColor(.6,.3,.3,1.)
-        f.glClear(f.GL_COLOR_BUFFER_BIT)
+        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
         self.paintSlice()
 
     # assumes the image is from fragment_fbo, and that
@@ -766,7 +796,7 @@ class GLDataWindowChild(QOpenGLWidget):
         iw = im.width()
         ih = im.height()
         iptr = im.constBits()
-        iptr.setsize(im.sizeInBytes())
+        # iptr.setsize(im.sizeInBytes())
         # make copy because the buffer from im will be deleted
         # at some point
         arr = np.frombuffer(iptr, dtype=np.uint16).copy()
@@ -783,10 +813,18 @@ class GLDataWindowChild(QOpenGLWidget):
         # Be sure to clear with alpha = 0
         # so that the slice view isn't blocked!
         f.glClearColor(0.,0.,0.,0.)
-        f.glClear(f.GL_COLOR_BUFFER_BIT)
+        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
 
+        '''
         # Aargh!  PyQt5 does not define glClearBufferfv!
-        # f.glClearBufferfv(f.GL_COLOR, 0, (.3, .6, .3, 1.))
+        # And it isn't clear how to call it in PySide6
+        # f.glClearBufferfv(int(pygl.GL_COLOR), int(0), [.3, .6, .3, 1.])
+        seq = [float(.3), float(.6), float(.3), float(1.)]
+        # seq = collections.abc.Sequence([.3, .6, .3, 1.])
+        print("seq type", type(seq), type(collections.abc.Sequence[float]))
+        print("isinstance", isinstance(seq, collections.abc.Sequence))
+        f.glClearBufferfv(int(pygl.GL_COLOR), int(0), seq)
+        '''
 
         dw = self.gldw
         axstr = "(%d) "%dw.axis
@@ -802,6 +840,9 @@ class GLDataWindowChild(QOpenGLWidget):
         zoom = dw.getZoom()
         cijk = volume_view.ijktf
 
+        zf = .8
+        # zoom *= .8
+
         # Convert tijk coordinates to OpenGL clip-window coordinates.
         # Note that the matrix converts the axis coordinate such that
         # only points within .5 voxel width on either side are
@@ -809,13 +850,21 @@ class GLDataWindowChild(QOpenGLWidget):
         mat = np.zeros((4,4), dtype=np.float32)
         ww = dw.size().width()
         wh = dw.size().height()
+        # print("w h", ww, wh)
         wf = zoom/(.5*ww)
         hf = zoom/(.5*wh)
         df = 1/.5
+        ''''''
         mat[0][iind] = wf
         mat[0][3] = -wf*cijk[iind]
         mat[1][jind] = -hf
         mat[1][3] = hf*cijk[jind]
+        '''
+        mat[0][iind] = wf
+        mat[0][3] = -wf*cijk[iind]
+        mat[1][jind] = -hf
+        mat[1][3] = hf*cijk[jind]
+        '''
         mat[2][kind] = df
         mat[2][3] = -df*cijk[kind]
         mat[3][3] = 1.
@@ -836,7 +885,16 @@ class GLDataWindowChild(QOpenGLWidget):
         self.fragment_trgls_program.bind()
         self.fragment_trgls_program.setUniformValue("xform", xform)
         self.fragment_trgls_program.setUniformValue("window_size", dw.size())
-        self.fragment_trgls_program.setUniformValue("thickness", 1.*line_thickness)
+        # self.fragment_trgls_program.setUniformValue("thickness", float(1.*line_thickness))
+        tloc = self.fragment_trgls_program.uniformLocation("thickness")
+        # test whether glGetUniformBlockIndex is available
+        # pid = self.fragment_trgls_program.programId()
+        # bloc = f.glGetUniformBlockIndex(pid, "asdf")
+        # print("tloc", tloc)
+        # BUG in PySide6: calls glUniform1i instead of glUniform1f
+        # self.fragment_trgls_program.setUniformValue(tloc, (1.*line_thickness,))
+        f.glUniform1f(tloc, 1.*line_thickness)
+        # print("tloc2")
         timera.time(axstr+"setup")
         new_fragment_vaos = {}
         self.indexed_fvs = []
@@ -867,8 +925,8 @@ class GLDataWindowChild(QOpenGLWidget):
             vao = fvao.getVao()
             vao.bind()
 
-            f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size, 
-                             f.GL_UNSIGNED_INT, None)
+            f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size, 
+                             pygl.GL_UNSIGNED_INT, VoidPtr(0))
             vao.release()
         self.fragment_trgls_program.release()
 
@@ -890,8 +948,8 @@ class GLDataWindowChild(QOpenGLWidget):
                 vao = fvao.getVao()
                 vao.bind()
     
-                f.glDrawElements(f.GL_LINE_STRIP, fvao.trgl_index_size, 
-                                 f.GL_UNSIGNED_INT, None)
+                f.glDrawElements(pygl.GL_LINE_STRIP, fvao.trgl_index_size, 
+                                 pygl.GL_UNSIGNED_INT, VoidPtr(0))
                 vao.release()
 
             self.fragment_lines_program.release()
@@ -944,7 +1002,7 @@ class GLDataWindowChild(QOpenGLWidget):
             # print(color, rgba)
             self.fragment_pts_program.setUniformValue("node_color", *rgba)
 
-            nearby_node_id = -1
+            nearby_node_id = 2**30
             pts = fv.getPointsOnSlice(dw.axis, dw.positionOnAxis())
             # print(fv.fragment.name, pts.shape)
             if fv == pv.nearby_node_fv:
@@ -957,7 +1015,12 @@ class GLDataWindowChild(QOpenGLWidget):
                     # print("nearby node", len(nz), nz, self.nearbyNode, pts[nz, 3])
 
             i0 += len(pts)
-            self.fragment_pts_program.setUniformValue("nearby_node_id", nearby_node_id)
+            # print("nni", self.fragment_pts_program.uniformLocation("nearby_node_id"))
+            # Can't use because of a BUG in PySide6
+            # self.fragment_pts_program.setUniformValue("nearby_node_id", nearby_node_id)
+            nniloc = self.fragment_pts_program.uniformLocation("nearby_node_id")
+            # print("nniloc", nniloc, nearby_node_id)
+            self.fragment_pts_program.setUniformValue(nniloc, int(nearby_node_id))
 
             ijs = dw.tijksToIjs(pts)
             xys = dw.ijsToXys(ijs)
@@ -975,7 +1038,7 @@ class GLDataWindowChild(QOpenGLWidget):
             vao.bind()
 
             # print("drawing", node_thickness, fvao.pts_size)
-            f.glDrawArrays(f.GL_POINTS, 0, fvao.pts_size)
+            f.glDrawArrays(pygl.GL_POINTS, 0, fvao.pts_size)
             vao.release()
 
         self.fragment_pts_program.release()
@@ -1185,7 +1248,7 @@ class GLDataWindowChild(QOpenGLWidget):
             return
         # print("bloc", bloc)
         bunit = 1
-        f.glActiveTexture(f.GL_TEXTURE0+bunit)
+        f.glActiveTexture(pygl.GL_TEXTURE0+bunit)
         base_tex.bind()
         self.slice_program.setUniformValue(bloc, bunit)
 
@@ -1197,7 +1260,7 @@ class GLDataWindowChild(QOpenGLWidget):
             print("couldn't get loc for underlay sampler")
             return
         uunit = 2
-        f.glActiveTexture(f.GL_TEXTURE0+uunit)
+        f.glActiveTexture(pygl.GL_TEXTURE0+uunit)
         underlay_tex.bind()
         self.slice_program.setUniformValue(uloc, uunit)
 
@@ -1209,7 +1272,7 @@ class GLDataWindowChild(QOpenGLWidget):
             print("couldn't get loc for overlay sampler")
             return
         ounit = 3
-        f.glActiveTexture(f.GL_TEXTURE0+ounit)
+        f.glActiveTexture(pygl.GL_TEXTURE0+ounit)
         overlay_tex.bind()
         self.slice_program.setUniformValue(oloc, ounit)
 
@@ -1223,10 +1286,10 @@ class GLDataWindowChild(QOpenGLWidget):
         # I'm not sure whether enabling alpha blending affects
         # only the current fbo, or whether it affects every drawing
         # operation everywhere from now on.
-        f.glEnable(f.GL_BLEND)
-        f.glBlendFunc(f.GL_SRC_ALPHA, f.GL_ONE_MINUS_SRC_ALPHA)
+        f.glEnable(pygl.GL_BLEND)
+        f.glBlendFunc(pygl.GL_SRC_ALPHA, pygl.GL_ONE_MINUS_SRC_ALPHA)
         self.drawFragments()
-        # f.glDisable(f.GL_BLEND)
+        # f.glDisable(pygl.GL_BLEND)
 
         self.slice_program.bind()
         floc = self.slice_program.uniformLocation("fragments_sampler")
@@ -1234,7 +1297,7 @@ class GLDataWindowChild(QOpenGLWidget):
             print("couldn't get loc for fragments sampler")
             return
         funit = 4
-        f.glActiveTexture(f.GL_TEXTURE0+funit)
+        f.glActiveTexture(pygl.GL_TEXTURE0+funit)
         # only valid if texture is created using
         # addColorAttachment()
         tex_ids = self.fragment_fbo.textures()
@@ -1246,14 +1309,14 @@ class GLDataWindowChild(QOpenGLWidget):
         # fragments_tex_id = self.pick_tex.textureId()
         # testing:
         # fragments_tex_id = tex_ids[1]
-        f.glBindTexture(f.GL_TEXTURE_2D, fragments_tex_id)
+        f.glBindTexture(pygl.GL_TEXTURE_2D, fragments_tex_id)
         self.slice_program.setUniformValue(floc, funit)
 
-        f.glActiveTexture(f.GL_TEXTURE0)
+        f.glActiveTexture(pygl.GL_TEXTURE0)
         vaoBinder = QOpenGLVertexArrayObject.Binder(self.slice_vao)
         self.slice_program.bind()
-        f.glDrawElements(f.GL_TRIANGLES, 
-                         self.slice_indices.size, f.GL_UNSIGNED_INT, None)
+        f.glDrawElements(pygl.GL_TRIANGLES, 
+                         self.slice_indices.size, pygl.GL_UNSIGNED_INT, VoidPtr(0))
         self.slice_program.release()
         vaoBinder = None
         # Putting getPicks here seems to fix the problems
@@ -1292,6 +1355,7 @@ class GLDataWindowChild(QOpenGLWidget):
         if not ok:
             print(name, "link failed")
             exit()
+        print("program", name, program.programId())
         return program
 
     def buildPrograms(self):
@@ -1336,12 +1400,12 @@ class GLDataWindowChild(QOpenGLWidget):
         
         f.glVertexAttribPointer(
                 vloc,
-                xyuvs.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
-                4*xyuvs.itemsize, 0)
+                xyuvs.shape[1], int(pygl.GL_FLOAT), int(pygl.GL_FALSE), 
+                4*xyuvs.itemsize, VoidPtr(0))
         f.glVertexAttribPointer(
                 tloc, 
-                xyuvs.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
-                4*xyuvs.itemsize, 2*xyuvs.itemsize)
+                xyuvs.shape[1], int(pygl.GL_FLOAT), int(pygl.GL_FALSE), 
+                4*xyuvs.itemsize, VoidPtr(2*xyuvs.itemsize))
         vbo.release()
         self.slice_program.enableAttributeArray(vloc)
         self.slice_program.enableAttributeArray(tloc)
@@ -1407,8 +1471,8 @@ class FragmentVao:
         f = self.gl
         f.glVertexAttribPointer(
                 vloc,
-                pts3d.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
-                0, 0)
+                pts3d.shape[1], int(pygl.GL_FLOAT), int(pygl.GL_FALSE), 
+                0, VoidPtr(0))
         self.vbo.release()
 
         # This needs to be called while the current VAO is bound

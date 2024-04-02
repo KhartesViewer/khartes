@@ -50,7 +50,7 @@ from volume import (
 from volume_zarr import CachedZarrVolume
 from ppm import Ppm
 from utils import Utils
-# from gl_data_window import GLDataWindow
+from gl_data_window import GLDataWindow
 # from gl_surface_window import GLSurfaceWindow
 
 class ColorBlock(QLabel):
@@ -875,7 +875,7 @@ class MainWindow(QMainWindow):
         self.openhand_transparents = self.transparentSvgs(path+"/icons/openhand transparent.svg", 11)
         self.openhand_transparent = self.openhand_transparents[0]
 
-        case = 0
+        case = 2
 
         if case == 0:
             # x slice or y slice in data
@@ -1880,7 +1880,7 @@ class MainWindow(QMainWindow):
             # print("sleeping")
             # The sleep is needed to prevent crashes 
             # with PySide6
-            time.sleep(.5)
+            time.sleep(1.0)
             print("calling dialog.accept()")
             # self.app.processEvents()
             # print("processed events")
