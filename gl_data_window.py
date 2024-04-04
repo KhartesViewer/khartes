@@ -119,7 +119,6 @@ class GLDataWindow(DataWindow):
 
     def setIjkTf(self, tf):
         # dw = self.glw
-        self.volume_view.setIjkTf(tf)
         ij = self.tijkToIj(tf)
         xy = self.ijToXy(ij)
         d = 10
@@ -127,9 +126,10 @@ class GLDataWindow(DataWindow):
         xyg = (xy[0]+d, xy[1]+d)
 
         stxy = self.stxyInBounds(xyl, xyg, tf)
-        # print("tf, stxy", tf, stxy)
+        # print("tf, xy, stxy", tf, xy, stxy)
         if stxy is not None:
             self.volume_view.setStxyTf(stxy)
+        self.volume_view.setIjkTf(tf)
 
     def ptToBary(self, ijk, vs):
         v01 = vs[1]-vs[0]
