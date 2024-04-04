@@ -44,6 +44,7 @@ from PySide6.QtCore import (
 
 import time
 import collections
+import traceback
 
 import numpy as np
 import numpy.linalg as npla
@@ -71,9 +72,12 @@ class GLDataWindow(DataWindow):
     # Overrides DataWindow.fvsInBounds
     # Returns a set of all FragmentViews whose cross-section
     # line on the slice passes through the bounding box given
-    # by xymin and xymax
+    # by xymin and xymax, where xymin and xymax are Qt window 
+    # coordinates (not OpenGL window coordinates)
     def fvsInBounds(self, xymin, xymax):
         dw = self.glw
+        # print("xy", (xymax[0]+xymin[0])/2, (xymax[1]+xymin[1])/2)
+        # print("xy", xymin, xymax)
         xyfvs = dw.xyfvs
         indexed_fvs = dw.indexed_fvs
         fvs = set()
@@ -95,6 +99,24 @@ class GLDataWindow(DataWindow):
             fvs.add(fv)
         return fvs
 
+    '''
+    # slice ij position to window xy position
+    def ijToGLXy(self, ij):
+        i,j = ij
+        ratio = self.screen().devicePixelRatio()
+        zoom = self.getZoom()
+        zoom *= ratio
+        tijk = self.volume_view.ijktf
+        ci = tijk[self.iIndex]
+        cj = tijk[self.jIndex]
+        ww, wh = ratio*self.width(), ratio*self.height()
+        wcx, wcy = ww//2, wh//2
+        x = int(zoom*(i-ci)) + wcx
+        y = int(zoom*(j-cj)) + wcy
+        print(i,j,ci,cj)
+        return (x,y)
+    '''
+
     def setIjkTf(self, tf):
         # dw = self.glw
         self.volume_view.setIjkTf(tf)
@@ -105,6 +127,7 @@ class GLDataWindow(DataWindow):
         xyg = (xy[0]+d, xy[1]+d)
 
         stxy = self.stxyInBounds(xyl, xyg, tf)
+        # print("tf, stxy", tf, stxy)
         if stxy is not None:
             self.volume_view.setStxyTf(stxy)
 
@@ -135,6 +158,9 @@ class GLDataWindow(DataWindow):
     # main active fragment view
     def stxyInBounds(self, xymin, xymax, ijk):
         fvs = set()
+        # ratio = self.screen().devicePixelRatio()
+        # xymin = (round(xymin[0]*ratio), round(xymin[1]*ratio))
+        # xymax = (round(xymax[0]*ratio), round(xymax[1]*ratio))
         xycenter = ((xymin[0]+xymax[0])//2, (xymin[1]+xymax[1])//2)
         dw = self.glw
         xyfvs = dw.xyfvs
@@ -152,6 +178,7 @@ class GLDataWindow(DataWindow):
         # has higher precedence than comparison operators
         matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
         if len(matches) == 0:
+            # print("no matches")
             return None
 
         mrows = xyfvs[matches]
@@ -165,6 +192,7 @@ class GLDataWindow(DataWindow):
                 inbounds.append(trgl)
         mirows = mrows[np.isin(trgls, inbounds)]
         if len(mirows) == 0:
+            # print("no pts in trgls")
             return None
         # print("mirows", mirows)
         xys = mirows[:,:2]
@@ -721,6 +749,8 @@ class GLDataWindowChild(QOpenGLWidget):
         self.logger.logMessage(msg)
         self.localInitializeGL()
 
+        # self.printInfo()
+
     def localInitializeGL(self):
         f = self.gl
         f.glClearColor(.6,.3,.3,1.)
@@ -743,6 +773,9 @@ class GLDataWindowChild(QOpenGLWidget):
         # fbdims = f.glGetFloati_v(pygl.GL_VIEWPORT, 0)
         # fbdims = f.glGetFloati_v(pygl.GL_DEPTH_RANGE, 2)
 
+        # fbdims = pygl.glGetIntegerv(pygl.GL_VIEWPORT)
+        # print("fbdims", width, height, fbdims)
+
         # See https://doc.qt.io/qt-6/highdpi.html for why
         # this is needed when working with OpenGL.
         # I would prefer to set the size based on the size of
@@ -751,14 +784,14 @@ class GLDataWindowChild(QOpenGLWidget):
         # to be possible.
         ratio = self.screen().devicePixelRatio()
         vp_size = QSize(int(ratio*width), int(ratio*height))
-        # print("resize", width, height, ratio)
+        # print("resize", width, height, ratio, vp_size)
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
         fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
         self.fragment_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.fragment_fbo.bind()
 
-        self.fragment_fbo.addColorAttachment(width, height, pygl.GL_RGBA16)
+        self.fragment_fbo.addColorAttachment(vp_size.width(), vp_size.height(), pygl.GL_RGBA16)
         draw_buffers = (pygl.GL_COLOR_ATTACHMENT0, pygl.GL_COLOR_ATTACHMENT0+1)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
         # f.glViewport(0, 0, vp_size.width(), vp_size.height())
@@ -1095,7 +1128,9 @@ class GLDataWindowChild(QOpenGLWidget):
                 axis=1)
 
         self.xyfvs = np.zeros((nonzeros.shape[0], 4), nonzeros.dtype)
-        self.xyfvs[:,0:2] = nonzeros[:,0:2]
+        ratio = self.screen().devicePixelRatio()
+        # print("arr", arr.shape, self.width(), self.height(), ratio)
+        self.xyfvs[:,0:2] = nonzeros[:,0:2].astype(np.float32)/ratio
         # Subtract 1 from value in nonzeros, 
         # because the stored iindex value starts at 1, not 0.
         self.xyfvs[:,2] = nonzeros[:,2] - 1
@@ -1328,9 +1363,9 @@ class GLDataWindowChild(QOpenGLWidget):
 
     def destroyingContext(self):
         print("glw destroying context")
-
     def onLogMessage(self, head, msg):
         print(head, "log:", msg.message())
+        # traceback.print_stack()
 
     @staticmethod
     def buildProgram(sdict):
@@ -1430,6 +1465,30 @@ class GLDataWindowChild(QOpenGLWidget):
         # ibo will be detached from vao.  We don't want that!
         vaoBinder = None
         ibo.release()
+
+    def printInfo(self):
+        print("vendor", pygl.glGetString(pygl.GL_VENDOR))
+        print("version", pygl.glGetString(pygl.GL_VERSION))
+        # for minimum values (4.1) see:
+        # https://registry.khronos.org/OpenGL/specs/gl/glspec41.core.pdf
+        # starting p. 383
+
+        # at least 16834 (4.1)
+        print("max texture size", 
+              pygl.glGetIntegerv(pygl.GL_MAX_TEXTURE_SIZE))
+        # at least 2048 (4.1)
+        print("max array texture size", 
+              pygl.glGetIntegerv(pygl.GL_MAX_ARRAY_TEXTURE_LAYERS))
+        # at least 2048 (4.1)
+        print("max 3d texture size", 
+              pygl.glGetIntegerv(pygl.GL_MAX_3D_TEXTURE_SIZE))
+        # at least 16 (4.1)
+        print("max texture image units", 
+              pygl.glGetIntegerv(pygl.GL_MAX_TEXTURE_IMAGE_UNITS))
+        print("max combined texture image units", 
+              pygl.glGetIntegerv(pygl.GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS))
+        print("max texture buffer size", 
+              pygl.glGetIntegerv(pygl.GL_MAX_TEXTURE_BUFFER_SIZE)) 
 
 
 class FragmentVao:

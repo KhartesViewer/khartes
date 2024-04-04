@@ -1,17 +1,8 @@
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
         QImage,
         QMatrix4x4,
         QOffscreenSurface,
-        QOpenGLVertexArrayObject,
-        QOpenGLBuffer,
         QOpenGLContext,
-        QOpenGLDebugLogger,
-        QOpenGLDebugMessage,
-        QOpenGLFramebufferObject,
-        QOpenGLFramebufferObjectFormat,
-        QOpenGLShader,
-        QOpenGLShaderProgram,
-        QOpenGLTexture,
         QPixmap,
         QSurfaceFormat,
         QTransform,
@@ -20,16 +11,31 @@ from PyQt5.QtGui import (
         QVector4D,
         )
 
-from PyQt5.QtWidgets import (
+from PySide6.QtOpenGL import (
+        QOpenGLVertexArrayObject,
+        QOpenGLBuffer,
+        QOpenGLDebugLogger,
+        QOpenGLDebugMessage,
+        QOpenGLFramebufferObject,
+        QOpenGLFramebufferObjectFormat,
+        QOpenGLShader,
+        QOpenGLShaderProgram,
+        QOpenGLTexture,
+        )
+
+from PySide6.QtWidgets import (
         QApplication, 
         QGridLayout,
         QHBoxLayout,
         QMainWindow,
-        QOpenGLWidget,
         QWidget,
         )
 
-from PyQt5.QtCore import (
+from PySide6.QtOpenGLWidgets import (
+        QOpenGLWidget,
+        )
+
+from PySide6.QtCore import (
         QFileInfo,
         QPointF,
         QSize,
@@ -40,6 +46,8 @@ import time
 from collections import OrderedDict
 import numpy as np
 import cv2
+from OpenGL import GL as pygl
+from shiboken6 import VoidPtr
 
 from utils import Utils
 from data_window import DataWindow
@@ -82,6 +90,7 @@ class GLSurfaceWindow(DataWindow):
         self.volume_view.setIjkTf(nijk)
         ostxy = self.volume_view.stxytf
         nstxy = (ostxy[0]+di, ostxy[1]+dj)
+
         self.volume_view.setStxyTf(nstxy)
 
     def setIjkOrStxyTf(self, tf):
@@ -113,8 +122,9 @@ class GLSurfaceWindow(DataWindow):
         if xyz_arr is None:
             print("xyz_arr is None; returning vv.ijktf")
             return self.volume_view.ijktf
-        ix = round(x)
-        iy = round(y)
+        ratio = self.screen().devicePixelRatio()
+        ix = round(x*ratio)
+        iy = round(y*ratio)
         if iy < 0 or iy >= xyz_arr.shape[0] or ix < 0 or ix >= xyz_arr.shape[1]:
             print("error", x, y, xyz_arr.shape)
             return self.volume_view.ijktf
@@ -300,10 +310,21 @@ class GLSurfaceWindowChild(GLDataWindowChild):
     
     def resizeGL(self, width, height):
         f = self.gl
+
+        # See https://doc.qt.io/qt-6/highdpi.html for why
+        # this is needed when working with OpenGL.
+        # I would prefer to set the size based on the size of
+        # the default framebuffer (or viewport), but because of 
+        # the PySide6 bug mentioned above, this does not seem
+        # to be possible.
+        ratio = self.screen().devicePixelRatio()
+        width = int(ratio*width)
+        height = int(ratio*height)
+        
         self.vp_width = width
         self.vp_height = height
         vp_size = QSize(width, height)
-        # print("resizeGL (surface)", width, height)
+        # print("resizeGL (surface)", width, height, vp_size)
 
         # fbo where xyz positions are drawn; this information is used
         # to determine which data chunks to load.
@@ -318,20 +339,20 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # a resolution for our purposes!
         # The uint16 format can store xyz at a resolution of 1
         # pixel, which is good enough for our purposes.
-        # fbo_format.setInternalTextureFormat(f.GL_RGB32F)
-        fbo_format.setInternalTextureFormat(f.GL_RGBA16)
+        # fbo_format.setInternalTextureFormat(pygl.GL_RGB32F)
+        fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
         self.xyz_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.xyz_fbo.bind()
-        draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
+        draw_buffers = (pygl.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
 
         # fbo where the data will be drawn
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
-        fbo_format.setInternalTextureFormat(f.GL_RGBA16)
+        fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
         self.data_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.data_fbo.bind()
-        draw_buffers = (f.GL_COLOR_ATTACHMENT0,)
+        draw_buffers = (pygl.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
 
         QOpenGLFramebufferObject.bindDefault()
@@ -346,7 +367,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # print("paintGL (surface)")
         f = self.gl
         f.glClearColor(.6,.3,.6,1.)
-        f.glClear(f.GL_COLOR_BUFFER_BIT)
+        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
         self.paintSlice()
 
     def buildPrograms(self):
@@ -426,10 +447,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             print("couldn't get loc for base sampler")
             return
         bunit = 1
-        f.glActiveTexture(f.GL_TEXTURE0+bunit)
-        f.glBindTexture(f.GL_TEXTURE_2D, base_tex)
-        self.slice_program.setUniformValue(bloc, bunit)
-
+        f.glActiveTexture(pygl.GL_TEXTURE0+bunit)
+        f.glBindTexture(pygl.GL_TEXTURE_2D, base_tex)
         self.slice_program.setUniformValue(bloc, bunit)
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
@@ -440,7 +459,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             print("couldn't get loc for underlay sampler")
             return
         uunit = 2
-        f.glActiveTexture(f.GL_TEXTURE0+uunit)
+        f.glActiveTexture(pygl.GL_TEXTURE0+uunit)
         underlay_tex.bind()
         self.slice_program.setUniformValue(uloc, uunit)
 
@@ -452,15 +471,15 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             print("couldn't get loc for overlay sampler")
             return
         ounit = 3
-        f.glActiveTexture(f.GL_TEXTURE0+ounit)
+        f.glActiveTexture(pygl.GL_TEXTURE0+ounit)
         overlay_tex.bind()
         self.slice_program.setUniformValue(oloc, ounit)
 
-        f.glActiveTexture(f.GL_TEXTURE0)
+        f.glActiveTexture(pygl.GL_TEXTURE0)
         self.slice_vao.bind()
         self.slice_program.bind()
-        f.glDrawElements(f.GL_TRIANGLES, 
-                         self.slice_indices.size, f.GL_UNSIGNED_INT, None)
+        f.glDrawElements(pygl.GL_TRIANGLES, 
+                         self.slice_indices.size, pygl.GL_UNSIGNED_INT, VoidPtr(0))
         self.slice_program.release()
         self.slice_vao.release()
         timera.time("combine")
@@ -487,6 +506,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         timera.time("get image")
         # print("im format", im.format())
         farr = self.npArrayFromQImage(im)
+        # print("farr", farr.shape, farr.dtype)
         df = 4
         arr = farr[::df,::df,:]
         # print(farr.shape, arr.shape)
@@ -519,6 +539,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         zoom_level = izoom
         # look for xyz values where alpha is not zero
         nzarr = arr[arr[:,:,3] > 0][:,:3] // dv
+        # print("nzarr", nzarr.shape, nzarr.dtype)
 
         if len(nzarr) == 0:
             return [], farr
@@ -581,7 +602,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # Be sure to clear with alpha = 0
         # so that the slice view isn't blocked!
         f.glClearColor(0.,0.,0.,0.)
-        f.glClear(f.GL_COLOR_BUFFER_BIT)
+        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
 
         pv = dw.window.project_view
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
@@ -598,8 +619,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         vao = fvao.getVao()
         vao.bind()
 
-        f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
-                       f.GL_UNSIGNED_INT, None)
+        f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
+                       pygl.GL_UNSIGNED_INT, None)
         vao.release()
         self.trgl_program.release()
 
@@ -621,7 +642,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # Be sure to clear with alpha = 0
         # so that the slice view isn't blocked!
         f.glClearColor(0.,0.,0.,0.)
-        f.glClear(f.GL_COLOR_BUFFER_BIT)
+        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
         f.glViewport(0, 0, fbo.width(), fbo.height())
 
         program.bind()
@@ -629,8 +650,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         xform = self.stxyXform()
         program.setUniformValue("xform", xform)
 
-        f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
-                       f.GL_UNSIGNED_INT, None)
+        f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
+                       pygl.GL_UNSIGNED_INT, VoidPtr(0))
         program.release()
 
         QOpenGLFramebufferObject.bindDefault()
@@ -646,7 +667,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # Be sure to clear with alpha = 0
         # so that the slice view isn't blocked!
         f.glClearColor(0.,0.,0.,0.)
-        f.glClear(f.GL_COLOR_BUFFER_BIT)
+        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
         f.glViewport(0, 0, fbo.width(), fbo.height())
 
         self.xyz_program.bind()
@@ -654,8 +675,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         xform = self.stxyXform()
         self.xyz_program.setUniformValue("xform", xform)
 
-        f.glDrawElements(f.GL_TRIANGLES, fvao.trgl_index_size,
-                       f.GL_UNSIGNED_INT, None)
+        f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
+                       pygl.GL_UNSIGNED_INT, None)
         self.xyz_program.release()
 
         QOpenGLFramebufferObject.bindDefault()
@@ -704,8 +725,8 @@ class FragmentMapVao:
 
         f.glVertexAttribPointer(
                 self.xyz_loc,
-                xyzs.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
-                0, 0)
+                xyzs.shape[1], int(pygl.GL_FLOAT), int(pygl.GL_FALSE), 
+                0, VoidPtr(0))
         self.xyz_vbo.release()
         # This needs to be called while the current VAO is bound
         f.glEnableVertexAttribArray(self.xyz_loc)
@@ -721,8 +742,8 @@ class FragmentMapVao:
         self.stxy_vbo.allocate(stxys, nbytes)
         f.glVertexAttribPointer(
                 self.stxy_loc,
-                stxys.shape[1], int(f.GL_FLOAT), int(f.GL_FALSE), 
-                0, 0)
+                stxys.shape[1], int(pygl.GL_FLOAT), int(pygl.GL_FALSE), 
+                0, VoidPtr(0))
         self.stxy_vbo.release()
         # This needs to be called while the current VAO is bound
         f.glEnableVertexAttribArray(self.stxy_loc)
@@ -775,6 +796,7 @@ class FragmentMapVao:
 # To use: modify values in the data member, then call setBuffer().
 class UniBuf:
     def __init__(self, gl, arr, binding_point):
+        gl = pygl
         self.gl = gl
         self.binding_point = binding_point
         self.data = arr
@@ -790,8 +812,12 @@ class UniBuf:
     def setBuffer(self):
         gl = self.gl
         byte_size = self.data.size * self.data.itemsize
-        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, self.buffer_id)
-        gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data.tobytes(), gl.GL_STATIC_DRAW)
+        # print("about to bind buffer", self.buffer_id)
+        gl.glBindBuffer(pygl.GL_UNIFORM_BUFFER, self.buffer_id)
+        # pygl.glBufferData(pygl.GL_UNIFORM_BUFFER, byte_size, self.data.tobytes(), pygl.GL_STATIC_DRAW)
+        # print("about to set buffer", self.data.shape, self.data.dtype)
+        gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data, gl.GL_STATIC_DRAW)
+        # print("buffer has been set")
         gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
 
 
@@ -1124,6 +1150,8 @@ class Atlas:
         # each UniBuf.
         # should use glGetUniformBlockIndex, to get ubo_index instead
         # of hardwiring 0, but that function is missing from PyQt5
+        for var in ["TMaxs", "TMins", "XForms", "ZChartIds"]:
+            print(var, gl.glGetUniformBlockIndex(pid, var))
         self.tmax_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 0)
         self.tmax_ubo.bindToShader(pid, 0)
 
@@ -1153,10 +1181,12 @@ class Atlas:
         tex3d.allocateStorage()
         self.tex3d = tex3d
         aunit = 4
-        gl.glActiveTexture(gl.GL_TEXTURE0+aunit)
+        gl.glActiveTexture(pygl.GL_TEXTURE0+aunit)
         tex3d.bind()
-        self.program.setUniformValue("atlas", aunit)
-        gl.glActiveTexture(gl.GL_TEXTURE0)
+        # self.program.setUniformValue("atlas", aunit)
+        aloc = self.program.uniformLocation("atlas")
+        self.program.setUniformValue(aloc, aunit)
+        gl.glActiveTexture(pygl.GL_TEXTURE0)
         tex3d.release()
 
 
@@ -1250,7 +1280,7 @@ class Atlas:
         # Be sure to clear with alpha = 0
         # so that the slice view isn't blocked!
         gl.glClearColor(0.,0.,0.,0.)
-        gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+        gl.glClear(pygl.GL_COLOR_BUFFER_BIT)
 
         self.program.bind()
 
@@ -1282,13 +1312,19 @@ class Atlas:
             self.chart_id_ubo.data[nchunks,0] = ind
             nchunks += 1
 
+        # BUG in PySide6
+        # Calls Uniform4fv
+        # self.program.setUniformValue("ncharts", nchunks)
+        nloc = self.program.uniformLocation("ncharts")
+        # print("nloc, nchunks", nloc, nchunks)
         print("nchunks", nchunks)
-        self.program.setUniformValue("ncharts", nchunks)
+        gl.glUniform1i(nloc, nchunks)
+
         self.chart_id_ubo.setBuffer()
 
         # print("db de")
-        gl.glDrawElements(gl.GL_TRIANGLES, fvao.trgl_index_size,
-                       gl.GL_UNSIGNED_INT, None)
+        gl.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
+                       pygl.GL_UNSIGNED_INT, VoidPtr(0))
         # print("db de finished")
         self.program.release()
 
