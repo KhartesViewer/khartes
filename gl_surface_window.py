@@ -73,6 +73,7 @@ class GLSurfaceWindow(DataWindow):
     def allowMouseToDragNode(self):
         return False
 
+    '''
     def setIjkTf(self, tf):
         oijk = self.volume_view.ijktf
         iind = self.iIndex
@@ -92,8 +93,50 @@ class GLSurfaceWindow(DataWindow):
         nstxy = (ostxy[0]+di, ostxy[1]+dj)
 
         self.volume_view.setStxyTf(nstxy)
+    '''
 
-    def setIjkOrStxyTf(self, tf):
+    '''
+    def shiftIjk(self, di, dj, dk):
+        oxy = self.volume_view.stxytf
+        nxy = (oxy[0]+di, oxy[1]+dj)
+        zoom = self.getZoom()
+        dx = di*zoom
+        dy = dj*zoom
+        ww, wh = self.width(), self.height()
+        ox, oy = ww/2, wh/2
+        nx, ny = ox+dx, oy+dy
+        nijk = self.xyToTijk((nx,ny))
+        self.volume_view.setIjkTf(nijk)
+        self.volume_view.setStxyTf(nxy)
+    '''
+
+    def setIjkTf(self, tf):
+        ij = self.tijkToIj(tf)
+        '''
+        xy = self.ijToXy(ij)
+        d = 10
+        xyl = (xy[0]-d, xy[1]-d)
+        xyg = (xy[0]+d, xy[1]+d)
+
+        stxy = self.stxyInBounds(xyl, xyg, tf)
+        '''
+        stxy = self.ijkToStxy(tf)
+        # print("tf, xy, stxy", tf, xy, stxy)
+        if stxy is not None:
+            self.volume_view.setStxyTf(stxy)
+        self.volume_view.setIjkTf(tf)
+
+    def computeTfStartPoint(self):
+        stxy = self.volume_view.stxytf
+        return (stxy[0], stxy[1], 0)
+        # print("tfs", len(tfs), tfs)
+        # return tfs
+
+    # def setTf(self, tf):
+    #     self.setIjkOrStxyTf(tf)
+
+    def setTf(self, tf):
+        tf = tf[:2]
         ostxy = self.volume_view.stxytf
         iind = self.iIndex
         jind = self.jIndex
@@ -110,8 +153,31 @@ class GLSurfaceWindow(DataWindow):
         self.volume_view.setIjkTf(nijk)
         self.volume_view.setStxyTf(tf)
 
-    def computeTfStartPoint(self):
-        return self.volume_view.stxytf
+    def ijkToStxy(self, ijk):
+        xyz_arr = self.glw.xyz_arr
+        if xyz_arr is None:
+            return None
+        dxyz = (xyz_arr[:,:,:3] - ijk).astype(np.float32)
+        dxyz *= dxyz
+        dsq = dxyz.sum(axis=2)
+        dsq[xyz_arr[:,:,3] == 0] = 2**30
+        minindex = np.unravel_index(dsq.argmin(), dsq.shape)
+        # print("shapes", xyz_arr.shape, dsq.shape)
+        # print("minindex", minindex, xyz_arr[*minindex,:3], ijk)
+        iy,ix = minindex
+        zoom = self.getZoom()
+        ratio = self.screen().devicePixelRatio()
+        x = ix/ratio
+        y = iy/ratio
+        w = self.width()
+        h = self.height()
+        hw = w/2
+        hh = h/2
+        dx = (x-hw)/zoom
+        dy = (y-hh)/zoom
+        ostxy = self.volume_view.stxytf
+        nstxy = (ostxy[0]+dx, ostxy[1]+dy)
+        return nstxy
 
     def xyToTijk(self, xy):
         x, y = xy
@@ -135,6 +201,16 @@ class GLSurfaceWindow(DataWindow):
         j = xyza[jind]
         k = xyza[kind]
         return (i,j,k)
+
+    def stxyWindowBounds(self):
+        stxy = self.volume_view.stxytf
+        if stxy is None:
+            return ((0.,0.), (-1.,-1.))
+        zoom = self.getZoom()
+        ww, wh = self.width(), self.height()
+        hw, hh = ww/2, wh/2
+        dx,dy = hw/zoom, hh/zoom
+        return ((stxy[0]-dx,stxy[1]-dy),(stxy[0]+dx,stxy[1]+dy))
 
     def drawSlice(self):
         # the MainWindow.edit widget overlays the
@@ -166,7 +242,7 @@ slice_code = {
       uniform sampler2D base_sampler;
       uniform sampler2D underlay_sampler;
       uniform sampler2D overlay_sampler;
-      uniform sampler2D fragments_sampler;
+      uniform sampler2D trgls_sampler;
       in vec2 ftxt;
       out vec4 fColor;
 
@@ -179,6 +255,11 @@ slice_code = {
         alpha = uColor.a;
         fColor = (1.-alpha)*fColor + alpha*uColor;
 
+        vec4 frColor = texture(trgls_sampler, ftxt);
+        alpha = frColor.a;
+        // alpha = 0.;
+        fColor = (1.-alpha)*fColor + alpha*frColor;
+
         vec4 oColor = texture(overlay_sampler, ftxt);
         alpha = oColor.a;
         fColor = (1.-alpha)*fColor + alpha*oColor;
@@ -186,6 +267,7 @@ slice_code = {
     ''',
 }
 
+"""
 data_code = {
     "name": "data",
 
@@ -241,6 +323,7 @@ data_code = {
       }
     ''',
 }
+"""
 
 xyz_code = {
     "name": "xyz",
@@ -271,6 +354,168 @@ xyz_code = {
     ''',
 }
 
+trgls_code = {
+    "name": "trgls",
+
+    "vertex": '''
+      #version 410 core
+
+      uniform mat4 xform;
+      layout(location=3) in vec3 xyz;
+      layout(location=4) in vec2 stxy;
+      // out vec3 fxyz;
+      void main() {
+        gl_Position = xform*vec4(stxy, 0., 1.);
+        // fxyz = xyz;
+      }
+    ''',
+
+    "geometry_template": '''
+      #version 410 core
+
+      uniform float thickness;
+      uniform vec2 window_size;
+
+      layout(triangles) in;
+      // 42 = 14*3
+      layout(triangle_strip, max_vertices=42) out;
+
+      %s
+
+      void draw_line(vec4 pcs[2]);
+
+      void main()
+      {
+        vec2 xys[3];
+        bool xslo = true; // true if all xs are less than -limit
+        bool xshi = true; // true if all xs are greater than limit
+        bool yslo = true; // true if all ys are less than -limit
+        bool yshi = true; // true if all ys are greater than limit
+        float limit = 1.1;
+        for (int i=0; i<3; i++) {
+          vec2 xy = gl_in[i].gl_Position.xy;
+          xys[i] = xy;
+          if (xy.x > -limit) xslo = false;
+          if (xy.x < limit) xshi = false;
+          if (xy.y > -limit) yslo = false;
+          if (xy.y < limit) yshi = false;
+        }
+        if (xslo || xshi || yslo || yshi) return;
+        /*
+        for (int i=0; i<4; i++) {
+          int ii = i%%3;
+          gl_Position = vec4(xys[ii], 0., 1.);
+          EmitVertex();
+          gl_Position = vec4(xys[ii], 0., 1.);
+          EmitVertex();
+        }
+        */
+        /*
+        for (int i=0; i<3; i++) {
+          gl_Position = vec4(xys[i], 0., 1.);
+          EmitVertex();
+        }
+        */
+        for (int i=0; i<3; i++) {
+          int ip1 = (i+1)%%3;
+          vec4 pcs[2];
+          pcs[0] = vec4(xys[i], 0., 1.);
+          pcs[1] = vec4(xys[ip1], 0., 1.);
+          draw_line(pcs);
+        }
+      }
+
+      void draw_line(vec4 pcs[2]) {
+        int vcount = 4;
+        if (thickness < 5) {
+          vcount = 4;
+        } else {
+           vcount = 10;
+        }
+
+        vec2 tan = (pcs[1]-pcs[0]).xy;
+        if (tan.x == 0 && tan.y == 0) {
+          tan.x = 1.;
+          tan.y = 0.;
+        }
+        tan = normalize(tan);
+        vec2 norm = vec2(-tan.y, tan.x);
+        vec2 factor = vec2(1./window_size.x, 1./window_size.y);
+        vec4 offsets[9];
+        for (int i=0; i<9; i++) {
+          // trig contains cosine and sine of angle i*45 degrees
+          vec2 trig = trig_table[i];
+          vec2 raw_offset = -trig.x*tan + trig.y*norm;
+          vec4 scaled_offset = vec4(factor*raw_offset, 0., 0.);
+          offsets[i] = scaled_offset;
+        }
+        ivec2 vs[10];
+        if (vcount == 10) {
+          vs = v10;
+        } else if (vcount == 4) {
+          vs = v4;
+        }
+
+        for (int i=0; i<vcount; i++) {
+          ivec2 iv = vs[i];
+          gl_Position = pcs[iv.x] + thickness*offsets[iv.y];
+          EmitVertex();
+        }
+        EndPrimitive();
+      }
+
+    ''',
+
+    "fragment": '''
+      #version 410 core
+
+      // in vec3 fxyz;
+      uniform vec4 frag_color;
+      out vec4 fColor;
+
+      void main() {
+          // fColor = vec4(fxyz/65535., 1.);
+          // fColor = vec4(.2,.8,.2,.8);
+          fColor = frag_color;
+      }
+
+    ''',
+}
+
+trgl_pts_code = {
+    "name": "trgl_pts",
+
+    "vertex": '''
+      #version 410 core
+
+      uniform vec4 node_color;
+      uniform vec4 highlight_node_color;
+      uniform int nearby_node_id;
+      out vec4 color;
+      uniform mat4 xform;
+      layout(location=4) in vec2 stxy;
+      void main() {
+        if (gl_VertexID == nearby_node_id) {
+          color = highlight_node_color;
+        } else {
+          color = node_color;
+        }
+        gl_Position = xform*vec4(stxy, 0.0, 1.0);
+      }
+
+    ''',
+    "fragment": '''
+      #version 410 core
+
+      in vec4 color;
+      out vec4 fColor;
+
+      void main()
+      {
+        fColor = color;
+      }
+    ''',
+}
     
 class GLSurfaceWindowChild(GLDataWindowChild):
     def __init__(self, gldw, parent=None):
@@ -291,9 +536,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.atlas = None
         self.active_vao = None
         self.data_fbo = None
-        self.trgl_id_fbo = None
         self.xyz_fbo = None
         self.xyz_arr = None
+        self.trgls_fbo = None
         # self.atlas_chunk_size = 254
         self.atlas_chunk_size = 126
         # self.atlas_chunk_size = 62
@@ -303,6 +548,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f.glClearColor(.6,.3,.3,1.)
         self.buildPrograms()
         self.buildSliceVao()
+        self.printInfo()
 
     def setDefaultViewport(self):
         f = self.gl
@@ -355,6 +601,15 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         draw_buffers = (pygl.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
 
+        # fbo where vertices and wireframe triangles will be drawn 
+        fbo_format = QOpenGLFramebufferObjectFormat()
+        fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
+        fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
+        self.trgls_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
+        self.trgls_fbo.bind()
+        draw_buffers = (pygl.GL_COLOR_ATTACHMENT0,)
+        f.glDrawBuffers(len(draw_buffers), draw_buffers)
+
         QOpenGLFramebufferObject.bindDefault()
 
         self.setDefaultViewport()
@@ -373,6 +628,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
     def buildPrograms(self):
         self.xyz_program = self.buildProgram(xyz_code)
         self.slice_program = self.buildProgram(slice_code)
+        trgls_code["geometry"] = trgls_code["geometry_template"] % self.common_offset_code
+        self.trgls_program = self.buildProgram(trgls_code)
+        self.trgl_pts_program = self.buildProgram(trgl_pts_code)
 
     # Rebuild atlas if volume_view or volume_view.direction
     # changes
@@ -420,12 +678,19 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         fvao = self.active_vao
 
         vao = fvao.getVao()
+
+        # NOTE that drawTrgls, drawTrglXyzs, and drawData all
+        # asssume that self.active_vao has been bound; they
+        # don't bind it themselves.
         vao.bind()
 
         # timera.time("xyz")
-        self.drawTrgls(self.xyz_fbo, self.xyz_program)
+        self.drawTrglXyzs(self.xyz_fbo, self.xyz_program)
         timera.time("xyz 2")
 
+        ''''''
+        # NOTE that getBlocks reads from xyz_fbo, which has
+        # just been written to
         larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
         # if zoom_level >= 0 and self.atlas is not None:
         if len(larr) > 0 and self.atlas is not None:
@@ -434,7 +699,12 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             maxxed_out = self.atlas.addBlocks(larr)
             if maxxed_out:
                 dw.window.zarrSlot(None)
+        ''''''
 
+        self.drawTrgls(self.trgls_fbo, self.trgls_program)
+
+        # NOTE that drawData uses the blocks added in addBlocks;
+        # xyToTijk uses self.xyz_arr, which is created by getBlocks 
         self.drawData()
         timera.time("data")
 
@@ -475,12 +745,35 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         overlay_tex.bind()
         self.slice_program.setUniformValue(oloc, ounit)
 
+        tloc = self.slice_program.uniformLocation("trgls_sampler")
+        if tloc < 0:
+            print("couldn't get loc for trgls sampler")
+            return
+        tunit = 4
+        f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
+        tex_ids = self.trgls_fbo.textures()
+        trgls_tex_id = tex_ids[0]
+        f.glBindTexture(pygl.GL_TEXTURE_2D, trgls_tex_id)
+        self.slice_program.setUniformValue(tloc, tunit)
+
         f.glActiveTexture(pygl.GL_TEXTURE0)
         self.slice_vao.bind()
         self.slice_program.bind()
         f.glDrawElements(pygl.GL_TRIANGLES, 
                          self.slice_indices.size, pygl.GL_UNSIGNED_INT, VoidPtr(0))
         self.slice_program.release()
+
+        ''' For testing:
+        larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
+        # if zoom_level >= 0 and self.atlas is not None:
+        if len(larr) > 0 and self.atlas is not None:
+            if len(larr) >= self.atlas.max_nchunks-1:
+                larr = larr[:self.atlas.max_nchunks-1]
+            maxxed_out = self.atlas.addBlocks(larr)
+            if maxxed_out:
+                dw.window.zarrSlot(None)
+        '''
+
         self.slice_vao.release()
         timera.time("combine")
 
@@ -507,6 +800,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # print("im format", im.format())
         farr = self.npArrayFromQImage(im)
         # print("farr", farr.shape, farr.dtype)
+        # df is decimation factor
         df = 4
         arr = farr[::df,::df,:]
         # print(farr.shape, arr.shape)
@@ -581,6 +875,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         zoom = dw.getZoom()
         cij = volume_view.stxytf
+        if cij is None:
+            return None
         # print("cij", cij)
         mat = np.zeros((4,4), dtype=np.float32)
         wf = zoom/(.5*ww)
@@ -593,6 +889,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         xform = QMatrix4x4(mat.flatten().tolist())
         return xform
 
+    '''
     def drawDataOrig(self):
         f = self.gl
         dw = self.gldw
@@ -625,17 +922,158 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.trgl_program.release()
 
         QOpenGLFramebufferObject.bindDefault()
+    '''
 
     def drawData(self):
         if self.atlas is None:
             return
         stxy_xform = self.stxyXform()
+        if stxy_xform is None:
+            return
         self.atlas.displayBlocks(self.data_fbo, self.active_vao, stxy_xform)
 
-    def drawTrgls(self, fbo, program):
+    # pts are in form stxy.x, stxy.y, index
+    def getPointsInStxyWindow(self, fv, xywindow):
+        pts = fv.stpoints
+        matches = ((pts > xywindow[0]) & (pts < xywindow[1])).all(axis=1).nonzero()[0]
+        mpts = pts[matches]
+        # print("m", xywindow, len(pts), matches.shape, mpts.shape)
+        # print("m", len(pts), matches.shape, mpts.shape)
+        opts = np.concatenate((mpts, matches[:,np.newaxis]), axis=1)
+        return opts
+
+
+    # TODO: should this be in parent widget?
+    def stxysToWindowXys(self, ijs):
+        dw = self.gldw
+        zoom = dw.getZoom()
+        cij = self.volume_view.stxytf
+        ci = cij[0]
+        cj = cij[1]
+        ww, wh = self.width(), self.height()
+        wcx, wcy = ww//2, wh//2
+        cij = np.array(cij)
+        wc = np.array((wcx,wcy))
+        xys = np.rint(zoom*(ijs-cij)+wc).astype(np.int32)
+        return xys
+
+    def drawTrgls(self, fbo, trgls_program):
+        # bind program, bind fbo, assume vao is already bound
         f = self.gl
         dw = self.gldw
         fvao = self.active_vao
+        xform = self.stxyXform()
+        if xform is None:
+            return
+
+        fbo.bind()
+
+        # Be sure to clear with alpha = 0
+        # so that the slice view isn't blocked!
+        f.glClearColor(0.,0.,0.,0.)
+        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
+        f.glViewport(0, 0, fbo.width(), fbo.height())
+
+        opacity = dw.getDrawOpacity("overlay")
+        apply_line_opacity = dw.getDrawApplyOpacity("mesh")
+        line_alpha = 1.
+        if apply_line_opacity:
+            line_alpha = opacity
+        line_thickness = dw.getDrawWidth("mesh")
+        line_thickness = (3*line_thickness)//2
+        fv = fvao.fragment_view
+        pv = dw.window.project_view
+
+        if fv.visible and line_thickness != 0 and line_alpha != 0:
+            trgls_program.bind()
+            trgls_program.setUniformValue("xform", xform)
+
+            wsize = QVector2D(fbo.width(), fbo.height())
+            trgls_program.setUniformValue("window_size", wsize)
+
+            tloc = self.trgls_program.uniformLocation("thickness")
+            f.glUniform1f(tloc, 1.*line_thickness)
+
+            qcolor = fv.fragment.color
+            rgba = list(qcolor.getRgbF())
+            rgba[3] = line_alpha
+            self.trgls_program.setUniformValue("frag_color", *rgba)
+
+            f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
+                       pygl.GL_UNSIGNED_INT, VoidPtr(0))
+
+            trgls_program.release()
+
+        apply_node_opacity = dw.getDrawApplyOpacity("node")
+        node_alpha = 1.
+        if apply_node_opacity:
+            node_alpha = opacity
+        default_node_thickness = dw.getDrawWidth("node")
+        free_node_thickness = dw.getDrawWidth("free_node")
+        node_thickness = default_node_thickness
+        if not fv.mesh_visible:
+            node_thickness = free_node_thickness
+        node_thickness *= 2
+        
+        dw.cur_frag_pts_xyijk = None
+        dw.cur_frag_pts_fv = []
+        xyptslist = []
+        dw.nearbyNode = -1
+
+        if fv.visible and node_thickness != 0 and node_alpha != 0:
+            self.trgl_pts_program.bind()
+            self.trgl_pts_program.setUniformValue("xform", xform)
+            highlight_node_color = [c/65535 for c in dw.highlightNodeColor]
+            highlight_node_color[3] = node_alpha
+            self.trgl_pts_program.setUniformValue("highlight_node_color", *highlight_node_color)
+            color = dw.nodeColor
+            if not fv.active:
+                color = dw.inactiveNodeColor
+            if not fv.mesh_visible:
+                color = fv.fragment.cvcolor
+            rgba = [c/65535 for c in color]
+            rgba[3] = node_alpha
+            self.trgl_pts_program.setUniformValue("node_color", *rgba)
+
+            nearby_node_id = 2**30
+            xywindow = dw.stxyWindowBounds()
+            # pts are in form stxy.x, stxy.y, index
+            pts = self.getPointsInStxyWindow(fv, xywindow)
+            xys = self.stxysToWindowXys(pts[:,:2])
+            xyzs = fv.vpoints[np.int32(pts[:,2])]
+            xypts = np.concatenate((xys, xyzs), axis=1)
+            if len(xypts) > 0:
+                dw.cur_frag_pts_xyijk = xypts
+            else:
+                dw.cur_frag_pts_xyijk = np.zeros((0,5), dtype=float32)
+            dw.cur_frag_pts_fv = [fv]*len(xypts)
+
+            if fv == pv.nearby_node_fv:
+                ind = pv.nearby_node_index
+                nz = np.nonzero(pts[:,2] == ind)[0]
+                if len(nz) > 0:
+                    ind = nz[0]
+                    self.nearbyNode = ind
+                    nearby_node_id = int(pts[ind,2])
+
+            # figure out highlighted node and set nearby_node_id
+            nniloc = self.trgl_pts_program.uniformLocation("nearby_node_id")
+            self.trgl_pts_program.setUniformValue(nniloc, int(nearby_node_id))
+                
+            f.glPointSize(node_thickness)
+            f.glDrawArrays(pygl.GL_POINTS, 0, fvao.stxys_size)
+            self.trgl_pts_program.release()
+
+        QOpenGLFramebufferObject.bindDefault()
+
+    def drawTrglXyzs(self, fbo, program):
+        f = self.gl
+        dw = self.gldw
+        fvao = self.active_vao
+
+        xform = self.stxyXform()
+        if xform is None:
+            return
 
         fbo.bind()
 
@@ -647,7 +1085,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         program.bind()
 
-        xform = self.stxyXform()
         program.setUniformValue("xform", xform)
 
         f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
@@ -657,10 +1094,14 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         QOpenGLFramebufferObject.bindDefault()
         self.setDefaultViewport()
 
+    '''
     def drawXyz(self, fbo):
         f = self.gl
         dw = self.gldw
         fvao = self.active_vao
+        xform = self.stxyXform()
+        if xform is None:
+            return
 
         fbo.bind()
 
@@ -672,7 +1113,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         self.xyz_program.bind()
 
-        xform = self.stxyXform()
         self.xyz_program.setUniformValue("xform", xform)
 
         f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
@@ -681,6 +1121,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         QOpenGLFramebufferObject.bindDefault()
         self.setDefaultViewport()
+    '''
 
 
 # two attribute buffers: xyz, and stxy (st = scaled texture)
@@ -1028,7 +1469,7 @@ atlas_data_code = {
       layout (std140) uniform XForms {{
         mat4 xforms[max_nchunks];
       }};
-      layout (std140) uniform ZChartIds {{
+      layout (std140) uniform ChartIds {{
         int chart_ids[max_nchunks];
       }};
       uniform sampler3D atlas;
@@ -1150,22 +1591,26 @@ class Atlas:
         # each UniBuf.
         # should use glGetUniformBlockIndex, to get ubo_index instead
         # of hardwiring 0, but that function is missing from PyQt5
-        for var in ["TMaxs", "TMins", "XForms", "ZChartIds"]:
-            print(var, gl.glGetUniformBlockIndex(pid, var))
+        # for var in ["TMaxs", "TMins", "XForms", "ZChartIds"]:
+        #    print(var, gl.glGetUniformBlockIndex(pid, var))
         self.tmax_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 0)
-        self.tmax_ubo.bindToShader(pid, 0)
+        loc = gl.glGetUniformBlockIndex(pid, "TMaxs")
+        self.tmax_ubo.bindToShader(pid, loc)
 
         self.tmin_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 1)
-        self.tmin_ubo.bindToShader(pid, 1)
+        loc = gl.glGetUniformBlockIndex(pid, "TMins")
+        self.tmin_ubo.bindToShader(pid, loc)
 
         self.xform_ubo = UniBuf(gl, np.zeros((max_nchunks, 4, 4), dtype=np.float32), 2)
-        self.xform_ubo.bindToShader(pid, 2)
+        loc = gl.glGetUniformBlockIndex(pid, "XForms")
+        self.xform_ubo.bindToShader(pid, loc)
 
         # even though data in this case could be listed as a 1D
         # array of ints, UBO layout rules require that the ints
         # be aligned every 16 bytes.
         self.chart_id_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.int32), 3)
-        self.chart_id_ubo.bindToShader(pid, 3)
+        loc = gl.glGetUniformBlockIndex(pid, "ChartIds")
+        self.chart_id_ubo.bindToShader(pid, loc)
 
         # allocate 3D texture 
         tex3d = QOpenGLTexture(QOpenGLTexture.Target3D)
@@ -1270,7 +1715,7 @@ class Atlas:
         return textures_set >= self.max_textures_set
             
     # displayBlocks is in a separate operation
-    # than addBlocks, because addBlocks needs to be called later
+    # than addBlocks, because addBlocks may need to be called later
     # than displayBlocks, to prevent GPU round trips
     def displayBlocks(self, data_fbo, fvao, stxy_xform):
         gl = self.gl

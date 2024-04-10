@@ -646,8 +646,23 @@ class DataWindow(QLabel):
     def setIjkTf(self, tf):
         self.volume_view.setIjkTf(tf)
 
-    def setIjkOrStxyTf(self, tf):
+    # def setIjkOrStxyTf(self, tf):
+    #     self.setIjkTf(tf)
+
+    def setTf(self, tf):
         self.setIjkTf(tf)
+
+    '''
+    # shift along local i,j,k axes (not transposed-volume axes)
+    def shiftIjk(self, di, dj, dk):
+        oijk = self.volume_view.ijktf
+        nijk = list(oijk)
+        nijk[self.iIndex] += di
+        nijk[self.jIndex] += dj
+        nijk[self.axis] += dk
+        self.setIjkTf(nijk)
+        pass
+    '''
 
     def mouseMoveEvent(self, e):
         # print("move", e.localPos())
@@ -666,7 +681,9 @@ class DataWindow(QLabel):
             tf[self.iIndex] -= int(dx/zoom)
             tf[self.jIndex] -= int(dy/zoom)
             # self.setIjkTf(tf)
-            self.setIjkOrStxyTf(tf)
+            # self.setIjkOrStxyTf(tf)
+            self.setTf(tf)
+            # self.shiftIjk(-int(dx/zoom), -int(dy/zoom), 0)
             # self.tfStartPoint = self.volume_view.ijktf
             # self.mouseStartPoint = pos
             self.window.drawSlices()
@@ -879,12 +896,17 @@ class DataWindow(QLabel):
             if self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0:
                 # pan
                 self.window.zarrResetActiveTimer()
-                tfijk = list(self.volume_view.ijktf)
+                # tfijk = list(self.volume_view.ijktf)
+                tfijk = list(self.computeTfStartPoint())
+                # print("tfijk", tfijk)
                 # print(d)
                 tfijk[self.iIndex] += d[0]
                 tfijk[self.jIndex] += d[1]
+                # print("k", self.axis, len(tfijk))
                 tfijk[self.axis] += d[2]
-                self.setIjkTf(tfijk)
+                # self.setIjkTf(tfijk)
+                self.setTf(tfijk)
+                # self.shiftIjk(*d)
                 self.window.drawSlices()
             elif self.nearby_tiff_corner >= 0:
                 # move nearby tiff corner

@@ -84,7 +84,8 @@ class GLDataWindow(DataWindow):
         if xyfvs is None or indexed_fvs is None:
             return fvs
 
-        matches = ((xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
+        # matches = ((xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
+        matches = ((xyfvs[:,:2] >= xymin) & (xyfvs[:,:2] <= xymax)).all(axis=1).nonzero()[0]
         # print("xyfvs", xymin, xymax, xyfvs.shape)
         # print("matches", matches.shape)
         if len(matches) == 0:
@@ -719,6 +720,7 @@ class GLDataWindowChild(QOpenGLWidget):
         # 0: asynchronous mode, 1: synch mode
         # synch mode is said to be much slower
         self.logging_mode = QOpenGLDebugLogger.SynchronousLogging
+        self.common_offset_code = common_offset_code
         self.localInit()
 
     def localInit(self):
@@ -1489,6 +1491,10 @@ class GLDataWindowChild(QOpenGLWidget):
               pygl.glGetIntegerv(pygl.GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS))
         print("max texture buffer size", 
               pygl.glGetIntegerv(pygl.GL_MAX_TEXTURE_BUFFER_SIZE)) 
+        print("max fragment uniform blocks", 
+              pygl.glGetIntegerv(pygl.GL_MAX_FRAGMENT_UNIFORM_BLOCKS)) 
+        print("max uniform block size", 
+              pygl.glGetIntegerv(pygl.GL_MAX_UNIFORM_BLOCK_SIZE)) 
 
 
 class FragmentVao:
