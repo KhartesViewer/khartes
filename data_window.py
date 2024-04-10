@@ -621,6 +621,7 @@ class DataWindow(QLabel):
             for i,a in enumerate(axes):
                 g = gijk[a]
                 dtxt = "%g"%round(g,2)
+                # dtxt = "%f"%g
                 mn = ranges[a][0]
                 mx = ranges[a][1]
                 if g < mn or g > mx:
@@ -921,16 +922,22 @@ class DataWindow(QLabel):
                 # self.window.drawSlices()
             elif self.localNearbyNodeIndex >= 0:
                 # move nearby node
-                nij = list(self.getNearbyNodeIjk())
-                nij = [round(x) for x in nij]
-                d = opts[key]
-                if d[2] != 0 and not self.nodeMovementAllowedInK():
-                    return
-                nij[0] -= d[0]
-                nij[1] -= d[1]
-                nij[2] -= d[2]
-                self.setWaitCursor()
-                self.setNearbyNodeIjk(nij)
+                nij = self.getNearbyNodeIjk()
+                if nij is None:
+                    # TODO: nij is None if the vertices have just
+                    # been hidden; for some reason in this case
+                    # self.localNearbyNodeIndex is still >= 0
+                    self.setNearbyNode(-1)
+                else:
+                    nij = [round(x) for x in nij]
+                    d = opts[key]
+                    if d[2] != 0 and not self.nodeMovementAllowedInK():
+                        return
+                    nij[0] -= d[0]
+                    nij[1] -= d[1]
+                    nij[2] -= d[2]
+                    self.setWaitCursor()
+                    self.setNearbyNodeIjk(nij)
         elif not self.isMovingNode and (key == Qt.Key_Backspace or key == Qt.Key_Delete):
             # print("backspace/delete")
             # ijk = self.getNearbyNodeIjk()

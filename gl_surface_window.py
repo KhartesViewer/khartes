@@ -763,7 +763,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                          self.slice_indices.size, pygl.GL_UNSIGNED_INT, VoidPtr(0))
         self.slice_program.release()
 
-        ''' For testing:
+        ''' # For testing:
         larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
         # if zoom_level >= 0 and self.atlas is not None:
         if len(larr) > 0 and self.atlas is not None:

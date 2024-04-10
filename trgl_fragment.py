@@ -771,7 +771,7 @@ class TrglFragmentView(BaseFragmentView):
 
     def getPointsOnSlice(self, axis, i):
         # matches = self.vpoints[(self.vpoints[:, axis] == i)]
-        matches = self.vpoints[(self.vpoints[:, axis] >= i-.5) & (self.vpoints[:, axis] < i+.5)]
+        matches = self.vpoints[(self.vpoints[:, axis] >= i-.5001) & (self.vpoints[:, axis] < i+.5001)]
         return matches
 
     # outputs a list of lines; each line has two vertices
