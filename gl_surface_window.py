@@ -202,6 +202,90 @@ class GLSurfaceWindow(DataWindow):
         k = xyza[kind]
         return (i,j,k)
 
+    def stxyToWindowXy(self, ij):
+        zoom = self.getZoom()
+        cij = self.volume_view.stxytf
+        ci = cij[0]
+        cj = cij[1]
+        ww, wh = self.width(), self.height()
+        wcx, wcy = ww//2, wh//2
+        # cij = np.array(cij)
+        # wc = np.array((wcx,wcy))
+        # xys = np.rint(zoom*(ijs-cij)+wc).astype(np.int32)
+
+        # note that the values are floats:
+        xy = (zoom*(ij[0]-ci), zoom*(ij[1]-cj))
+        return xy
+
+    def getXyzsInRange(self, stxy, stxy_radius):
+        # From all the pixels in the window, keep only those
+        # whose stxy is in range.
+        # Then get the xyz points from these pixels.
+        # Or less accurately, get all the xyz points from all 
+        # the pixels in the window, and keep those 
+        # within the radius.
+        pass
+
+    '''
+    # NOTE: not debugged or tested
+    # returns a 2D array.  Columns: scroll xyz, stxy, window xy
+    def getXyzGrid(self):
+        xyz_arr = self.glw.xyz_arr
+        if xyz_arr is None:
+            return None
+        zoom = self.getZoom()
+        ratio = self.screen().devicePixelRatio()
+        stxy_center = self.volume_view.stxytf
+        # TODO: ww, wh should be based on size of xyz_arr
+        # ww, wh = int(ratio*self.width()), int(ratio*self.height())
+        # wcx, wcy = ww//2, wh//2
+        window_center = (xyz_arr.shape[1]//2, xyz_arr.shape[0]//2)
+
+        # print("xyz_arr", xyz_arr.shape, xyz_arr.dtype)
+        wxys = np.array(np.nonzero(xyz_arr[:,:,3] != 0)).T
+        # print("wxys", wxys.shape, wxys.dtype)
+        stxys = stxy_center+(wxys-window_center)/(ratio*zoom)
+        # print("stxys", stxys.shape, stxys.dtype)
+        scrxyzs = xyz_arr[wxys[:,0], wxys[:,1], :3]
+        # print("scrxyzs", scrxyzs.shape, scrxyzs.dtype)
+        # TODO: should wxys be OpenGL window coords or Qt coords?
+        xyzgrid = np.concatenate((scrxyzs, stxys, wxys), axis=1)
+        # print("xyzgrid", xyzgrid.shape, xyzgrid.dtype)
+        return xyzgrid
+    '''
+
+    def setNearbyNodeIjk(self, ijk):
+        # print("snnijk", ijk)
+        stxys = self.cur_frag_pts_stxy
+        xyijks = self.cur_frag_pts_xyijk
+        nearbyNode = self.localNearbyNodeIndex
+        if nearbyNode < 0 or stxys.shape[0] == 0:
+            return
+        stxy = stxys[nearbyNode, 0:2]
+        oijk = xyijks[nearbyNode, 2:5]
+        dijk = ijk-oijk
+        # Use convention that ^ is outwards
+        dijk[2] *= -1
+        index = int(stxys[nearbyNode, 2])
+        # wxy = xyijks[nearbyNode, 0:2]
+        # print(" ", index, oijk, dijk, stxy)
+        # print(" oijk", oijk, self.getNearbyNodeIjk())
+        # print(" dijk", dijk)
+        # size of data window to use, in units of stxy
+        # window_half_width = 20
+        # xyzg = self.getXyzGrid()
+        fv = self.glw.active_vao.fragment_view
+        # normal = fv.pointNormal(index)
+        axes = fv.fragment.pointThreeAxes(index, fv.fpoints[:,:3], fv.stpoints, fv.trgls())
+        # print(" ", axes)
+        # nijk = oijk + dijk[0]*axes[0]+dijk[1]*axes[1]+dijk[2]*axes[2]
+        if axes is None:
+            print("GLSurfaceWindow.setNearbyNodeIjk: could not compute axes")
+            return
+        nijk = oijk + axes@dijk
+        # print(" nijk", nijk)
+        super(GLSurfaceWindow, self).setNearbyNodeIjk(nijk.tolist())
+
     def stxyWindowBounds(self):
         stxy = self.volume_view.stxytf
         if stxy is None:
@@ -1044,8 +1128,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             xypts = np.concatenate((xys, xyzs), axis=1)
             if len(xypts) > 0:
                 dw.cur_frag_pts_xyijk = xypts
+                dw.cur_frag_pts_stxy = pts
             else:
-                dw.cur_frag_pts_xyijk = np.zeros((0,5), dtype=float32)
+                dw.cur_frag_pts_xyijk = np.zeros((0,5), dtype=np.float32)
+                dw.cur_frag_pts_stxy = np.zeros((0,3), dtype=np.float32)
             dw.cur_frag_pts_fv = [fv]*len(xypts)
 
             if fv == pv.nearby_node_fv:

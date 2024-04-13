@@ -99,6 +99,66 @@ class BaseFragment:
         return n3d
 
     # class function
+    def pointNormal(pt_index, pts, trgls):
+        ltrgl_indexes = BaseFragment.trglsAroundPoint(pt_index, trgls)
+        ltrgls = trgls[ltrgl_indexes]
+
+        v0 = ltrgls[:,0]
+        v1 = ltrgls[:,1]
+        v2 = ltrgls[:,2]
+        d01 = (pts[v1] - pts[v0]).astype(np.float64)
+        d02 = (pts[v2] - pts[v0]).astype(np.float64)
+        n3d = np.cross(d01, d02)
+        npt = n3d.sum(axis=0)
+        l2 = np.sqrt(np.sum(npt*npt))
+        if l2 == 0:
+            return npt
+        return npt/l2
+
+    # class function
+    # returns 3 axes: axis along increasing stx, axis along increasing sty,
+    # normal.  The 3 axes are orthonormal.
+    # TODO: the calculation of stxaxis and styaxis should take into
+    # account the local stxy values (uvpts), intead of looking
+    # at the z axis as a proxy
+    @staticmethod
+    def pointThreeAxes(pt_index, xyzpts, uvpts, trgls):
+        if uvpts is None or len(xyzpts) != len(uvpts):
+            return None
+        ltrgl_indexes = BaseFragment.trglsAroundPoint(pt_index, trgls)
+        ltrgls = trgls[ltrgl_indexes]
+
+        v0 = ltrgls[:,0]
+        v1 = ltrgls[:,1]
+        v2 = ltrgls[:,2]
+        d01 = (xyzpts[v1] - xyzpts[v0]).astype(np.float64)
+        d02 = (xyzpts[v2] - xyzpts[v0]).astype(np.float64)
+        n3d = np.cross(d01, d02)
+        npt = n3d.sum(axis=0)
+        # print("npt", npt)
+        l2 = np.sqrt(np.sum(npt*npt))
+        if l2 == 0:
+            return None
+        normal = npt/l2
+        # print("normal", normal)
+        # In the transposed coordinate system, this represents
+        # the axis along the scroll's original z axis.
+        # This should be more or less aligned with the sty axis
+        zaxis = np.array((0., 1., 0.), dtype=np.float32)
+        stxaxis = np.cross(normal, zaxis)
+        # stxaxis = np.cross(zaxis, normal)
+        # stxaxis *= -1
+        # print("stxaxis", stxaxis)
+        l2 = np.sqrt(np.sum(stxaxis*stxaxis))
+        if l2 == 0:
+            return None
+        stxaxis /= l2
+        styaxis = np.cross(normal, stxaxis)
+        # styaxis *= -1
+        return np.array((stxaxis, styaxis, normal)).T
+
+
+    # class function
     def calculateSqCm(pts, trgls, voxel_size_um):
         v0 = trgls[:,0]
         v1 = trgls[:,1]
@@ -249,6 +309,14 @@ class BaseFragmentView:
             return
         pts3d = self.fpoints[:,:3]
         return BaseFragment.pointNormals(pts3d, trgls)
+
+    def pointNormal(self, pt_index):
+        self.triangulate()
+        trgls = self.trgls()
+        if trgls is None:
+            return
+        pts3d = self.vpoints[:,:3]
+        return BaseFragment.pointNormal(pt_index, pts3d, trgls)
 
     def moveAlongNormalsSign(self):
         return 1.

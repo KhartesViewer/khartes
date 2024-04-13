@@ -929,7 +929,8 @@ class DataWindow(QLabel):
                     # self.localNearbyNodeIndex is still >= 0
                     self.setNearbyNode(-1)
                 else:
-                    nij = [round(x) for x in nij]
+                    # nij = [round(x) for x in nij]
+                    nij = [x for x in nij]
                     d = opts[key]
                     if d[2] != 0 and not self.nodeMovementAllowedInK():
                         return

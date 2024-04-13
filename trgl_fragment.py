@@ -801,10 +801,22 @@ class TrglFragmentView(BaseFragmentView):
         return self.fragment.trgls
 
     def movePoint(self, index, new_vijk):
+        old_vijk = self.vpoints[index, :3]
+        dvijk = new_vijk-old_vijk
+        axes = self.fragment.pointThreeAxes(index, self.vpoints[:,:3], self.stpoints, self.trgls())
+        if axes is None:
+            print("TrglFragmentView.movePoint: could not compute axes")
+            return
+        rdvijk = (axes.T)@dvijk
+        old_stxy = self.stpoints[index]
+        # new_stxy = old_stxy-rdvijk[:2]
+        new_stxy = old_stxy+rdvijk[:2]
+        # new_stxy = old_stxy
         new_gijk = self.cur_volume_view.transposedIjkToGlobalPosition(new_vijk)
         # print(self.fragment.gpoints)
         # print(match, new_gijk)
         self.fragment.gpoints[index, :] = new_gijk
+        self.stpoints[index, :] = new_stxy
         # print(self.fragment.gpoints)
         self.fragment.notifyModified()
         # modifyZsurf = False
