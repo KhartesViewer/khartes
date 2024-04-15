@@ -128,6 +128,8 @@ class GLSurfaceWindow(DataWindow):
 
     def computeTfStartPoint(self):
         stxy = self.volume_view.stxytf
+        if stxy is None:
+            return None
         return (stxy[0], stxy[1], 0)
         # print("tfs", len(tfs), tfs)
         # return tfs
@@ -186,7 +188,8 @@ class GLSurfaceWindow(DataWindow):
         kind = self.kIndex
         xyz_arr = self.glw.xyz_arr
         if xyz_arr is None:
-            print("xyz_arr is None; returning vv.ijktf")
+            # print("xyz_arr is None; returning vv.ijktf")
+            # return None
             return self.volume_view.ijktf
         ratio = self.screen().devicePixelRatio()
         ix = round(x*ratio)
@@ -202,9 +205,30 @@ class GLSurfaceWindow(DataWindow):
         k = xyza[kind]
         return (i,j,k)
 
+    def ijToTijk(self, ij):
+        return (ij[0], ij[1], 0)
+
+    def getTrackingCursorXy(self):
+        stxyz = self.window.cursor_stxyz
+        # print("gtxy", stxyz)
+        if stxyz is None:
+            return None
+        xy = self.stxyToWindowXy(stxyz[:2])
+        # print("gtxy", xy)
+        return xy
+
+    def getTrackingCursorHeight(self):
+        stxyz = self.window.cursor_stxyz
+        if stxyz is None:
+            return None
+        # print("gth", stxyz[2])
+        return stxyz[2]
+
     def stxyToWindowXy(self, ij):
         zoom = self.getZoom()
         cij = self.volume_view.stxytf
+        if cij is None:
+            return None
         ci = cij[0]
         cj = cij[1]
         ww, wh = self.width(), self.height()
@@ -214,7 +238,7 @@ class GLSurfaceWindow(DataWindow):
         # xys = np.rint(zoom*(ijs-cij)+wc).astype(np.int32)
 
         # note that the values are floats:
-        xy = (zoom*(ij[0]-ci), zoom*(ij[1]-cj))
+        xy = (wcx+zoom*(ij[0]-ci), wcy+zoom*(ij[1]-cj))
         return xy
 
     def getXyzsInRange(self, stxy, stxy_radius):
@@ -617,6 +641,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # whenever volume_view or volume_view.direction change
         self.volume_view =  None
         self.volume_view_direction = -1
+        self.active_fragment = None
         self.atlas = None
         self.active_vao = None
         self.data_fbo = None
@@ -723,15 +748,25 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if dw.volume_view is None:
             self.volume_view = None
             self.volume_view_direction = -1
+            self.active_fragment = None
             self.atlas = None
             return
-        if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction:
+        pv = dw.window.project_view
+        mfv = None
+        if pv is not None:
+            mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        # if mfv is None:
+        #     dw.volume_view.setStxyTf(None)
+        if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction or self.active_fragment != mfv :
             self.volume_view = dw.volume_view
             self.volume_view_direction = self.volume_view.direction
-            if self.atlas_chunk_size < 65:
-                self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,70), chunk_size=self.atlas_chunk_size)
-            else:
-                self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,400), chunk_size=self.atlas_chunk_size)
+            self.active_fragment = mfv
+            if self.atlas is None:
+                if self.atlas_chunk_size < 65:
+                    self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,70), chunk_size=self.atlas_chunk_size)
+                else:
+                    self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,400), chunk_size=self.atlas_chunk_size)
+                self.atlas.clearData()
 
     def paintSlice(self):
         timera = Utils.Timer()
@@ -750,10 +785,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         whh = wh//2
 
         pv = dw.window.project_view
-        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
-        if mfv is None:
-            # print("No currently active fragment")
-            return
+        # mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        mfv = self.active_fragment
+        # if mfv is None:
+        #     # print("No currently active fragment")
+        #     return
 
         if self.active_vao is None or self.active_vao.fragment_view != mfv:
             self.active_vao = FragmentMapVao(
@@ -773,16 +809,19 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         timera.time("xyz 2")
 
         ''''''
-        # NOTE that getBlocks reads from xyz_fbo, which has
-        # just been written to
-        larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
-        # if zoom_level >= 0 and self.atlas is not None:
-        if len(larr) > 0 and self.atlas is not None:
-            if len(larr) >= self.atlas.max_nchunks-1:
-                larr = larr[:self.atlas.max_nchunks-1]
-            maxxed_out = self.atlas.addBlocks(larr)
-            if maxxed_out:
-                dw.window.zarrSlot(None)
+        xform = self.stxyXform()
+        self.xyz_arr = None
+        if xform is not None:
+            # NOTE that getBlocks reads from xyz_fbo, which has
+            # just been written to
+            larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
+            # if zoom_level >= 0 and self.atlas is not None:
+            if len(larr) > 0 and self.atlas is not None:
+                if len(larr) >= self.atlas.max_nchunks-1:
+                    larr = larr[:self.atlas.max_nchunks-1]
+                maxxed_out = self.atlas.addBlocks(larr)
+                if maxxed_out:
+                    dw.window.zarrSlot(None)
         ''''''
 
         self.drawTrgls(self.trgls_fbo, self.trgls_program)
@@ -1012,8 +1051,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if self.atlas is None:
             return
         stxy_xform = self.stxyXform()
-        if stxy_xform is None:
-            return
+        # if stxy_xform is None:
+        #     return
         self.atlas.displayBlocks(self.data_fbo, self.active_vao, stxy_xform)
 
     # pts are in form stxy.x, stxy.y, index
@@ -1046,9 +1085,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f = self.gl
         dw = self.gldw
         fvao = self.active_vao
-        xform = self.stxyXform()
-        if xform is None:
-            return
 
         fbo.bind()
 
@@ -1056,6 +1092,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # so that the slice view isn't blocked!
         f.glClearColor(0.,0.,0.,0.)
         f.glClear(pygl.GL_COLOR_BUFFER_BIT)
+        xform = self.stxyXform()
+        if xform is None:
+            QOpenGLFramebufferObject.bindDefault()
+            return
+
         f.glViewport(0, 0, fbo.width(), fbo.height())
 
         opacity = dw.getDrawOpacity("overlay")
@@ -1157,9 +1198,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         dw = self.gldw
         fvao = self.active_vao
 
-        xform = self.stxyXform()
-        if xform is None:
-            return
 
         fbo.bind()
 
@@ -1167,6 +1205,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # so that the slice view isn't blocked!
         f.glClearColor(0.,0.,0.,0.)
         f.glClear(pygl.GL_COLOR_BUFFER_BIT)
+        xform = self.stxyXform()
+        if xform is None:
+            QOpenGLFramebufferObject.bindDefault()
+            return
+
         f.glViewport(0, 0, fbo.width(), fbo.height())
 
         program.bind()
@@ -1224,7 +1267,7 @@ class FragmentMapVao:
 
     def getVao(self):
         fv = self.fragment_view
-        if self.vao_modified > fv.modified and self.vao_modified > fv.fragment.modified and self.vao_modified > fv.local_points_modified:
+        if fv is not None and self.vao_modified > fv.modified and self.vao_modified > fv.fragment.modified and self.vao_modified > fv.local_points_modified:
             # print("returning existing vao")
             return self.vao
 
@@ -1234,6 +1277,9 @@ class FragmentMapVao:
             self.vao = QOpenGLVertexArrayObject()
             self.vao.create()
             # print("creating new vao")
+
+        if fv is None:
+            return self.vao
 
         # print("updating vao")
         self.vao.bind()
@@ -1397,7 +1443,7 @@ class Chunk:
         self.dk = dk
         self.dl = dl
         if dl < 0:
-            return None
+            return False
 
         # data chunk size (3 coords, usually 128,128,128)
         dcsz = self.atlas.dcsz 
@@ -1413,6 +1459,8 @@ class Chunk:
         all_dr = ((0, 0, 0), (dsz[0], dsz[1], dsz[2]))
         # intersection of the padded data rectangle with the data
         int_dr = self.rectIntersection(pdr, all_dr)
+        if int_dr is None:
+            return False
         # print(pdr, all_dr, int_dr)
 
         # Compute change in pdr (padded data-chunk rectangle) 
@@ -1720,6 +1768,18 @@ class Atlas:
         gl.glActiveTexture(pygl.GL_TEXTURE0)
         tex3d.release()
 
+    def clearData(self):
+        aksz = self.aksz
+        self.chunks.clear()
+        for k in range(aksz[2]):
+            for j in range(aksz[1]):
+                for i in range(aksz[0]):
+                    ak = (i,j,k)
+                    dk = (i,j,k)
+                    dl = -1
+                    chunk = Chunk(self, ak, dk, dl)
+                    key = self.key(dk, dl)
+                    self.chunks[key] = chunk
 
     def xyzXform(self, data_size):
         mat = np.zeros((4,4), dtype=np.float32)
@@ -1812,6 +1872,10 @@ class Atlas:
         # so that the slice view isn't blocked!
         gl.glClearColor(0.,0.,0.,0.)
         gl.glClear(pygl.GL_COLOR_BUFFER_BIT)
+
+        if stxy_xform is None:
+            QOpenGLFramebufferObject.bindDefault()
+            return
 
         self.program.bind()
 

@@ -398,6 +398,7 @@ class VolumeView():
         if self.direction != direction:
             ijk = self.ijktf
             self.ijktf = (ijk[2], ijk[1], ijk[0])
+            self.stxytf = None
         self.direction = direction
         if self.volume.data is not None:
             self.trdata = self.volume.trdatas[direction]

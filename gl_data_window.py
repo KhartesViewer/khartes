@@ -64,10 +64,19 @@ class GLDataWindow(DataWindow):
         self.setLayout(layout)
         self.glw = GLDataWindowChild(self)
         layout.addWidget(self.glw)
+        self.main_active_fragment_view = None
 
     def drawSlice(self):
         self.window.setFocus()
         self.glw.update()
+        if self.volume_view is not None:
+            pv = self.window.project_view
+            mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+            if mfv != self.main_active_fragment_view:
+                self.main_active_fragment_view = mfv
+                self.volume_view.setStxyTf(None)
+            if self.volume_view.stxytf is None:
+                self.setStxyTfFromIjkTf()
 
     # Overrides DataWindow.fvsInBounds
     # Returns a set of all FragmentViews whose cross-section
@@ -118,19 +127,41 @@ class GLDataWindow(DataWindow):
         return (x,y)
     '''
 
-    def setIjkTf(self, tf):
+    def setCursorPosition(self, tijk):
+        ij = self.tijkToIj(tijk)
+        xy = self.ijToXy(ij)
+        d = 10
+        xyl = (xy[0]-d, xy[1]-d)
+        xyg = (xy[0]+d, xy[1]+d)
+
+        # stxyz = self.stxyzInBounds(xyl, xyg, tijk)
+        stxyz = self.stxyzInRange(tijk, d)
+        # print("tf, xy, stxy", tf, xy, stxy)
+        self.window.setCursorPosition(self, tijk, stxyz)
+
+
+    def setStxyTfFromIjkTf(self):
         # dw = self.glw
+        vv = self.volume_view
+        if vv is None:
+            return
+        tf = vv.ijktf
         ij = self.tijkToIj(tf)
         xy = self.ijToXy(ij)
         d = 10
         xyl = (xy[0]-d, xy[1]-d)
         xyg = (xy[0]+d, xy[1]+d)
 
-        stxy = self.stxyInBounds(xyl, xyg, tf)
+        # stxy = self.stxyInBounds(xyl, xyg, tf)
+        stxy = self.stxyInRange(tf, d)
         # print("tf, xy, stxy", tf, xy, stxy)
-        if stxy is not None:
-            self.volume_view.setStxyTf(stxy)
+        # if stxy is not None:
+        #     self.volume_view.setStxyTf(stxy)
+        self.volume_view.setStxyTf(stxy)
+
+    def setIjkTf(self, tf):
         self.volume_view.setIjkTf(tf)
+        self.setStxyTfFromIjkTf()
 
     def ptToBary(self, ijk, vs):
         v01 = vs[1]-vs[0]
@@ -155,9 +186,87 @@ class GLDataWindow(DataWindow):
         # print("bs", bs, bs.sum())
         return (bs>=0).all() and (bs<=1).all()
 
+    @staticmethod
+    def tetVolume(v0, v1, v2, v3):
+        v = np.inner(v3-v0, np.cross(v1-v0, v2-v0)) / 6.
+        return v
+
+    # height of v3 above the plane formed by v0,v1,v2
+    @staticmethod
+    def tetHeight(v0, v1, v2, v3):
+        cr = np.cross(v1-v0, v2-v0)
+        l2 = np.sqrt(np.inner(cr,cr))
+        if l2 != 0:
+            cr /= l2
+        h = np.inner(cr, v3-v0)
+        return h
+
     # Note that this only looks for trgls on the
     # main active fragment view
-    def stxyInBounds(self, xymin, xymax, ijk):
+    def stxyzInRange(self, ijk, maxd):
+        dw = self.glw
+        ij = self.tijkToIj(ijk)
+        xy0 = self.ijToXy(ij)
+        xymin = (xy0[0]-maxd, xy0[1]-maxd)
+        xymax = (xy0[0]+maxd, xy0[1]+maxd)
+        # x y fragment_view_id trgl_id
+        xyfvs = dw.xyfvs
+        # list of fragment views (to go from fragment_view_id
+        # to fragment_view)
+        indexed_fvs = dw.indexed_fvs
+        pv = self.window.project_view
+        mfvi = -1
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            return None
+        if mfv is not None and dw.indexed_fvs is not None and mfv in indexed_fvs:
+            mfvi = indexed_fvs.index(mfv)
+        if mfvi < 0:
+            return None
+        # indexes of rows where fragment_view matches mfvi
+        # matches = (xyfvs[:,2] == mfvi).nonzero()[0]
+        # need a lot of parentheses because the & operator
+        # has higher precedence than comparison operators
+        matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
+        if len(matches) == 0:
+            # print("no matches")
+            return None
+
+        mxyft = xyfvs[matches]
+
+        # dels = mxyft[:,:2] - np.array(xy0)[:,np.newaxis]
+        dels = mxyft[:,:2] - xy0
+        # d2s = np.inner(dels, dels)
+        d2s = (dels*dels).sum(axis=1)
+        minindex = np.argmin(d2s)
+        # print("d2s", mxyft.shape, xy0, dels.shape, d2s.shape, d2s[minindex])
+        mind = np.sqrt(d2s[minindex])
+        if mind > maxd:
+            return None
+
+        trgl_index = mxyft[minindex, 3]
+        trgl = mfv.trgls()[trgl_index]
+        vpts = mfv.vpoints[trgl][:,:3]
+
+        bs = self.ptToBary(ijk, vpts)
+        sts = mfv.stpoints[trgl]
+        # print(sts)
+        # print(bs)
+        stxy = (sts*bs.reshape(-1,1)).sum(axis=0)
+        z = self.tetHeight(*vpts, ijk)
+        stxyz = np.concatenate((stxy, [z]))
+        return stxyz
+
+    def stxyInRange(self, ijk, maxd):
+        stxyz = self.stxyzInRange(ijk, maxd)
+        if stxyz is None:
+            return None
+        return stxyz[:2]
+
+    # Note that this only looks for trgls on the
+    # main active fragment view
+    def stxyzInBounds(self, xymin, xymax, ijk):
+        timera = Utils.Timer()
         fvs = set()
         # ratio = self.screen().devicePixelRatio()
         # xymin = (round(xymin[0]*ratio), round(xymin[1]*ratio))
@@ -171,7 +280,7 @@ class GLDataWindow(DataWindow):
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
             return None
-        if mfv is not None and mfv in dw.indexed_fvs:
+        if mfv is not None and dw.indexed_fvs is not None and mfv in dw.indexed_fvs:
             mfvi = dw.indexed_fvs.index(mfv)
         if mfvi < 0:
             return None
@@ -210,13 +319,27 @@ class GLDataWindow(DataWindow):
         # print(trgl_index)
         # print(self.ptInTrgl(ijk, trgl_index))
 
+
         bs = self.ptToBary(ijk, vpts)
         sts = mfv.stpoints[trgl]
         # print(sts)
         # print(bs)
         stxy = (sts*bs.reshape(-1,1)).sum(axis=0)
+        z = self.tetHeight(*vpts, ijk)
+        stxyz = np.concatenate((stxy, [z]))
         # print(stxy)
-        return stxy
+        timera.time("old")
+        nstxyz = self.stxyzInRange(ijk, 10)
+        timera.time("new")
+        print(stxyz)
+        print(" ", nstxyz)
+        return stxyz
+
+    def stxyInBounds(self, xymin, xymax, ijk):
+        stxyz = self.stxyzInBounds(xymin, xymax, ijk)
+        if stxyz is None:
+            return None
+        return stxyz[:2]
 
 
 slice_code = {

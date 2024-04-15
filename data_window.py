@@ -117,6 +117,7 @@ class DataWindow(QLabel):
             self.setPalette(palette)
         # print("axis", axis)
         (self.iIndex, self.jIndex) = vv.volume.ijIndexesInPlaneOfSlice(self.axis)
+        vv.setStxyTf(None)
         self.kIndex = self.axis
 
     def fragmentViews(self):
@@ -456,6 +457,8 @@ class DataWindow(QLabel):
                 '''
                 # self.tfStartPoint = self.volume_view.ijktf
                 self.tfStartPoint = self.computeTfStartPoint()
+                if self.tfStartPoint is None:
+                    return
                 self.isPanning = True
                 self.isMovingNode = False
                 self.isMovingTiff = False
@@ -733,8 +736,12 @@ class DataWindow(QLabel):
         # ij = self.xyToIj(mxy)
         # tijk = self.ijToTijk(ij)
         tijk = self.xyToTijk(mxy)
-        self.window.setCursorPosition(self, tijk)
+        # self.window.setCursorPosition(self, tijk)
+        self.setCursorPosition(tijk)
         self.checkCursor()
+
+    def setCursorPosition(self, tijk):
+        self.window.setCursorPosition(self, tijk)
 
     def setBoundingNodes(self, bns):
         prev = self.bounding_nodes
@@ -898,7 +905,10 @@ class DataWindow(QLabel):
                 # pan
                 self.window.zarrResetActiveTimer()
                 # tfijk = list(self.volume_view.ijktf)
-                tfijk = list(self.computeTfStartPoint())
+                tfst = self.computeTfStartPoint()
+                if tfst is None:
+                    return
+                tfijk = list(tfst)
                 # print("tfijk", tfijk)
                 # print(d)
                 tfijk[self.iIndex] += d[0]
@@ -1529,13 +1539,32 @@ into and out of the viewing plane.
         maxxy = self.ijToXy(maxij)
         return minxy, maxxy, intersects_slice
 
+    def getTrackingCursorXy(self):
+        cijk = self.window.cursor_tijk
+        cij = self.tijkToIj(cijk)
+        cxy = self.ijToXy(cij)
+        return cxy
+
+    def getTrackingCursorHeight(self):
+        cijk = self.window.cursor_tijk
+        cij = self.tijkToIj(cijk)
+        k = self.ijToTijk(cij)[self.axis]
+        ck = cijk[self.axis]
+        dk = k-ck
+        return dk
+
     def drawTrackingCursor(self, canvas, alpha=65535):
         cw = self.window.cursor_window
         if cw is None or cw == self:
             return
-        cijk = self.window.cursor_tijk
-        cij = self.tijkToIj(cijk)
-        cxy = self.ijToXy(cij)
+        # cijk = self.window.cursor_tijk
+        # cij = self.tijkToIj(cijk)
+        # cxy = self.ijToXy(cij)
+        cxy = self.getTrackingCursorXy()
+        if cxy is None:
+            return
+        cxy = (round(cxy[0]), round(cxy[1]))
+        # cij = self.tijkToIj(cijk)
         r = 5
         thickness = 2
         # color = self.axisColor(cw.axis)
@@ -1546,14 +1575,16 @@ into and out of the viewing plane.
         # self.ijToTijk is a virtual function that
         # sets the true k value in the fragment window
         # k = self.positionOnAxis()
-        k = self.ijToTijk(cij)[self.axis]
-        ck = cijk[self.axis]
+        # k = self.ijToTijk(cij)[self.axis]
+        # ck = cijk[self.axis]
+        # dk = k-ck
+        dk = self.getTrackingCursorHeight()
         cx = cxy[0]
         cy = cxy[1]
-        if k-ck != 0:
+        if dk != 0:
             cv2.line(canvas, (cx-r,cy), (cx+r,cy), white, thickness+2)
             cv2.line(canvas, (cx-r,cy), (cx+r,cy), color, thickness)
-        if k < ck:
+        if dk > 0:
             cv2.line(canvas, (cx,cy-r), (cx,cy+r), white, thickness+2)
             cv2.line(canvas, (cx,cy-r), (cx,cy+r), color, thickness)
 

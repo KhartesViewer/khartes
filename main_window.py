@@ -861,6 +861,7 @@ class MainWindow(QMainWindow):
 
         self.project_view = None
         self.cursor_tijk = None
+        self.cursor_stxyz = None
         self.cursor_window = None
         args = QCoreApplication.arguments()
         path = os.path.dirname(os.path.realpath(args[0]))
@@ -1063,16 +1064,18 @@ class MainWindow(QMainWindow):
             self.setFocus()
     '''
 
-    def setCursorPosition(self, data_window, tijk):
+    def setCursorPosition(self, data_window, tijk, stxyz=None):
         # show_tracking_cursors = self.draw_settings["tracking_cursors"]["show"]
         # TODO remove after testing
         # show_tracking_cursors = True
         # if not show_tracking_cursors:
         if not self.getTrackingCursorsVisible():
             self.cursor_tijk = None
+            self.cursor_stxyz = None
             self.cursor_window = None
             return
         self.cursor_tijk = tijk
+        self.cursor_stxyz = stxyz
         self.cursor_window = data_window
         self.drawSlices()
 
