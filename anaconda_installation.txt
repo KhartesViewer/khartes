@@ -1,10 +1,8 @@
-khartes is written in Python; it requires a few 
+khartes is written in Python; it requires a number of 
 external modules.  Below are the Anaconda commands 
 I used in Windows to import the needed modules.  
 Probably the pip commands and module names are 
-similar, but I haven't tested them.  Although khartes 
-does not actually use matlib, I installed it because 
-doing so automatically installs PyQt5 and numpy.
+similar, but I haven't tested them.  
 
 One possibly unfamiliar package is pynrrd, 
 which implements (in pure python) the NRRD format 
@@ -14,7 +12,7 @@ khartes uses this format for storing data volumes.
 
 Another unusual package is rectpack, which is
 used for packing 2D rectangles in a minimum-size box.
-It is used when exporting textures in the export-mesh
+It is called when exporting textures in the export-mesh
 function.
 
 I tested khartes in Python 3.11, but it probably works 
@@ -22,19 +20,33 @@ on slightly older versions of Python 3 as well.
 
 User hari_seldon has informed me that the pip equivalent 
 of opencv is opencv-python-headless (Thanks hari!).
-And it turns out that the pip install of matplotlib does 
-not import pyqt5, so you will need to pip install pyqt5 
-as well.
+
+The list below shows how to install modules from the
+default conda repository.  Due to problems with the
+current (4.6.0) version of opencv in the repository,
+you need to install python 3.11 (not 3.12), and
+install a specific version of glib before installing
+opencv.  It is a good idea, after you install opencv, 
+to check that you can import it ("import cv2") before proceeding.
 
 conda create -n vch python=3.11
-conda install matplotlib
+conda install glib=2.69.1
 conda install opencv
+conda install pyqt
+conda install tifffile
+conda install zarr
 conda install scipy
+conda install pyopengl
 conda install -c conda-forge pynrrd
 conda install -c conda-forge rectpack
 
+If you want to live on the bleeding edge, you can
+install the conda-forge versions of all these packages.
+If you do this, you are able to use python 3.12, and you 
+don't need to install the glib package; the correct version 
+of glib will be installed automatically.
+As of mid-April 2024, the conda-forge versions seem
+to work correctly.
+
 # TODO: add a proper conda requirements file 
-# Additional requirements for Brett's speed improvement code.
-conda install zarr
-conda install tifffile
-conda install PIL
+
