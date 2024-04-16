@@ -16,9 +16,9 @@ from scipy.interpolate import CubicSpline
 from utils import Utils
 from volume import Volume
 from base_fragment import BaseFragment, BaseFragmentView
-from PySide6 import QtCore, QtGui
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PyQt5 import QtCore, QtGui
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
 
 class FragmentsModel(QtCore.QAbstractTableModel):
     def __init__(self, project_view, main_window):

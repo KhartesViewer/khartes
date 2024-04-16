@@ -1,4 +1,4 @@
-from PySide6.QtGui import (
+from PyQt5.QtGui import (
         QImage,
         QMatrix4x4,
         QOffscreenSurface,
@@ -11,7 +11,8 @@ from PySide6.QtGui import (
         QVector4D,
         )
 
-from PySide6.QtOpenGL import (
+# from PySide6.QtOpenGL import (
+from PyQt5.QtGui import (
         QOpenGLVertexArrayObject,
         QOpenGLBuffer,
         QOpenGLDebugLogger,
@@ -23,7 +24,7 @@ from PySide6.QtOpenGL import (
         QOpenGLTexture,
         )
 
-from PySide6.QtWidgets import (
+from PyQt5.QtWidgets import (
         QApplication, 
         QGridLayout,
         QHBoxLayout,
@@ -31,11 +32,12 @@ from PySide6.QtWidgets import (
         QWidget,
         )
 
-from PySide6.QtOpenGLWidgets import (
+# from PySide6.QtOpenGLWidgets import (
+from PyQt5.QtWidgets import (
         QOpenGLWidget,
         )
 
-from PySide6.QtCore import (
+from PyQt5.QtCore import (
         QFileInfo,
         QPointF,
         QSize,
@@ -47,7 +49,10 @@ from collections import OrderedDict
 import numpy as np
 import cv2
 from OpenGL import GL as pygl
-from shiboken6 import VoidPtr
+# from shiboken6 import VoidPtr
+import ctypes
+def VoidPtr(i):
+    return ctypes.c_void_p(i)
 
 from utils import Utils
 from data_window import DataWindow

@@ -7,7 +7,8 @@ from volume import Volume
 from volume_zarr import CachedZarrVolume
 import tifffile
 
-from PySide6.QtWidgets import (
+from PyQt5.QtWidgets import (
+        QAction,
         QApplication, QAbstractItemView,
         QCheckBox, QColorDialog,
         QFileDialog,
@@ -21,8 +22,10 @@ from PySide6.QtWidgets import (
         QVBoxLayout, 
         QWidget, 
         )
-from PySide6.QtCore import QSize, Qt, qVersion, QSettings
-from PySide6.QtGui import QAction, QPalette, QColor, QCursor, QIntValidator
+from PyQt5.QtCore import QSize, Qt, qVersion, QSettings
+from PyQt5.QtGui import (
+        # QAction, 
+        QPalette, QColor, QCursor, QIntValidator)
 
 class ColorEdit(QPushButton):
 
@@ -130,7 +133,7 @@ class ZarrLoader(QMainWindow):
             dialog.zarr_directory = sdir
             # The sleep is needed to prevent crashes 
             # with PySide6
-            time.sleep(.5)
+            # time.sleep(.5)
             # dialog.done(1)
             dialog.accept()
 
@@ -153,7 +156,7 @@ class ZarrLoader(QMainWindow):
             dialog.zarr_directory = sdir
             # The sleep is needed to prevent crashes 
             # with PySide6
-            time.sleep(.5)
+            # time.sleep(.5)
             # dialog.done(1)
             dialog.accept()
         return None

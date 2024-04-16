@@ -10,7 +10,7 @@ from utils import Utils
 from base_fragment import BaseFragment, BaseFragmentView
 from fragment import Fragment, FragmentView
 
-from PySide6.QtGui import QColor
+from PyQt5.QtGui import QColor
 
 class TrglFragment(BaseFragment):
     def __init__(self, name):

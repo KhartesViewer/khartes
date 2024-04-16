@@ -1,9 +1,9 @@
-from PySide6.QtGui import (
+from PyQt5.QtGui import (
         QColor, QCursor, QFont, 
         QGuiApplication, QImage, QPalette, QPixmap,
         )
-from PySide6.QtWidgets import QLabel, QApplication
-from PySide6.QtCore import QPoint, Qt
+from PyQt5.QtWidgets import QLabel, QApplication
+from PyQt5.QtCore import QPoint, Qt
 import numpy as np
 import numpy.linalg as npla
 import cv2

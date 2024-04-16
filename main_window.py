@@ -8,7 +8,8 @@ import numpy as np
 import platform
 import traceback
 
-from PySide6.QtWidgets import (
+from PyQt5.QtWidgets import (
+        QAction,
         QApplication, QAbstractItemView,
         QCheckBox, QComboBox,
         QDialog, QDialogButtonBox,
@@ -25,16 +26,19 @@ from PySide6.QtWidgets import (
         QVBoxLayout, 
         QWidget, 
         )
-from PySide6.QtCore import (
+from PyQt5.QtCore import (
         QAbstractTableModel, QCoreApplication, QObject,
         QThread, QSize, QTimer, Qt, qVersion, QSettings,
-        Signal
+        # Signal
+        pyqtSignal
         )
-from PySide6.QtGui import QAction, QPainter, QPalette, QColor, QCursor, QIcon, QPixmap, QImage
+from PyQt5.QtGui import (
+        # QAction, 
+        QPainter, QPalette, QColor, QCursor, QIcon, QPixmap, QImage)
 
-from PySide6.QtSvg import QSvgRenderer
+from PyQt5.QtSvg import QSvgRenderer
 
-from PySide6.QtXml import QDomDocument
+from PyQt5.QtXml import QDomDocument
 
 from tiff_loader import TiffLoader
 from zarr_loader import ZarrLoader
@@ -824,7 +828,8 @@ class MainWindow(QMainWindow):
         },
     }
 
-    zarr_signal = Signal(str)
+    # zarr_signal = Signal(str)
+    zarr_signal = pyqtSignal(str)
 
     def __init__(self, appname, app):
         super(MainWindow, self).__init__()
@@ -1883,7 +1888,7 @@ class MainWindow(QMainWindow):
             # print("sleeping")
             # The sleep is needed to prevent crashes 
             # with PySide6
-            time.sleep(1.0)
+            # time.sleep(1.0)
             print("calling dialog.accept()")
             # self.app.processEvents()
             # print("processed events")

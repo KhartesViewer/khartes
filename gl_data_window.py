@@ -1,4 +1,4 @@
-from PySide6.QtGui import (
+from PyQt5.QtGui import (
         QImage,
         QMatrix4x4,
         QOffscreenSurface,
@@ -10,7 +10,8 @@ from PySide6.QtGui import (
         QVector4D,
         )
 
-from PySide6.QtOpenGL import (
+# from PyQt5.QtOpenGL import (
+from PyQt5.QtGui import (
         QOpenGLVertexArrayObject,
         QOpenGLBuffer,
         QOpenGLDebugLogger,
@@ -20,10 +21,10 @@ from PySide6.QtOpenGL import (
         QOpenGLShader,
         QOpenGLShaderProgram,
         QOpenGLTexture,
-        QOpenGLVersionFunctionsFactory,
+        # QOpenGLVersionFunctionsFactory,
         )
 
-from PySide6.QtWidgets import (
+from PyQt5.QtWidgets import (
         QApplication, 
         QGridLayout,
         QHBoxLayout,
@@ -31,11 +32,12 @@ from PySide6.QtWidgets import (
         QWidget,
         )
 
-from PySide6.QtOpenGLWidgets import (
+# from PyQt5.QtOpenGLWidgets import (
+from PyQt5.QtWidgets import (
         QOpenGLWidget,
         )
 
-from PySide6.QtCore import (
+from PyQt5.QtCore import (
         QFileInfo,
         QPointF,
         QSize,
@@ -50,7 +52,10 @@ import numpy as np
 import numpy.linalg as npla
 import cv2
 from OpenGL import GL as pygl
-from shiboken6 import VoidPtr
+# from shiboken6 import VoidPtr
+import ctypes
+def VoidPtr(i):
+    return ctypes.c_void_p(i)
 
 from utils import Utils
 from data_window import DataWindow
@@ -862,7 +867,8 @@ class GLDataWindowChild(QOpenGLWidget):
         print(self.message_prefix, "initializeGL")
         self.context().aboutToBeDestroyed.connect(self.destroyingContext)
         # self.gl = self.context().versionFunctions()
-        self.gl = QOpenGLVersionFunctionsFactory.get()
+        self.gl = pygl
+        # self.gl = QOpenGLVersionFunctionsFactory.get()
         self.main_context = self.context()
         # Note that debug logging only takes place if the
         # surface format option "DebugContext" is set
@@ -954,7 +960,7 @@ class GLDataWindowChild(QOpenGLWidget):
         iw = im.width()
         ih = im.height()
         iptr = im.constBits()
-        # iptr.setsize(im.sizeInBytes())
+        iptr.setsize(im.sizeInBytes())
         # make copy because the buffer from im will be deleted
         # at some point
         arr = np.frombuffer(iptr, dtype=np.uint16).copy()

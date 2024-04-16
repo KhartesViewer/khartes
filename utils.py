@@ -3,8 +3,8 @@ import random
 import datetime
 import re
 import numpy as np
-from PySide6.QtGui import QColorConstants as QCC
-from PySide6.QtGui import QColor
+from PyQt5.QtGui import QColorConstants as QCC
+from PyQt5.QtGui import QColor
 # import PySide6.QtGuiQColor.SVG as QtSVG
 
 c1 = QCC.Svg.skyblue
