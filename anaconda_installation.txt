@@ -22,14 +22,23 @@ User hari_seldon has informed me that the pip equivalent
 of opencv is opencv-python-headless (Thanks hari!).
 
 The list below shows how to install modules from the
-default conda repository.  Due to problems with the
-current (4.6.0) version of opencv in the repository,
-you need to install python 3.11 (not 3.12), and
-install a specific version of glib before installing
-opencv.  It is a good idea, after you install opencv, 
-to check that you can import it ("import cv2") before proceeding.
+default conda repository.  
+
+IMPORTANT:
+
+Due to problems with the current (4.6.0) version of 
+opencv in the default conda repository, you need to
+install python 3.11 (not 3.12), and install a specific
+version of glib before installing opencv.  It is a good
+idea, after you install opencv, to check that you can
+import it.  To do this check, type:
+python -c "import cv2"
+If no errors are printed, then opencv is installed correctly.
+
+Installation list:
 
 conda create -n vch python=3.11
+activate vch
 conda install glib=2.69.1
 conda install opencv
 conda install pyqt
@@ -45,7 +54,7 @@ install the conda-forge versions of all these packages.
 If you do this, you are able to use python 3.12, and you 
 don't need to install the glib package; the correct version 
 of glib will be installed automatically.
-As of mid-April 2024, the conda-forge versions seem
+As of mid-April 2024, these conda-forge versions seem
 to work correctly.
 
 # TODO: add a proper conda requirements file 
