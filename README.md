@@ -1672,7 +1672,7 @@ Khartes is open-source code, licensed under the GPL 3.0 license.  See [LICENSE.t
 ### Contact
 
 I prefer not to make my name and email address available on the public internet.
-I can be reached on the [Vesuvius Challenge Discord server](https://discord.com/invite/6FgWYNjb4N)
+I can be reached on the [Vesuvius Challenge Discord server](https://discord.gg/V4fJhvtaQn)
 under my user name, @khartes_chuck .
 
 ### Acknowledgements
