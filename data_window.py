@@ -1404,7 +1404,7 @@ After you have created an empty project,
 you can use <code>File/Import TIFF files...</code> to create
 data volumes from existing TIFF files. 
 Note that the "Import TIFF Files" command creates a khartes
-data volume from existing TIFF files that you alread have
+data volume from existing TIFF files that you already have
 on disk; it will not import TIFF files from elsewhere.
 <p>
 If you have an existing data volume that is in NRRD format,

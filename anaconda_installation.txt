@@ -24,22 +24,22 @@ of opencv is opencv-python-headless (Thanks hari!).
 The list below shows how to install modules from the
 default conda repository.  
 
-IMPORTANT:
+IMPORTANT (for Windows users):
 
-Due to problems with the current (4.6.0) version of 
-opencv in the default conda repository, you need to
-install python 3.11 (not 3.12), and install a specific
-version of glib before installing opencv.  It is a good
-idea, after you install opencv, to check that you can
-import it.  To do this check, type:
+If you are working in Windows: Due to problems with the current 
+(4.6.0) version of OpenCV in the default conda repository, you 
+need to install python 3.11 (not 3.12), and install a specific
+version of glib *before* installing OpenCV.  It is a good
+idea, after you install OpenCV, to check that you can
+import it.  To perform this check, type:
 python -c "import cv2"
-If no errors are printed, then opencv is installed correctly.
+If no errors are printed, then OpenCV is installed correctly.
 
 Installation list:
 
 conda create -n vch python=3.11
 activate vch
-conda install glib=2.69.1
+conda install glib=2.69.1  # Only needed in Windows?  See note above
 conda install opencv
 conda install pyqt
 conda install tifffile
@@ -51,7 +51,7 @@ conda install -c conda-forge rectpack
 
 If you want to live on the bleeding edge, you can
 install the conda-forge versions of all these packages.
-If you do this, you are able to use python 3.12, and you 
+If you do this, then you are able to use python 3.12, and you 
 don't need to install the glib package; the correct version 
 of glib will be installed automatically.
 As of mid-April 2024, these conda-forge versions seem
