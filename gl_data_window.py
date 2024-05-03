@@ -845,9 +845,9 @@ class GLDataWindowChild(QOpenGLWidget):
         self.setMouseTracking(True)
         self.fragment_vaos = {}
 
-        # 0: asynchronous mode, 1: synch mode
-        # synch mode is said to be much slower
-        self.logging_mode = QOpenGLDebugLogger.SynchronousLogging
+        # synchronous mode is said to be much slower
+        # self.logging_mode = QOpenGLDebugLogger.SynchronousLogging
+        self.logging_mode = QOpenGLDebugLogger.AsynchronousLogging
         self.common_offset_code = common_offset_code
         self.localInit()
 

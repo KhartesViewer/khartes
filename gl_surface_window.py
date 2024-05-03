@@ -754,7 +754,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             self.volume_view = None
             self.volume_view_direction = -1
             self.active_fragment = None
-            self.atlas = None
+            # self.atlas = None
             return
         pv = dw.window.project_view
         mfv = None
@@ -762,16 +762,20 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         # if mfv is None:
         #     dw.volume_view.setStxyTf(None)
-        if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction or self.active_fragment != mfv :
+        # if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction or self.active_fragment != mfv :
+        if self.active_fragment != mfv:
+            self.active_fragment = mfv
+        if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction :
             self.volume_view = dw.volume_view
             self.volume_view_direction = self.volume_view.direction
-            self.active_fragment = mfv
+            # self.active_fragment = mfv
             if self.atlas is None:
                 if self.atlas_chunk_size < 65:
                     self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,70), chunk_size=self.atlas_chunk_size)
                 else:
                     self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,400), chunk_size=self.atlas_chunk_size)
-                self.atlas.clearData()
+            else:
+                self.atlas.setVolumeView(self.volume_view)
 
     def paintSlice(self):
         timera = Utils.Timer()
@@ -1498,6 +1502,7 @@ class Chunk:
             self.atlas.volume_view.volume.setImmediateDataMode(True)
             buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
             self.atlas.volume_view.volume.setImmediateDataMode(False)
+            print(self.dk, self.dl, "*")
             misses = 0
 
         self.misses = misses
@@ -1659,22 +1664,28 @@ class Atlas:
     # def __init__(self, volume_view, gl, tex3dsz=(2048,1500,150), dcsz=(128,128,128)):
     # def __init__(self, volume_view, gl, tex3dsz=(2048,2048,600), dcsz=(256,256,256)):
     def __init__(self, volume_view, gl, tex3dsz=(2048,2048,300), chunk_size=126):
+        print("Creating atlas")
         dcsz = (chunk_size, chunk_size, chunk_size)
         self.gl = gl
         pad = 1
         self.pad = pad
+        '''
         self.volume_view = volume_view
+        '''
         self.dcsz = dcsz
         acsz = tuple(dcsz[i]+2*pad for i in range(len(dcsz)))
         self.acsz = acsz
+        '''
         vol = volume_view.volume
         vdir = volume_view.direction
         is_zarr = vol.is_zarr
+        '''
         if chunk_size < 65:
             self.max_textures_set = 10
         else:
             self.max_textures_set = 3
 
+        '''
         datas = []
         if not is_zarr:
             data = vol.trdatas[vdir]
@@ -1695,6 +1706,7 @@ class Atlas:
             lksz = tuple(self.ke(dsz[l][i],dcsz[i]) for i in range(len(dcsz)))
             ksz.append(lksz)
         self.ksz = ksz
+        '''
         # number of atlas chunks in each direction
         aksz = tuple(tex3dsz[i]//acsz[i] for i in range(len(acsz)))
         # size of atlas in each direction
@@ -1703,6 +1715,7 @@ class Atlas:
 
         self.chunks = OrderedDict()
 
+        '''
         for k in range(aksz[2]):
             for j in range(aksz[1]):
                 for i in range(aksz[0]):
@@ -1712,15 +1725,21 @@ class Atlas:
                     chunk = Chunk(self, ak, dk, dl)
                     key = self.key(dk, dl)
                     self.chunks[key] = chunk
+        '''
 
         max_nchunks = aksz[0]*aksz[1]*aksz[2]
         print("max_nchunks", max_nchunks)
         self.max_nchunks = max_nchunks
         atlas_data_code["fragment"] = atlas_data_code["fragment_template"].format(max_nchunks = max_nchunks)
         self.program = GLDataWindowChild.buildProgram(atlas_data_code)
+
+        self.setVolumeView(volume_view)
+        
         self.program.bind()
+        '''
         xyz_xform = self.xyzXform(dsz[0])
         self.program.setUniformValue("xyz_xform", xyz_xform)
+        '''
         # for var in ["atlas", "xyz_xform", "tmins", "tmaxs", "TMins", "TMaxs", "XForms", "ZChartIds", "chart_ids", "ncharts"]:
         #     print(var, self.program.uniformLocation(var))
         pid = self.program.programId()
@@ -1773,7 +1792,48 @@ class Atlas:
         gl.glActiveTexture(pygl.GL_TEXTURE0)
         tex3d.release()
 
+    def setVolumeView(self, volume_view):
+        print("setVolumeView", volume_view.volume.name if volume_view else "(None)")
+        self.clearData()
+
+        self.volume_view = volume_view
+
+        vol = volume_view.volume
+        vdir = volume_view.direction
+        is_zarr = vol.is_zarr
+        dcsz = self.dcsz
+
+        datas = []
+        if not is_zarr:
+            data = vol.trdatas[vdir]
+            datas.append(data)
+        else:
+            for level in vol.levels:
+                data = level.trdatas[vdir]
+                datas.append(data)
+        dsz = []
+        for data in datas:
+            # print("data shape", data.shape)
+            shape = data.shape
+            dsz.append(tuple(shape[::-1]))
+        # TODO: Need to clear out self.datas as soon as possible
+        # when a volume's data is released, in order to make
+        # sure the data's memory is released.
+        self.datas = datas
+        self.dsz = dsz
+        # number of data chunks in each direction
+        ksz = []
+        for l in range(len(dsz)):
+            lksz = tuple(self.ke(dsz[l][i],dcsz[i]) for i in range(len(dcsz)))
+            ksz.append(lksz)
+        self.ksz = ksz
+        self.program.bind()
+        xyz_xform = self.xyzXform(dsz[0])
+        self.program.setUniformValue("xyz_xform", xyz_xform)
+        # self.program.release()
+
     def clearData(self):
+        # print("clearing atlas data")
         aksz = self.aksz
         self.chunks.clear()
         for k in range(aksz[2]):
