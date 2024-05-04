@@ -353,6 +353,12 @@ class Fragment(BaseFragment):
 
         return frag
 
+    @staticmethod
+    def pointThreeAxes(pt_index, xyzpts, uvpts, trgls):
+        # print("PTA")
+        # TODO: make this act like a zsurf
+        return BaseFragment.pointThreeAxes(pt_index, xyzpts, uvpts, trgls)
+
     # TODO: need "created" and "modified" timestamps
     # class function
     def load(json_file):
@@ -995,7 +1001,11 @@ class FragmentView(BaseFragmentView):
             self.fpoints = np.concatenate((self.fpoints, indices), axis=1)
 
         self.vpoints = self.cur_volume_view.volume.globalPositionsToTransposedIjks(self.fragment.gpoints, self.cur_volume_view.direction)
-        self.stpoints = self.vpoints[:,0:2]
+        # self.stpoints = self.vpoints[:,0:2]
+        # self.stpoints = self.fpoints[:,0:2]
+        gai = self.cur_volume_view.volume.globalAxisFromTransposedAxis(0, self.fragment.direction)
+        gaj = self.cur_volume_view.volume.globalAxisFromTransposedAxis(1, self.fragment.direction)
+        self.stpoints = self.fragment.gpoints[:,(gai,gaj)]
         # self.xyzmin = (0.,0.,0.)
         # self.xyzmin = (0.,0.,0.)
         self.working_vpoints = np.full((len(self.vpoints),),True)

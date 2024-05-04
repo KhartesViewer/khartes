@@ -1,4 +1,5 @@
 from PyQt5.QtGui import (
+        QColor,
         QImage,
         QMatrix4x4,
         QOffscreenSurface,
@@ -946,6 +947,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             nlevels = len(vol.levels)
         else:
             nlevels = 1
+        # TODO: testing only!
+        # nlevels = 1
+
         fuzz = .75
         iscale = 1
         for izoom in range(nlevels):
@@ -1515,13 +1519,21 @@ class Chunk:
         if self.misses == 0:
             self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, buf.tobytes())
             texture_set = True
-            self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
-            self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
+            # self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
+            # self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
+            # print("dsz", dsz)
+            # print("dr", dr)
+            # print("int_dr", int_dr)
+            # print("tmin", self.tmin)
+            # print("tmax", self.tmax)
+            # self.tmin = (0., 0., 0.01)
+            # self.tmax = (1., 1., 1.)
             timera.time("set texture")
         else:
-            self.tmin = (0., 0., 0.)
-            self.tmax = (-1., -1., -1.)
+            # self.tmin = (0., 0., 0.)
+            # self.tmax = (-1., -1., -1.)
             timera.time("didn't set texture")
+            pass
 
         asz = self.atlas.asz
 
@@ -1534,8 +1546,11 @@ class Chunk:
         self.atlas.program.bind()
         ind = self.atlas.index(self.ak)
 
+        self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
+        self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
         self.atlas.tmax_ubo.data[ind, :3] = self.tmax
         self.atlas.tmin_ubo.data[ind, :3] = self.tmin
+        self.atlas.tmin_ubo.data[ind, 3] = texture_set
 
         xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
         self.atlas.xform_ubo.data[ind, :, :] = xformarr
@@ -1605,10 +1620,10 @@ atlas_data_code = {
       // the uniform buffers below MUST be in alphabetical
       // order!!
       layout (std140) uniform TMaxs {{
-        vec3 tmaxs[max_nchunks];
+        vec4 tmaxs[max_nchunks];
       }};
       layout (std140) uniform TMins {{
-        vec3 tmins[max_nchunks];
+        vec4 tmins[max_nchunks];
       }};
       layout (std140) uniform XForms {{
         mat4 xforms[max_nchunks];
@@ -1623,13 +1638,14 @@ atlas_data_code = {
       out vec4 fColor;
 
       void main() {{
+        // fColor = vec4(.7,.5,.5,1.);
         fColor = vec4(.5,.5,.5,1.);
         for (int i=0; i<ncharts; i++) {{
         // for (int i=ncharts-1; i>=0; i--) {{
             int id = chart_ids[i];
-            vec3 tmin = tmins[id];
-            vec3 tmax = tmaxs[id];
-            if (tmin.z != 0. && fxyz.x >= tmin.x && fxyz.x <= tmax.x &&
+            vec4 tmin = tmins[id];
+            vec4 tmax = tmaxs[id];
+            if (tmin.w != 0. && fxyz.x >= tmin.x && fxyz.x <= tmax.x &&
              fxyz.y >= tmin.y && fxyz.y <= tmax.y &&
              fxyz.z >= tmin.z && fxyz.z <= tmax.z) {{
               mat4 xform = xforms[id];
@@ -1637,6 +1653,7 @@ atlas_data_code = {
               fColor = texture(atlas, txyz);
               fColor.g = fColor.r;
               fColor.b = fColor.r;
+              // fColor.r = float(id+1)/10.;
               fColor.a = 1.;
             }}
         }}
@@ -1773,6 +1790,8 @@ class Atlas:
         # allocate 3D texture 
         tex3d = QOpenGLTexture(QOpenGLTexture.Target3D)
         tex3d.setWrapMode(QOpenGLTexture.ClampToBorder)
+        # Useful for debugging:
+        # tex3d.setBorderColor(QColor(100,100,200,255))
         tex3d.setAutoMipMapGenerationEnabled(False)
         tex3d.setMagnificationFilter(QOpenGLTexture.Linear)
         # tex3d.setMagnificationFilter(QOpenGLTexture.Nearest)
