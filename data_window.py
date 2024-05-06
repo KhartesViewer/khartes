@@ -230,7 +230,9 @@ class DataWindow(QLabel):
             fv = self.cur_frag_pts_fv[nearbyNode]
             fv.setWorkingRegion(index, 60.)
 
-    def setNearbyNodeIjk(self, ijk):
+    # overridden in GLSurfaceWindow
+    def setNearbyNodeIjk(self, ijk, update_xyz, update_st):
+        # print("snni", update_xyz, update_st)
         xyijks = self.cur_frag_pts_xyijk
         nearbyNode = self.localNearbyNodeIndex
         if nearbyNode >= 0 and xyijks is not None and xyijks.shape[0] != 0:
@@ -244,7 +246,7 @@ class DataWindow(QLabel):
             new_tijk[self.axis] = k
             # True if successful
             # if fv.movePoint(index, new_tijk):
-            if self.window.movePoint(fv, index, new_tijk):
+            if self.window.movePoint(fv, index, new_tijk, update_xyz, update_st):
                 # wpos = e.localPos()
                 # wxy = (wpos.x(), wpos.y())
                 # nearbyNode = self.findNearbyNode(wxy)
@@ -704,7 +706,7 @@ class DataWindow(QLabel):
             nij = list(self.nnStartPoint)
             nij[0] += di
             nij[1] += dj
-            self.setNearbyNodeIjk(nij)
+            self.setNearbyNodeIjk(nij, True, True)
             self.setWaitCursor()
             self.window.drawSlices()
         elif self.isMovingTiff:
@@ -884,6 +886,11 @@ class DataWindow(QLabel):
         key = e.key()
         # print(self.axis, key)
         sgn = 1
+        # print("kpe %x"%QGuiApplication.queryKeyboardModifiers())
+        # TODO: See 
+        # https://doc.qt.io/qt-6/qt.html#KeyboardModifier-enum
+        # on how ctrl is mapped in MacOS
+        ctrl_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.ControlModifier) != 0
         opts = {
             Qt.Key_Left: (1*sgn,0,0),
             Qt.Key_A:    (1*sgn,0,0),
@@ -948,7 +955,7 @@ class DataWindow(QLabel):
                     nij[1] -= d[1]
                     nij[2] -= d[2]
                     self.setWaitCursor()
-                    self.setNearbyNodeIjk(nij)
+                    self.setNearbyNodeIjk(nij, True, not ctrl_pressed)
         elif not self.isMovingNode and (key == Qt.Key_Backspace or key == Qt.Key_Delete):
             # print("backspace/delete")
             # ijk = self.getNearbyNodeIjk()

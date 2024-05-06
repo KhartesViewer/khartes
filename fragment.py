@@ -1797,7 +1797,9 @@ class FragmentView(BaseFragmentView):
         return self.tri.simplices
 
     # return True if succeeds, False if fails
-    def movePoint(self, index, new_vijk):
+    # Note that update_xyz and update_st are ignored here;
+    # st is always updated due to the call to FragmentView.setLocalPoints() 
+    def movePoint(self, index, new_vijk, update_xyz, update_st):
         old_fijk = self.fpoints[index]
         new_fijk = self.vijkToFijk(new_vijk)
         new_matches = np.where((np.rint(self.fpoints[:, 0:2]) == np.rint(new_fijk[0:2])).all(axis=1))[0]

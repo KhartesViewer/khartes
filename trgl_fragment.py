@@ -854,7 +854,7 @@ class TrglFragmentView(BaseFragmentView):
         return axes
     '''
 
-    def movePoint(self, index, new_vijk):
+    def movePoint(self, index, new_vijk, update_xyz, update_st):
         vv = self.cur_volume_view
         new_gijk = vv.transposedIjkToGlobalPosition(new_vijk)
         new_uijk = vv.transposedIjkToIjk(new_vijk)
@@ -883,14 +883,16 @@ class TrglFragmentView(BaseFragmentView):
         # new_gijk = self.cur_volume_view.transposedIjkToGlobalPosition(new_vijk)
         # print(self.fragment.gpoints)
         # print(match, new_gijk)
-        self.fragment.gpoints[index, :] = new_gijk
-        self.stpoints[index, :] = new_stxy
-        # print(self.fragment.gpoints)
         self.fragment.notifyModified()
+        if update_xyz:
+            self.fragment.gpoints[index, :] = new_gijk
+            self.setLocalPoints(True, False)
+        if update_st:
+            self.stpoints[index, :] = new_stxy
+        # print(self.fragment.gpoints)
         # modifyZsurf = False
         # if len(self.workingVpoints()) > 0 and self.workingVpoints()[index]:
         #     modifyZsurf = True
-        self.setLocalPoints(True, False)
         return True
 
     # returns list of trgl indexes

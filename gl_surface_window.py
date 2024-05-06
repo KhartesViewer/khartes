@@ -284,8 +284,12 @@ class GLSurfaceWindow(DataWindow):
         return xyzgrid
     '''
 
-    def setNearbyNodeIjk(self, ijk):
+    def setNearbyNodeIjk(self, ijk, update_xyz, update_st):
         # print("snnijk", ijk)
+        # NOTE that the two flags are switched below, because the
+        # flags have opposite values when passed to
+        # this window.
+        update_xyz, update_st = update_st, update_xyz
         stxys = self.cur_frag_pts_stxy
         xyijks = self.cur_frag_pts_xyijk
         nearbyNode = self.localNearbyNodeIndex
@@ -351,10 +355,10 @@ class GLSurfaceWindow(DataWindow):
         # TODO: testing!
         # nijk = oijk + dijk
         # print(" nijk", nijk)
-        # This eventually ends up calling movePoints(), which
+        # This eventually ends up calling movePoint(), which
         # is defined in both FragmentView and TrglFragmentView.
         # super(GLSurfaceWindow, self).setNearbyNodeIjk(nijk.tolist())
-        super(GLSurfaceWindow, self).setNearbyNodeIjk(nijk)
+        super(GLSurfaceWindow, self).setNearbyNodeIjk(nijk, update_xyz, update_st)
 
     def stxyWindowBounds(self):
         stxy = self.volume_view.stxytf
