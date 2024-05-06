@@ -291,11 +291,26 @@ class GLSurfaceWindow(DataWindow):
         nearbyNode = self.localNearbyNodeIndex
         if nearbyNode < 0 or stxys.shape[0] == 0:
             return
+        fv = self.glw.active_vao.fragment_view
+        vv = fv.cur_volume_view
         stxy = stxys[nearbyNode, 0:2]
         oijk = xyijks[nearbyNode, 2:5]
-        dijk = ijk-oijk
+        gijk = vv.transposedIjkToGlobalPosition(ijk)
+        # gijk = vv.transposedIjksToGlobalPositions(np.array([ijk]))[0]
+        ogijk = vv.transposedIjkToGlobalPosition(oijk)
+        # ogijk = vv.transposedIjksToGlobalPositions(np.array([oijk]))[0]
+
+        # shift in transposed ijk coordinates:
+        dijk = [ijk[i]-oijk[i] for i in range(3)]
+        # dijk = ijk-oijk
+
+        # shift in global coordinates
+        dgijk = [gijk[i]-ogijk[i] for i in range(3)]
+
+        # print(dijk, dgijk)
+        # dgijk = gijk-ogijk
         # Use convention that ^ is outwards
-        dijk[2] *= -1
+        # dijk[2] *= -1
         index = int(stxys[nearbyNode, 2])
         # wxy = xyijks[nearbyNode, 0:2]
         # print(" ", index, oijk, dijk, stxy)
@@ -304,17 +319,42 @@ class GLSurfaceWindow(DataWindow):
         # size of data window to use, in units of stxy
         # window_half_width = 20
         # xyzg = self.getXyzGrid()
-        fv = self.glw.active_vao.fragment_view
+        # fv = self.glw.active_vao.fragment_view
         # normal = fv.pointNormal(index)
-        axes = fv.fragment.pointThreeAxes(index, fv.fpoints[:,:3], fv.stpoints, fv.trgls())
+        # print("axis 1 is", fv.cur_volume_view.globalAxisFromTransposedAxis(1))
+        # gas = [fv.cur_volume_view.globalAxisFromTransposedAxis(i) for i in range(3)]
+        # print("gas", gas)
+        # axes = fv.fragment.pointThreeAxes(index, fv.fpoints[:,:3], fv.stpoints, fv.trgls())
+        # axes = fv.fragment.pointThreeAxes(index, fv.fragment.gpoints, fv.stpoints, fv.trgls())
+        axes = fv.localStAxes(index)
         # print(" ", axes)
         # nijk = oijk + dijk[0]*axes[0]+dijk[1]*axes[1]+dijk[2]*axes[2]
         if axes is None:
             print("GLSurfaceWindow.setNearbyNodeIjk: could not compute axes")
             return
-        nijk = oijk + axes@dijk
+        # nijk = oijk + axes@dijk
+        # shift = axes@dgijk
+
+        # Use transposed ijk coordinates to calculate
+        # the shift, since dijk represents the original user
+        # input in the map-view plane (up, down, right, left, in, out)
+        shift = axes@dijk
+
+        # print(dgijk, shift)
+        # TODO: what does this do to the scaling, if the
+        # volume is decimated
+        # But apply the shift to the global coordinates!
+        ngijk = ogijk + shift
+        # And then transform the shifted result back to ijk coordinates:
+        nijk = vv.globalPositionToTransposedIjk(ngijk)
+        # print(ngijk, nijk)
+        # TODO: testing!
+        # nijk = oijk + dijk
         # print(" nijk", nijk)
-        super(GLSurfaceWindow, self).setNearbyNodeIjk(nijk.tolist())
+        # This eventually ends up calling movePoints(), which
+        # is defined in both FragmentView and TrglFragmentView.
+        # super(GLSurfaceWindow, self).setNearbyNodeIjk(nijk.tolist())
+        super(GLSurfaceWindow, self).setNearbyNodeIjk(nijk)
 
     def stxyWindowBounds(self):
         stxy = self.volume_view.stxytf
@@ -775,6 +815,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                     self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,70), chunk_size=self.atlas_chunk_size)
                 else:
                     self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,400), chunk_size=self.atlas_chunk_size)
+                    # TODO: for testing
+                    # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,150), chunk_size=self.atlas_chunk_size)
             else:
                 self.atlas.setVolumeView(self.volume_view)
 

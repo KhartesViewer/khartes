@@ -852,6 +852,14 @@ class CachedZarrVolume():
         else:
             return gpoints[:,(0,2,1)]
 
+    def globalPositionToTransposedIjk(self, gpoint, direction):
+        if direction == 0:
+            # return gpoints[:,(1,2,0)]
+            return (gpoint[1], gpoint[2], gpoint[0])
+        else:
+            # return gpoints[:,(0,2,1)]
+            return (gpoint[0], gpoint[2], gpoint[1])
+
     def transposedIjksToGlobalPositions(self, ijkts, direction):
         if direction == 0:
             return ijkts[:,(2,0,1)]

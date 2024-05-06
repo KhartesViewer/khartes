@@ -499,6 +499,9 @@ class VolumeView():
     def globalPositionsToTransposedIjks(self, gpoints):
         return self.volume.globalPositionsToTransposedIjks(gpoints, self.direction)
 
+    def globalPositionToTransposedIjk(self, gpoint):
+        return self.volume.globalPositionToTransposedIjk(gpoint, self.direction)
+
     def globalAxisFromTransposedAxis(self, axis):
         return self.volume.globalAxisFromTransposedAxis(axis, self.direction)
 
@@ -911,6 +914,17 @@ class Volume():
         else:
             tijks = ijks[:,(0,2,1)]
         return tijks
+
+    def globalPositionToTransposedIjk(self, gpoint, direction):
+        g0 = self.gijk_starts
+        dg = self.gijk_steps
+        ijk = [(gpoint[i]-g0[i])/dg[i] for i in range(3)]
+        if direction == 0:
+            # tijk = ijk[(1,2,0)]
+            tijk = (ijk[1],ijk[2],ijk[0])
+        else:
+            tijk = (ijk[0],ijk[2],ijk[1])
+        return tijk
 
     # class function
     def globalIjksToTransposedGlobalIjks(gijks, direction):

@@ -357,7 +357,8 @@ class Fragment(BaseFragment):
     def pointThreeAxes(pt_index, xyzpts, uvpts, trgls):
         # print("PTA")
         # TODO: make this act like a zsurf
-        return BaseFragment.pointThreeAxes(pt_index, xyzpts, uvpts, trgls)
+        # return BaseFragment.pointThreeAxes(pt_index, xyzpts, uvpts, trgls)
+        return np.array([[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]])
 
     # TODO: need "created" and "modified" timestamps
     # class function
@@ -967,6 +968,27 @@ class FragmentView(BaseFragmentView):
         sqcm = BaseFragment.calculateSqCm(pts, simps, voxel_size_um)
         self.sqcm = sqcm
 
+    # This version moves the points in the old way (along the axes)
+    def localStAxesHide(self, pt_index):
+        axes = np.array([[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]])
+        if self.fragment.direction == 0:
+            axes = axes[(2,0,1), :]
+        else:
+            axes = axes[(0,2,1), :]
+        return axes
+
+    # This version moves the points along the normal and the tangent plane
+    def localStAxes(self, pt_index):
+        axes = super(FragmentView, self).localStAxes(pt_index)
+        if axes is None:
+            return axes
+        if self.cur_volume_view is not None:
+            if self.cur_volume_view.direction == 0:
+                axes[:,(0,1)] *= -1
+            else:
+                axes *= -1.
+        return axes
+
     def clearCaches(self):
         self.oldzs = None
         self.oldtri = None
@@ -986,6 +1008,8 @@ class FragmentView(BaseFragmentView):
     # recursion_ok determines whether to call setLocalPoints in
     # "echo" fragments.  But this is safe to call only if all
     # fragment views have had their current volume view set.
+    # NOTE that Fragment.setLocalPoints sets stpoints,
+    # but TrglFragment.setLocalPoints does not.
     def setLocalPoints(self, recursion_ok, always_update_zsurf=True):
         # print("set local points", self.cur_volume_view.volume.name)
         # print("set local points", self.fragment.name)
@@ -1786,5 +1810,6 @@ class FragmentView(BaseFragmentView):
         self.fragment.gpoints[index, :] = new_gijk
         # print(self.fragment.gpoints)
         self.fragment.notifyModified()
+        # NOTE that this will set stpoints as well as fpoints and vpoints
         self.setLocalPoints(True, False)
         return True

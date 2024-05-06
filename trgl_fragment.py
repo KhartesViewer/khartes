@@ -366,6 +366,8 @@ class TrglFragmentView(BaseFragmentView):
             self.mesh_visible = False
 
     # TODO: if cur_volume_view changed, unset working region
+    # NOTE that Fragment.setLocalPoints sets stpoints,
+    # but TrglFragment.setLocalPoints does not.
     def setLocalPoints(self, recursion_ok=True, always_update_zsurfs=True):
         self.local_points_modified = Utils.timestamp()
         if self.cur_volume_view is None:
@@ -800,19 +802,85 @@ class TrglFragmentView(BaseFragmentView):
     def trgls(self):
         return self.fragment.trgls
 
+    '''
+    def localStAxesOld(self, index):
+        axes = BaseFragment.pointThreeAxes(index, self.fragment.gpoints, self.stpoints, self.trgls())
+        return axes
+
+    # returns 3 axes: axis along increasing stx, axis along increasing sty,
+    # normal.  The 3 axes are orthonormal.
+    # TODO: the calculation of stxaxis and styaxis should take into
+    # account the local stxy values (uvpts), intead of looking
+    # at the z axis as a proxy
+    def localStAxesHide(self, pt_index):
+        xyzpts = self.fragment.gpoints
+        uvpts = self.stpoints
+        trgls = self.trgls()
+        if uvpts is None or len(xyzpts) != len(uvpts):
+            return None
+        ltrgl_indexes = BaseFragment.trglsAroundPoint(pt_index, trgls)
+        ltrgls = trgls[ltrgl_indexes]
+
+        v0 = ltrgls[:,0]
+        v1 = ltrgls[:,1]
+        v2 = ltrgls[:,2]
+        d01 = (xyzpts[v1] - xyzpts[v0]).astype(np.float64)
+        d02 = (xyzpts[v2] - xyzpts[v0]).astype(np.float64)
+        n3d = np.cross(d01, d02)
+        npt = n3d.sum(axis=0)
+        # print("npt", npt)
+        l2 = np.sqrt(np.sum(npt*npt))
+        if l2 == 0:
+            return None
+        normal = npt/l2
+        # print("normal", normal)
+        # In the global coordinate system, this represents
+        # the axis along the scroll's original z axis.
+        # This should be more or less aligned with the sty axis
+        zaxis = np.array((0., 0., 1.), dtype=np.float32)
+        stxaxis = np.cross(normal, zaxis)
+        # stxaxis = np.cross(zaxis, normal)
+        # stxaxis *= -1
+        # print("stxaxis", stxaxis)
+        l2 = np.sqrt(np.sum(stxaxis*stxaxis))
+        if l2 == 0:
+            return None
+        stxaxis /= l2
+        styaxis = np.cross(normal, stxaxis)
+        # styaxis *= -1
+        axes = np.array((stxaxis, styaxis, normal)).T
+        # print(normal, axes)
+        # return np.array((stxaxis, styaxis, normal)).T
+        return axes
+    '''
+
     def movePoint(self, index, new_vijk):
+        vv = self.cur_volume_view
+        new_gijk = vv.transposedIjkToGlobalPosition(new_vijk)
+        new_uijk = vv.transposedIjkToIjk(new_vijk)
         old_vijk = self.vpoints[index, :3]
-        dvijk = new_vijk-old_vijk
-        axes = self.fragment.pointThreeAxes(index, self.vpoints[:,:3], self.stpoints, self.trgls())
+        # old_gijk = vv.transposedIjkToGlobalPosition(old_vijk)
+        old_uijk = vv.transposedIjkToIjk(old_vijk)
+        # dvijk = new_vijk-old_vijk
+        # dgijk = [new_gijk[i]-old_gijk[i] for i in range(3)]
+        duijk = [new_uijk[i]-old_uijk[i] for i in range(3)]
+        # print("movePoint", dvijk, dgijk, duijk)
+        # axes = self.fragment.pointThreeAxes(index, self.vpoints[:,:3], self.stpoints, self.trgls())
+        axes = self.localStAxes(index)
         if axes is None:
             print("TrglFragmentView.movePoint: could not compute axes")
             return
-        rdvijk = (axes.T)@dvijk
+        # rdvijk = (axes.T)@dvijk
+        # rdgijk = (axes.T)@dgijk
+        rduijk = (axes.T)@duijk
+        # rdgijk = (axes)@dgijk
         old_stxy = self.stpoints[index]
         # new_stxy = old_stxy-rdvijk[:2]
-        new_stxy = old_stxy+rdvijk[:2]
+        # new_stxy = old_stxy+rdvijk[:2]
+        # new_stxy = old_stxy+rdgijk[:2]
+        new_stxy = old_stxy+rduijk[:2]
         # new_stxy = old_stxy
-        new_gijk = self.cur_volume_view.transposedIjkToGlobalPosition(new_vijk)
+        # new_gijk = self.cur_volume_view.transposedIjkToGlobalPosition(new_vijk)
         # print(self.fragment.gpoints)
         # print(match, new_gijk)
         self.fragment.gpoints[index, :] = new_gijk
