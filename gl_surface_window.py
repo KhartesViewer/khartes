@@ -506,7 +506,8 @@ xyz_code = {
       out vec4 fColor;
 
       void main() {
-          fColor = vec4(fxyz/65535., 1.);
+          // fColor = vec4(fxyz/65535., 1.);
+          fColor = vec4(fxyz, 1.);
       }
 
     ''',
@@ -744,8 +745,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # a resolution for our purposes!
         # The uint16 format can store xyz at a resolution of 1
         # pixel, which is good enough for our purposes.
-        # fbo_format.setInternalTextureFormat(pygl.GL_RGB32F)
-        fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
+        fbo_format.setInternalTextureFormat(pygl.GL_RGB32F)
+        # fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
         self.xyz_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.xyz_fbo.bind()
         draw_buffers = (pygl.GL_COLOR_ATTACHMENT0,)
@@ -823,6 +824,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                     # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,150), chunk_size=self.atlas_chunk_size)
             else:
                 self.atlas.setVolumeView(self.volume_view)
+
+    def areVolBoxesVisible(self):
+        return False
 
     def paintSlice(self):
         timera = Utils.Timer()
@@ -967,18 +971,29 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         for block in blocks:
             bset.add(tuple(block))
         return bset
-        
+
     def getBlocks(self, fbo):
         timera = Utils.Timer()
         timera.active = False
         dw = self.gldw
         f = self.gl
 
-        im = fbo.toImage(True)
+        # im = fbo.toImage(True)
+        self.xyz_fbo.bind()
+        w = fbo.width()
+        # w = (w//4-1)*4
+        h = fbo.height()
+        # h = (h//4-1)*4
+        # print("w h", w, h)
+        farr = f.glReadPixels(0, 0, w, h, f.GL_RGBA, f.GL_FLOAT)
+        farr = farr.reshape((h,w,4))
+        farr = farr[::-1, :, :]
+        QOpenGLFramebufferObject.bindDefault()
+        # print("farr", farr.shape, farr.dtype)
         timera.time("get image")
         # print("im format", im.format())
-        farr = self.npArrayFromQImage(im)
         # print("farr", farr.shape, farr.dtype)
+        # print(farr)
         # df is decimation factor
         df = 4
         arr = farr[::df,::df,:]
@@ -1014,7 +1029,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         dv = self.atlas_chunk_size*iscale
         zoom_level = izoom
         # look for xyz values where alpha is not zero
-        nzarr = arr[arr[:,:,3] > 0][:,:3] // dv
+        nzarr = (arr[arr[:,:,3] > 0][:,:3]).astype(np.int32) // dv
         # print("nzarr", nzarr.shape, nzarr.dtype)
 
         if len(nzarr) == 0:

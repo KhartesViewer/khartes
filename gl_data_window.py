@@ -957,6 +957,7 @@ class GLDataWindowChild(QOpenGLWidget):
 
         # conversion to numpy array based on
         # https://stackoverflow.com/questions/19902183/qimage-to-numpy-array-using-pyside
+        # print("im format", im.format())
         iw = im.width()
         ih = im.height()
         iptr = im.constBits()
@@ -1333,6 +1334,12 @@ class GLDataWindowChild(QOpenGLWidget):
             jcolor[3] = alpha16
             cv2.line(data, (0,fy), (ww,fy), jcolor, aw)
 
+    def areVolBoxesVisible(self):
+        return self.gldw.window.getVolBoxesVisible()
+
+    # TODO: need more granular control so that
+    # in map view, only scale bar and tracking cursor are shown
+    # (extra TODO: is map-view scale bar correct?)
     def drawOverlays(self, data):
         dw = self.gldw
         volume_view = dw.volume_view
@@ -1344,7 +1351,8 @@ class GLDataWindowChild(QOpenGLWidget):
             alpha = opacity
         alpha16 = int(alpha*65535)
         dww = dw.window
-        if dww.getVolBoxesVisible():
+        # if dww.getVolBoxesVisible():
+        if self.areVolBoxesVisible():
             cur_vol_view = dww.project_view.cur_volume_view
             cur_vol = dww.project_view.cur_volume
             for vol, vol_view in dww.project_view.volumes.items():
