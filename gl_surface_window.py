@@ -697,6 +697,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.active_vao = None
         self.data_fbo = None
         self.xyz_fbo = None
+        self.xyz_pbo = None
         self.xyz_arr = None
         self.trgls_fbo = None
         # self.atlas_chunk_size = 254
@@ -745,12 +746,18 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # a resolution for our purposes!
         # The uint16 format can store xyz at a resolution of 1
         # pixel, which is good enough for our purposes.
-        fbo_format.setInternalTextureFormat(pygl.GL_RGB32F)
+        fbo_format.setInternalTextureFormat(pygl.GL_RGBA32F)
         # fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
         self.xyz_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.xyz_fbo.bind()
         draw_buffers = (pygl.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
+        self.xyz_pbo = QOpenGLBuffer(QOpenGLBuffer.PixelPackBuffer)
+        self.xyz_pbo.create()
+        self.xyz_pbo.bind()
+        pbo_size = width*height*4*4
+        self.xyz_pbo.allocate(pbo_size)
+        self.xyz_pbo.release()
 
         # fbo where the data will be drawn
         fbo_format = QOpenGLFramebufferObjectFormat()
@@ -985,7 +992,13 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         h = fbo.height()
         # h = (h//4-1)*4
         # print("w h", w, h)
-        farr = f.glReadPixels(0, 0, w, h, f.GL_RGBA, f.GL_FLOAT)
+        # farr = f.glReadPixels(0, 0, w, h, f.GL_RGBA, f.GL_FLOAT)
+        self.xyz_pbo.bind()
+        raw_uint8_data = f.glGetBufferSubData(f.GL_PIXEL_PACK_BUFFER, 0, h*w*4*4)
+        self.xyz_pbo.release()
+        # https://stackoverflow.com/questions/34637222/glgetbuffersubdata-pyopengl-random-result-and-segfault
+        farr = raw_uint8_data.view('<f4')
+        # print("whf", w, h, farr.shape, farr.dtype)
         farr = farr.reshape((h,w,4))
         farr = farr[::-1, :, :]
         QOpenGLFramebufferObject.bindDefault()
@@ -1294,8 +1307,14 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                        pygl.GL_UNSIGNED_INT, VoidPtr(0))
         program.release()
 
-        QOpenGLFramebufferObject.bindDefault()
         self.setDefaultViewport()
+        self.xyz_pbo.bind()
+        w = fbo.width()
+        h = fbo.height()
+        f.glReadPixels(0, 0, w, h, f.GL_RGBA, f.GL_FLOAT, 0)
+        self.xyz_pbo.release()
+        QOpenGLFramebufferObject.bindDefault()
+
 
     '''
     def drawXyz(self, fbo):
