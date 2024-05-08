@@ -51,6 +51,8 @@ import traceback
 import numpy as np
 import numpy.linalg as npla
 import cv2
+import OpenGL
+# OpenGL.ERROR_CHECKING = False
 from OpenGL import GL as pygl
 # from shiboken6 import VoidPtr
 import ctypes

@@ -50,7 +50,7 @@ from collections import OrderedDict
 import numpy as np
 import cv2
 import OpenGL
-OpenGL.ERROR_CHECKING = False
+# OpenGL.ERROR_CHECKING = False
 from OpenGL import GL as pygl
 # from shiboken6 import VoidPtr
 import ctypes
@@ -842,10 +842,17 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                 if self.atlas_chunk_size < 65:
                     # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,70), chunk_size=self.atlas_chunk_size)
                     ad = 70
+                # Loop to determine how much GPU memory can
+                # be allocated by Atlas.  If initial allocation
+                # fails, keep reducing the dimensions until
+                # it fits into memory.
                 while True:
-                    success = False
                     print("creating atlas with dimensions",aw,ah,ad)
                     ml = self.MiniLogger(self.logger)
+                    success = False
+                    # TODO: temporary
+                    self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(aw,ah,ad), chunk_size=self.atlas_chunk_size)
+                    break
                     try:
                         self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(aw,ah,ad), chunk_size=self.atlas_chunk_size)
                         success = True
@@ -1499,8 +1506,10 @@ class UniBuf:
         self.data = arr
         self.buffer_id = gl.glGenBuffers(1)
         gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, self.binding_point, self.buffer_id)
-        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
         self.setBuffer()
+        # byte_size = self.data.size * self.data.itemsize
+        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data, gl.GL_STATIC_DRAW)
+        # gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
 
     def bindToShader(self, shader_id, uniform_index):
         gl = self.gl
@@ -1508,12 +1517,33 @@ class UniBuf:
 
     def setBuffer(self):
         gl = self.gl
+        gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, self.binding_point, self.buffer_id)
+        # self.setBuffer(0)
         byte_size = self.data.size * self.data.itemsize
+        gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data, gl.GL_STATIC_DRAW)
+        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
+
+    def setSubBuffer(self, cnt):
+        gl = self.gl
+        # cnt = 0
+        if cnt == 0:
+            return
+        full_size = self.data.size * self.data.itemsize
+        cnt_size = abs(cnt)*self.data.shape[1] * self.data.itemsize
+        if cnt < 0:
+            offset = full_size - cnt_size
+            subdata = self.data[offset:]
+        else:
+            offset = 0
+            subdata = self.data[:cnt_size]
+        # byte_size = self.data.size * self.data.itemsize
+        # print(cnt, full_size, cnt_size, offset, subdata.shape)
         # print("about to bind buffer", self.buffer_id)
         gl.glBindBuffer(pygl.GL_UNIFORM_BUFFER, self.buffer_id)
         # pygl.glBufferData(pygl.GL_UNIFORM_BUFFER, byte_size, self.data.tobytes(), pygl.GL_STATIC_DRAW)
         # print("about to set buffer", self.data.shape, self.data.dtype)
-        gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data, gl.GL_STATIC_DRAW)
+        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data, gl.GL_STATIC_DRAW)
+        gl.glBufferSubData(gl.GL_UNIFORM_BUFFER, offset, cnt_size, subdata)
         # print("buffer has been set")
         gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
 
@@ -2040,10 +2070,6 @@ class Atlas:
 
         # TODO: At img 12310 x 3348 y 4539 there is a little missing piece 
 
-        if textures_set > 0:
-            self.tmin_ubo.setBuffer()
-            self.tmax_ubo.setBuffer()
-            self.xform_ubo.setBuffer()
         cnt = 0
         # To get all the active chunks, search backwards from
         # the end
@@ -2053,6 +2079,13 @@ class Atlas:
             # print(chunk.dl, chunk.dk)
             cnt += 1
         # print(zoom_level, cnt, len(blocks))
+        # print("cnt", cnt)
+
+        if textures_set > 0:
+            self.tmin_ubo.setBuffer()
+            self.tmax_ubo.setBuffer()
+            self.xform_ubo.setBuffer()
+
         return textures_set >= self.max_textures_set
             
     # displayBlocks is in a separate operation
@@ -2110,7 +2143,7 @@ class Atlas:
         print("nchunks", nchunks)
         gl.glUniform1i(nloc, nchunks)
 
-        self.chart_id_ubo.setBuffer()
+        self.chart_id_ubo.setSubBuffer(nchunks)
 
         # print("db de")
         gl.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
