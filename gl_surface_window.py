@@ -49,6 +49,8 @@ import time
 from collections import OrderedDict
 import numpy as np
 import cv2
+import OpenGL
+OpenGL.ERROR_CHECKING = False
 from OpenGL import GL as pygl
 # from shiboken6 import VoidPtr
 import ctypes
@@ -799,6 +801,17 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.trgls_program = self.buildProgram(trgls_code)
         self.trgl_pts_program = self.buildProgram(trgl_pts_code)
 
+    class MiniLogger:
+        def __init__(self, logger):
+            self.message_count = 0
+            self.logger = logger
+            self.connection = self.logger.messageLogged.connect(self.onLogMessage)
+        def onLogMessage(self, msg):
+            self.message_count += 1
+        def close(self):
+            # self.logger.messageLogged.disconnect(self.connection)
+            self.logger.disconnect(self.connection)
+
     # Rebuild atlas if volume_view or volume_view.direction
     # changes
     def checkAtlas(self):
@@ -823,12 +836,30 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             self.volume_view_direction = self.volume_view.direction
             # self.active_fragment = mfv
             if self.atlas is None:
+                aw,ah,ad = (2048,2048,400)
+                # TODO: for testing
+                # ad = 150
                 if self.atlas_chunk_size < 65:
-                    self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,70), chunk_size=self.atlas_chunk_size)
-                else:
-                    self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,400), chunk_size=self.atlas_chunk_size)
-                    # TODO: for testing
-                    # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,150), chunk_size=self.atlas_chunk_size)
+                    # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,70), chunk_size=self.atlas_chunk_size)
+                    ad = 70
+                while True:
+                    success = False
+                    print("creating atlas with dimensions",aw,ah,ad)
+                    ml = self.MiniLogger(self.logger)
+                    try:
+                        self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(aw,ah,ad), chunk_size=self.atlas_chunk_size)
+                        success = True
+                    except:
+                        print("exception!")
+                        ml.close()
+                        pass
+                    if ml.message_count > 0:
+                        success = False
+                    ml.close()
+                    if success:
+                        break
+                    aw = (aw*3)//4
+                    # time.sleep(5)
             else:
                 self.atlas.setVolumeView(self.volume_view)
 
