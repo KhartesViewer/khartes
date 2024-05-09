@@ -49,8 +49,8 @@ import time
 from collections import OrderedDict
 import numpy as np
 import cv2
-import OpenGL
-OpenGL.ERROR_CHECKING = False
+# OpenGL error checking is set/unset in gl_data_windows.py,
+# since that is loaded first
 from OpenGL import GL as pygl
 # from shiboken6 import VoidPtr
 import ctypes
@@ -801,17 +801,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.trgls_program = self.buildProgram(trgls_code)
         self.trgl_pts_program = self.buildProgram(trgl_pts_code)
 
-    class MiniLogger:
-        def __init__(self, logger):
-            self.message_count = 0
-            self.logger = logger
-            self.connection = self.logger.messageLogged.connect(self.onLogMessage)
-        def onLogMessage(self, msg):
-            self.message_count += 1
-        def close(self):
-            # self.logger.messageLogged.disconnect(self.connection)
-            self.logger.disconnect(self.connection)
-
     # Rebuild atlas if volume_view or volume_view.direction
     # changes
     def checkAtlas(self):
@@ -845,20 +834,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                 while True:
                     success = False
                     print("creating atlas with dimensions",aw,ah,ad)
-                    ml = self.MiniLogger(self.logger)
-                    try:
-                        self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(aw,ah,ad), chunk_size=self.atlas_chunk_size)
-                        success = True
-                    except:
-                        print("exception!")
-                        ml.close()
-                        pass
-                    if ml.message_count > 0:
-                        success = False
-                    ml.close()
-                    if success:
+                    self.atlas = Atlas(self.volume_view, self.gl, self.logger, tex3dsz=(aw,ah,ad), chunk_size=self.atlas_chunk_size)
+                    if self.atlas.valid:
                         break
                     aw = (aw*3)//4
+                    # aw = (aw*2)//4
                     # time.sleep(5)
             else:
                 self.atlas.setVolumeView(self.volume_view)
@@ -1791,7 +1771,19 @@ atlas_data_code = {
 class Atlas:
     # def __init__(self, volume_view, gl, tex3dsz=(2048,1500,150), dcsz=(128,128,128)):
     # def __init__(self, volume_view, gl, tex3dsz=(2048,2048,600), dcsz=(256,256,256)):
-    def __init__(self, volume_view, gl, tex3dsz=(2048,2048,300), chunk_size=126):
+
+    class MiniLogger:
+        def __init__(self, logger):
+            self.message_count = 0
+            self.logger = logger
+            self.connection = self.logger.messageLogged.connect(self.onLogMessage)
+        def onLogMessage(self, msg):
+            self.message_count += 1
+        def close(self):
+            # self.logger.messageLogged.disconnect(self.connection)
+            self.logger.disconnect(self.connection)
+
+    def __init__(self, volume_view, gl, logger, tex3dsz=(2048,2048,300), chunk_size=126):
         print("Creating atlas")
         dcsz = (chunk_size, chunk_size, chunk_size)
         self.gl = gl
@@ -1911,16 +1903,38 @@ class Atlas:
         tex3d.setSize(*self.asz)
         # see https://stackoverflow.com/questions/23533749/difference-between-gl-r16-and-gl-r16ui
         tex3d.setFormat(QOpenGLTexture.R16_UNorm)
-        tex3d.allocateStorage()
-        self.tex3d = tex3d
-        aunit = 4
-        gl.glActiveTexture(pygl.GL_TEXTURE0+aunit)
-        tex3d.bind()
-        # self.program.setUniformValue("atlas", aunit)
-        aloc = self.program.uniformLocation("atlas")
-        self.program.setUniformValue(aloc, aunit)
-        gl.glActiveTexture(pygl.GL_TEXTURE0)
-        tex3d.release()
+
+        self.valid = False
+        # MiniLogger will detect if the Qt OpenGL error logger
+        # receives any error messages
+        ml = self.MiniLogger(logger)
+        try:
+            # This will fail if there is not enough GPU memory
+            tex3d.allocateStorage()
+            self.tex3d = tex3d
+            aunit = 4
+            # If OpenGL module is allowed to throw exceptions
+            # (the default; this can be changed at the top of
+            # gl_data_window.py), the out-of-memory exception
+            # will be thrown at the next line, rather than at
+            # the allocateStorage() call above
+            gl.glActiveTexture(pygl.GL_TEXTURE0+aunit)
+            tex3d.bind()
+            # self.program.setUniformValue("atlas", aunit)
+            aloc = self.program.uniformLocation("atlas")
+            self.program.setUniformValue(aloc, aunit)
+            gl.glActiveTexture(pygl.GL_TEXTURE0)
+            tex3d.release()
+            self.valid = True
+        except:
+            print("exception!")
+            ml.close()
+            pass
+        if ml.message_count > 0: 
+            # The Qt OpenGL error logging system detected an error message
+            print("error message!")
+            self.valid = False
+        ml.close()
 
     def setVolumeView(self, volume_view):
         print("setVolumeView", volume_view.volume.name if volume_view else "(None)")
