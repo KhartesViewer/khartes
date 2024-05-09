@@ -900,9 +900,12 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             if len(larr) > 0 and self.atlas is not None:
                 if len(larr) >= self.atlas.max_nchunks-1:
                     larr = larr[:self.atlas.max_nchunks-1]
+                '''
                 maxxed_out = self.atlas.addBlocks(larr)
                 if maxxed_out:
                     dw.window.zarrSlot(None)
+                '''
+                self.atlas.addBlocks(larr, dw.window.zarrSlot)
         ''''''
 
         self.drawTrgls(self.trgls_fbo, self.trgls_program)
@@ -1563,7 +1566,7 @@ class Chunk:
         asz = atlas.asz
         # rectangle of the entire data set
 
-        self.setData(dk, dl)
+        # self.setData(dk, dl)
         self.in_use = False
         self.misses = -1
 
@@ -1649,8 +1652,11 @@ class Chunk:
         else:
             # self.tmin = (0., 0., 0.)
             # self.tmax = (-1., -1., -1.)
+            # Signal that texture was not set
+            ind = self.atlas.index(self.ak)
+            self.atlas.tmin_ubo.data[ind, 3] = False
             timera.time("didn't set texture")
-            pass
+            return False
 
         asz = self.atlas.asz
 
@@ -1660,7 +1666,7 @@ class Chunk:
         xform.scale(*(dsz[i] for i in range(len(dsz))))
         self.xform = xform
 
-        self.atlas.program.bind()
+        # self.atlas.program.bind()
         ind = self.atlas.index(self.ak)
 
         self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
@@ -2043,7 +2049,7 @@ class Atlas:
 
     # Given a list of blocks, add the blocks that are
     # not already in the atlas. 
-    def addBlocks(self, zblocks):
+    def addBlocks(self, zblocks, maxxed_out_cb=None):
         for chunk in reversed(self.chunks.values()):
             if chunk.in_use == False:
                 break
@@ -2096,7 +2102,9 @@ class Atlas:
             self.tmax_ubo.setBuffer()
             self.xform_ubo.setBuffer()
 
-        return textures_set >= self.max_textures_set
+        # return textures_set >= self.max_textures_set
+        if textures_set >= self.max_textures_set and maxxed_out_cb is not None:
+            maxxed_out_cb()
             
     # displayBlocks is in a separate operation
     # than addBlocks, because addBlocks may need to be called later

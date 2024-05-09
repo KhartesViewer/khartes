@@ -2959,7 +2959,7 @@ class MainWindow(QMainWindow):
     # it calls a one-shot timer with a delay of 100 msec
     # (0.1 seconds).  The delay is to allow multiple callbacks
     # to be consolidated
-    def zarrSlot(self, key):
+    def zarrSlot(self, key=None):
         if not self.zarr_timer.isActive():
             self.zarr_timer.start(100)
 
