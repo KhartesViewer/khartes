@@ -7,6 +7,7 @@ import pathlib
 import re
 import queue
 import json
+import threading
 from concurrent.futures import ThreadPoolExecutor
 import cv2
 from scipy import ndimage
@@ -130,6 +131,7 @@ class TransposedDataView():
         self.from_vc_render = from_vc_render
         assert direction in [0, 1]
         self.direction = direction
+        self.mutex = threading.Lock()
 
     @property
     def shape(self):
@@ -144,11 +146,12 @@ class TransposedDataView():
     def getDataAndMisses(self, slice0, slice1, slice2, immediate=False):
         klru = self.data.store
         old_immediate_mode = klru.getImmediateDataMode()
-        klru.setImmediateDataMode(immediate)
-        misses0 = klru.nz_misses
-        data = self[slice0, slice1, slice2]
-        misses1 = klru.nz_misses
-        klru.setImmediateDataMode(old_immediate_mode)
+        with self.mutex:
+            klru.setImmediateDataMode(immediate)
+            misses0 = klru.nz_misses
+            data = self[slice0, slice1, slice2]
+            misses1 = klru.nz_misses
+            klru.setImmediateDataMode(old_immediate_mode)
         return data, misses1-misses0
 
 
@@ -303,7 +306,8 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                     # this tells the caller to treat the current
                     # chunk as all zeros
                     raise_error = True
-                if key not in self.zero_vols:
+                if key not in self.zero_vols and not wait_for_data:
+                    # print("+1")
                     self.nz_misses += 1
                 if not raise_error and not wait_for_data:
                     # the add() is done here, instead of below,

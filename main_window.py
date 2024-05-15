@@ -2970,7 +2970,7 @@ class MainWindow(QMainWindow):
     # is in general not thread-safe, this "emit" technique is
     # used to ensure that khartes code is called only
     # from within the Qt GUI thread.
-    def zarrFutureDoneCallback(self, key, has_data):
+    def zarrFutureDoneCallback(self, key=None, has_data=True):
         # print(key, has_data, int(QThread.currentThreadId()))
         if has_data:
             self.zarr_signal.emit(key)

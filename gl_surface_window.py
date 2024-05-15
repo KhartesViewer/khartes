@@ -47,6 +47,10 @@ from PyQt5.QtCore import (
 
 import time
 from collections import OrderedDict
+import enum
+from enum import Enum
+from concurrent.futures import ThreadPoolExecutor
+from queue import Queue
 import numpy as np
 import cv2
 # OpenGL error checking is set/unset in gl_data_windows.py,
@@ -905,10 +909,16 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                 if maxxed_out:
                     dw.window.zarrSlot(None)
                 '''
-                self.atlas.addBlocks(larr, dw.window.zarrSlot)
+                # self.atlas.addBlocks(larr, dw.window.zarrSlot)
+                self.atlas.addBlocks(larr, dw.window.zarrFutureDoneCallback)
         ''''''
 
         self.drawTrgls(self.trgls_fbo, self.trgls_program)
+
+        # This is part of the addBlocks process, but it has been
+        # moved here to give time for chunk PBOs to be loaded
+        # to the texture atlas in the background.
+        self.atlas.loadTextures(dw.window.zarrFutureDoneCallback)
 
         # NOTE that drawData uses the blocks added in addBlocks;
         # xyToTijk uses self.xyz_arr, which is created by getBlocks 
@@ -1547,6 +1557,7 @@ class Chunk:
 
         # Atlas
         self.atlas = atlas
+        self.pbo = None
         # Chunk key (position) in atlas (3 coords)
         self.ak = ak
         # Chunk key (position) in input data (3 coords: x, y, z)
@@ -1567,11 +1578,264 @@ class Chunk:
         # rectangle of the entire data set
 
         # self.setData(dk, dl)
+
+        # in_use: one of the currently-displayed blocks
         self.in_use = False
+
+        # misses: status of reading the data from disk to core.
+        # 0 means fully in core.  
+        # > 0 means reading has started, but parts are still not read.
+        # < 0 means reading has not started.
         self.misses = -1
 
+        # texture_status:
+        # 0: not loaded
+        # 1: loaded to pbo
+        # 2: loaded into tex atlas
+        # self.texture_status = 0
 
-    def setData(self, dk, dl):
+        self.status = Chunk.Status.UNINITIALIZED
+
+        # TODO: when misses reaches 0, should buf.tobytes() result 
+        # be stored locally, so it is available for saving as pbo?
+        self.data_bytes = None
+
+        # And clear it out once data is loaded to pbo (or tex atlas)?
+        # And clear pbo once it has been loaded to tex?
+
+        # TODO: When clearing the tex atlas, be sure to clear
+        # local copy of buf, pbo, and reset misses and texture_status
+
+    class Status(Enum):
+        UNINITIALIZED = enum.auto()
+        INITIALIZED = enum.auto()
+        LOADING_FROM_DISK = enum.auto()
+        PARTIALLY_LOADED_FROM_DISK = enum.auto()
+        LOADED_FROM_DISK = enum.auto()
+        LOADED_TO_PBO = enum.auto()
+        LOADED_TO_TEXTURE = enum.auto()
+        IGNORE = enum.auto()
+
+    def initialize(self, dk, dl):
+        self.dk = dk
+        self.dl = dl
+        self.status = Chunk.Status.INITIALIZED
+        self.data_bytes = None
+        ind = self.atlas.index(self.ak)
+        self.atlas.tmin_ubo.data[ind, 3] = False
+        self.pbo = None
+
+    def getDataFromDisk(self):
+        # if self.status != Chunk.Status.INITIALIZED and self.status != Chunk.Status.PARTIALLY_LOADED_FROM_DISK:
+        # print("getDataFromDisk", self.status)
+        if self.status not in [Chunk.Status.INITIALIZED, Chunk.Status.PARTIALLY_LOADED_FROM_DISK]:
+            # print("returning")
+            return
+        self.status = Chunk.Status.LOADING_FROM_DISK
+
+        # print("set data", self.ak, dk, dl)
+        dk = self.dk
+        dl = self.dl
+        if dl < 0:
+            return False
+
+        # data chunk size (3 coords, usually 128,128,128)
+        dcsz = self.atlas.dcsz 
+        # data rectangle
+        dr = self.k2r(dk, dcsz)
+        # data corner
+        d = dr[0]
+
+        # padded data rectangle
+        pdr = self.padRect(dr, self.pad)
+        # size of the data on the data's level (3 coords: nx, ny, nz)
+        dsz = self.atlas.dsz[dl]
+        all_dr = ((0, 0, 0), (dsz[0], dsz[1], dsz[2]))
+        # intersection of the padded data rectangle with the data
+        int_dr = self.rectIntersection(pdr, all_dr)
+        if int_dr is None:
+            self.status = Chunk.Status.IGNORE
+            return False
+        # print(pdr, all_dr, int_dr)
+
+        # Compute change in pdr (padded data-chunk rectangle) 
+        # due to intersection with edges of data array:
+        # Difference in min corner:
+        skip0 = tuple(int_dr[0][i]-pdr[0][i] for i in range(len(int_dr[0])))
+        # Difference in max corner:
+        skip1 = tuple(pdr[1][i]-int_dr[1][i] for i in range(len(pdr[1])))
+
+        # print(pdr, skip0)
+        # print(ar, int_dr, skip0, skip1)
+        # print(skip0, skip1)
+        # print(dr, int_dr)
+        acsz = self.atlas.acsz
+        buf = np.zeros((acsz[2], acsz[1], acsz[0]), np.uint16)
+        c0 = skip0
+        c1 = tuple(acsz[i]-skip1[i] for i in range(len(acsz)))
+        adata = self.atlas.datas[dl]
+
+        timera = Utils.Timer()
+        timera.active = False
+        ''''''
+        # TODO: eliminate need for is_zarr test by adding
+        # getDataAndMisses to VolumeView.trdata (need to make
+        # trdata into a class)
+        if self.atlas.volume_view.volume.is_zarr:
+            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = adata.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), True)
+            # print(self.ak, misses)
+            print("from disk", self.dk, self.dl, misses)
+        else:
+            self.atlas.volume_view.volume.setImmediateDataMode(True)
+            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+            self.atlas.volume_view.volume.setImmediateDataMode(False)
+            print("from disk", self.dk, self.dl, "*")
+            misses = 0
+        ''''''
+        '''
+        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = adata.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), True)
+        print("from disk", self.dk, self.dl, misses)
+
+        '''
+
+        self.misses = misses
+
+        if misses == 0:
+            self.data_bytes = buf.tobytes()
+            self.status = Chunk.Status.LOADED_FROM_DISK
+        else:
+            self.status = Chunk.Status.PARTIALLY_LOADED_FROM_DISK
+
+        # TODO: still needed here?
+        # self.texture_status = 0
+        ind = self.atlas.index(self.ak)
+        self.atlas.tmin_ubo.data[ind, 3] = False
+
+    # def isTextureSet(self):
+    #    return self.texture_status == 2
+
+    def copyCpuDataToPbo(self):
+        if self.misses != 0:
+            print("do not call this if misses is not 0", self.misses)
+            return
+        if self.status == Chunk.Status.LOADED_TO_TEXTURE:
+            print("do not call this if texture is set")
+            return
+
+        # print("to pbo", self.dk, self.dl)
+
+        acsz = self.atlas.acsz
+        a = self.ar[0]
+        dk = self.dk
+        dl = self.dl
+        # data chunk size (3 coords, usually 128,128,128)
+        dcsz = self.atlas.dcsz 
+        # data rectangle
+        dr = self.k2r(dk, dcsz)
+        dsz = self.atlas.dsz[dl]
+        asz = self.atlas.asz
+
+        self.pbo = QOpenGLBuffer(QOpenGLBuffer.PixelUnpackBuffer)
+        self.pbo.create()
+        self.pbo.bind()
+        # Assumes UInt16
+        # pbo_size = acsz[0]*acsz[1]*acsz[2]*2
+        pbo_size = len(self.data_bytes)
+        self.pbo.allocate(pbo_size)
+
+        # self.pbo.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, self.data_bytes)
+        # print("calling pbo.write", len(self.data_bytes), pbo_size)
+        self.pbo.write(0, self.data_bytes, pbo_size)
+        # print("called")
+        self.pbo.release()
+        self.data_bytes = None
+
+        # Don't set uniforms here, need to wait until
+        # tex3d is set
+
+        '''
+        xform = QMatrix4x4()
+        xform.scale(*(1./asz[i] for i in range(len(asz))))
+        xform.translate(*(self.ar[0][i]+self.pad-dr[0][i] for i in range(len(self.ar[0]))))
+        xform.scale(*(dsz[i] for i in range(len(dsz))))
+        self.xform = xform
+
+        # self.atlas.program.bind()
+        ind = self.atlas.index(self.ak)
+
+        self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
+        self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
+        self.atlas.tmax_ubo.data[ind, :3] = self.tmax
+        self.atlas.tmin_ubo.data[ind, :3] = self.tmin
+        self.atlas.tmin_ubo.data[ind, 3] = 1.
+
+        xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
+        self.atlas.xform_ubo.data[ind, :, :] = xformarr
+        '''
+        self.status = Chunk.Status.LOADED_TO_PBO
+
+    def copyPboDataToTexmap(self):
+        if self.misses != 0:
+            print("do not call this if misses is not 0", self.misses)
+            return
+        if self.status == Chunk.Status.LOADED_TO_TEXTURE:
+            print("do not call this if texture is set")
+            return
+
+        print("to texmap", self.dk, self.dl)
+
+        acsz = self.atlas.acsz
+        a = self.ar[0]
+        dk = self.dk
+        dl = self.dl
+        # data chunk size (3 coords, usually 128,128,128)
+        dcsz = self.atlas.dcsz 
+        # data rectangle
+        dr = self.k2r(dk, dcsz)
+        dsz = self.atlas.dsz[dl]
+        asz = self.atlas.asz
+
+        # print("a",a,"acsz",acsz, "db", len(self.data_bytes))
+
+        self.pbo.bind()
+
+        # self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, self.data_bytes)
+        self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, 0)
+        self.pbo.release()
+
+        # self.texture_status = 2
+        self.status = Chunk.Status.LOADED_TO_TEXTURE
+        self.pbo = None
+        self.data_bytes = None
+
+        xform = QMatrix4x4()
+        xform.scale(*(1./asz[i] for i in range(len(asz))))
+        xform.translate(*(self.ar[0][i]+self.pad-dr[0][i] for i in range(len(self.ar[0]))))
+        xform.scale(*(dsz[i] for i in range(len(dsz))))
+        self.xform = xform
+
+        # self.atlas.program.bind()
+        ind = self.atlas.index(self.ak)
+
+        self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
+        self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
+        self.atlas.tmax_ubo.data[ind, :3] = self.tmax
+        self.atlas.tmin_ubo.data[ind, :3] = self.tmin
+        self.atlas.tmin_ubo.data[ind, 3] = 1.
+
+        xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
+        self.atlas.xform_ubo.data[ind, :, :] = xformarr
+
+        # Now consolidated in addBlocks
+        # self.atlas.tmin_ubo.setBuffer()
+        # self.atlas.tmax_ubo.setBuffer()
+        # self.atlas.xform_ubo.setBuffer()
+
+        # timera.time("set buffers")
+
+        # self.in_use = True
+
+    def setDataOld(self, dk, dl):
         # print("set data", self.ak, dk, dl)
         self.dk = dk
         self.dl = dl
@@ -1611,7 +1875,7 @@ class Chunk:
         buf = np.zeros((acsz[2], acsz[1], acsz[0]), np.uint16)
         c0 = skip0
         c1 = tuple(acsz[i]-skip1[i] for i in range(len(acsz)))
-        data = self.atlas.datas[dl]
+        adata = self.atlas.datas[dl]
 
         timera = Utils.Timer()
         timera.active = False
@@ -1619,12 +1883,12 @@ class Chunk:
         # getDataAndMisses to VolumeView.trdata (need to make
         # trdata into a class)
         if self.atlas.volume_view.volume.is_zarr:
-            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = data.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), False)
+            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = adata.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), False)
             # print(self.ak, misses)
             print(self.dk, self.dl, misses)
         else:
             self.atlas.volume_view.volume.setImmediateDataMode(True)
-            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = data[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
             self.atlas.volume_view.volume.setImmediateDataMode(False)
             print(self.dk, self.dl, "*")
             misses = 0
@@ -1819,6 +2083,8 @@ class Atlas:
         print("Creating atlas")
         dcsz = (chunk_size, chunk_size, chunk_size)
         self.gl = gl
+        self.executor = ThreadPoolExecutor(max_workers=4)
+        self.pbo_queue = Queue()
         pad = 1
         self.pad = pad
         '''
@@ -1836,6 +2102,7 @@ class Atlas:
             self.max_textures_set = 10
         else:
             self.max_textures_set = 3
+            self.max_textures_set = 8
 
         '''
         datas = []
@@ -2021,6 +2288,7 @@ class Atlas:
                     chunk = Chunk(self, ak, dk, dl)
                     key = self.key(dk, dl)
                     self.chunks[key] = chunk
+        self.pbo_queue = Queue()
 
     def xyzXform(self, data_size):
         mat = np.zeros((4,4), dtype=np.float32)
@@ -2047,9 +2315,217 @@ class Atlas:
         ke = 1 + (e-1)//ce
         return ke
 
+    def initializeChunks(self, zblocks):
+        for chunk in reversed(self.chunks.values()):
+            if not chunk.in_use:
+                break
+            chunk.in_use = False
+
+        # reverse to make lowest-resolution blocks
+        # are loaded first
+        for zblock in reversed(zblocks):
+            block = zblock[:3]
+            zoom_level = zblock[3]
+            key = self.key(block, zoom_level)
+            chunk = self.chunks.get(key, None)
+            # If the data chunk is not currently stored in the atlas:
+            if chunk is None:
+                # Get the first Chunk in the OrderedDict: 
+                _, chunk = self.chunks.popitem(last=False)
+                chunk.initialize(block, zoom_level)
+                self.chunks[key] = chunk
+            else:
+                self.chunks.move_to_end(key)
+            chunk.in_use = True
+
+    def loadChunks(self, in_progress_cb=None):
+        chunks_loading = 0
+        for key,chunk in reversed(self.chunks.items()):
+            if not chunk.in_use:
+                break
+            if chunks_loading >= 2*self.max_textures_set:
+                break
+            '''
+            if chunk.status == Chunk.Status.INITIALIZED:
+                chunk.getDataFromDisk()
+            # TODO: may not be needed later
+            if chunk.status == Chunk.Status.PARTIALLY_LOADED_FROM_DISK:
+                chunks_loading += 1
+                chunk.getDataFromDisk()
+            if chunks_loading >= self.max_textures_set:
+                break
+            '''
+            if chunk.status == Chunk.Status.INITIALIZED or chunk.status == Chunk.Status.PARTIALLY_LOADED_FROM_DISK:
+                print("request", chunk.dk, chunk.dl)
+                future = self.executor.submit(chunk.getDataFromDisk)
+                # TODO: need a callback?
+                if in_progress_cb is not None:
+                    future.add_done_callback(lambda x: self.futureCallback(in_progress_cb, x))
+                chunks_loading += 1
+
+    def futureCallback(self, in_progress_cb, future):
+        # We don't care about the result, but this will throw
+        # an exception if the thread had an exception
+        result = future.result()
+        if in_progress_cb is not None:
+            in_progress_cb()
+
+    def loadPbos(self):
+        # To get all the active chunks, search backwards from
+        # the end
+        num_pbos_set = 0
+        for key,chunk in reversed(self.chunks.items()):
+            if not chunk.in_use:
+                break
+            # if chunk.misses == 0 and not chunk.status == Chunk.Status.LOADED_TO_TEXTURE:
+            if self.pbo_queue.qsize() >= 8*self.max_textures_set:
+                break
+            if num_pbos_set >= 1.5*self.max_textures_set:
+                break
+            if chunk.status == Chunk.Status.LOADED_FROM_DISK:
+                chunk.copyCpuDataToPbo()
+                self.pbo_queue.put(chunk)
+                num_pbos_set += 1
+            # print(chunk.dl, chunk.dk)
+            #     break
+        # print(zoom_level, cnt, len(blocks))
+        # print("cnt", cnt)
+
+    def loadTextures(self, in_progress_cb=None):
+        # cnt = 0
+        # To get all the active chunks, search backwards from
+        # the end
+        num_textures_set = 0
+        '''
+        for key,chunk in reversed(self.chunks.items()):
+            if not chunk.in_use:
+                break
+            # if chunk.misses == 0 and not chunk.status == Chunk.Status.LOADED_TO_TEXTURE:
+            if chunk.status == Chunk.Status.LOADED_TO_PBO:
+                chunk.copyPboDataToTexmap()
+                num_textures_set += 1
+            # print(chunk.dl, chunk.dk)
+            cnt += 1
+            if num_textures_set >= self.max_textures_set:
+                break
+        # print(zoom_level, cnt, len(blocks))
+        # print("cnt", cnt)
+        '''
+        while not self.pbo_queue.empty() and num_textures_set < self.max_textures_set:
+            chunk = self.pbo_queue.get()
+            if chunk.status == Chunk.Status.LOADED_TO_PBO:
+                chunk.copyPboDataToTexmap()
+                num_textures_set += 1
+
+        if num_textures_set > 0:
+            self.tmin_ubo.setBuffer()
+            self.tmax_ubo.setBuffer()
+            self.xform_ubo.setBuffer()
+
+        # return textures_set >= self.max_textures_set
+        if num_textures_set >= self.max_textures_set and in_progress_cb is not None:
+            in_progress_cb()
+
+    def addBlocks(self, zblocks, in_progress_cb=None):
+        timer = Utils.Timer()
+        timer.active = False
+        self.initializeChunks(zblocks)
+        timer.time("init")
+        self.loadChunks(in_progress_cb)
+        timer.time("from disk")
+        self.loadPbos()
+        timer.time("to pbos")
+        # self.loadTextures(in_progress_cb)
+        # timer.time("to textures")
+
+    def addBlocksOld(self, zblocks, in_progress_cb=None):
+        for chunk in reversed(self.chunks.values()):
+            if not chunk.in_use:
+                break
+            chunk.in_use = False
+        ready_for_texture = 0
+        for zblock in zblocks:
+            block = zblock[:3]
+            zoom_level = zblock[3]
+            key = self.key(block, zoom_level)
+            chunk = self.chunks.get(key, None)
+            '''
+            # If the data chunk is not currently stored in the atlas:
+            if chunk is None:
+                if ready_for_texture >= self.max_textures_set:
+                    continue
+                # Get the first Chunk in the OrderedDict: 
+                _, chunk = self.chunks.popitem(last=False)
+                # print("popped", chunk.dk, chunk.dl)
+                # texture_set = chunk.setData(block, zoom_level)
+                chunk.getDataFromDisk(block, zoom_level)
+                # print("set data", chunk.dk, chunk.dl)
+                if chunk.misses == 0:
+                    ready_for_texture += 1
+                self.chunks[key] = chunk
+            else: # If the data is already in the Atlas
+                # move the chunk to the end of the OrderedDict
+                # if chunk.misses > 0:
+                if chunk.misses > 0 and ready_for_texture < self.max_textures_set:
+                    chunk.getDataFromDisk(block, zoom_level)
+                    if chunk.misses == 0:
+                        ready_for_texture += 1
+                self.chunks.move_to_end(key)
+            '''
+            # If the data chunk is not currently stored in the atlas:
+            if chunk is None:
+                # Get the first Chunk in the OrderedDict: 
+                _, chunk = self.chunks.popitem(last=False)
+                chunk.initialize(block, zoom_level)
+                self.chunks[key] = chunk
+            else:
+                self.chunks.move_to_end(key)
+            chunk.in_use = True
+
+        chunks_loading = 0
+        for key,chunk in reversed(self.chunks.items()):
+            if not chunk.in_use:
+                break
+            if chunk.status == Chunk.Status.INITIALIZED:
+                chunk.getDataFromDisk()
+            # TODO: may not be needed later
+            if chunk.status == Chunk.Status.LOADING_FROM_DISK:
+                chunks_loading += 1
+                chunk.getDataFromDisk()
+            if chunks_loading >= self.max_textures_set:
+                break
+
+        # TODO: At img 12310 x 3348 y 4539 there is a little missing piece 
+
+        cnt = 0
+        # To get all the active chunks, search backwards from
+        # the end
+        num_textures_set = 0
+        for key,chunk in reversed(self.chunks.items()):
+            if not chunk.in_use:
+                break
+            if chunk.misses == 0 and not chunk.status:
+                chunk.copyCpuDataToTexmap()
+                num_textures_set += 1
+            # print(chunk.dl, chunk.dk)
+            cnt += 1
+        # print(zoom_level, cnt, len(blocks))
+        # print("cnt", cnt)
+
+
+        if num_textures_set > 0:
+            self.tmin_ubo.setBuffer()
+            self.tmax_ubo.setBuffer()
+            self.xform_ubo.setBuffer()
+
+        # return textures_set >= self.max_textures_set
+        if num_textures_set >= self.max_textures_set and in_progress_cb is not None:
+            in_progress_cb()
+
+
     # Given a list of blocks, add the blocks that are
     # not already in the atlas. 
-    def addBlocks(self, zblocks, maxxed_out_cb=None):
+    def addBlocksOld2(self, zblocks, maxxed_out_cb=None):
         for chunk in reversed(self.chunks.values()):
             if chunk.in_use == False:
                 break
