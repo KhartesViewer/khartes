@@ -918,7 +918,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # This is part of the addBlocks process, but it has been
         # moved here to give time for chunk PBOs to be loaded
         # to the texture atlas in the background.
-        self.atlas.loadTextures(dw.window.zarrFutureDoneCallback)
+        # self.atlas.loadTextures(dw.window.zarrFutureDoneCallback)
 
         # NOTE that drawData uses the blocks added in addBlocks;
         # xyToTijk uses self.xyz_arr, which is created by getBlocks 
@@ -995,6 +995,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         timera.time("combine")
 
         timerb.time("done")
+        print()
 
     def printBlocks(self, blocks):
         for block in blocks:
@@ -1684,12 +1685,12 @@ class Chunk:
         if self.atlas.volume_view.volume.is_zarr:
             buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = adata.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), True)
             # print(self.ak, misses)
-            print("from disk", self.dk, self.dl, misses)
+            # print("from disk", self.dk, self.dl, misses)
         else:
             self.atlas.volume_view.volume.setImmediateDataMode(True)
             buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
             self.atlas.volume_view.volume.setImmediateDataMode(False)
-            print("from disk", self.dk, self.dl, "*")
+            # print("from disk", self.dk, self.dl, "*")
             misses = 0
         ''''''
         '''
@@ -1735,6 +1736,9 @@ class Chunk:
         dsz = self.atlas.dsz[dl]
         asz = self.atlas.asz
 
+        self.pbo = self.atlas.getPbo()
+
+        '''
         self.pbo = QOpenGLBuffer(QOpenGLBuffer.PixelUnpackBuffer)
         self.pbo.create()
         self.pbo.bind()
@@ -1742,9 +1746,12 @@ class Chunk:
         # pbo_size = acsz[0]*acsz[1]*acsz[2]*2
         pbo_size = len(self.data_bytes)
         self.pbo.allocate(pbo_size)
+        '''
 
         # self.pbo.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, self.data_bytes)
-        # print("calling pbo.write", len(self.data_bytes), pbo_size)
+        pbo_size = len(self.data_bytes)
+        self.pbo.bind()
+        # print("calling pbo.write", pbo_size, self.pbo.bufferId())
         self.pbo.write(0, self.data_bytes, pbo_size)
         # print("called")
         self.pbo.release()
@@ -1782,7 +1789,7 @@ class Chunk:
             print("do not call this if texture is set")
             return
 
-        print("to texmap", self.dk, self.dl)
+        # print("to texmap", self.dk, self.dl)
 
         acsz = self.atlas.acsz
         a = self.ar[0]
@@ -1805,6 +1812,7 @@ class Chunk:
 
         # self.texture_status = 2
         self.status = Chunk.Status.LOADED_TO_TEXTURE
+        self.atlas.releasePbo(self.pbo)
         self.pbo = None
         self.data_bytes = None
 
@@ -2085,6 +2093,7 @@ class Atlas:
         self.gl = gl
         self.executor = ThreadPoolExecutor(max_workers=4)
         self.pbo_queue = Queue()
+        self.pbo_pool = Queue()
         pad = 1
         self.pad = pad
         '''
@@ -2315,6 +2324,23 @@ class Atlas:
         ke = 1 + (e-1)//ce
         return ke
 
+    def getPbo(self):
+        if self.pbo_pool.empty():
+            acsz = self.acsz
+            pbo = QOpenGLBuffer(QOpenGLBuffer.PixelUnpackBuffer)
+            pbo.create()
+            pbo.bind()
+            # Assumes UInt16
+            pbo_size = acsz[0]*acsz[1]*acsz[2]*2
+            pbo.allocate(pbo_size)
+            pbo.release()
+            print("created pbo", pbo.bufferId(), pbo_size)
+            self.pbo_pool.put(pbo)
+        return self.pbo_pool.get()
+
+    def releasePbo(self, pbo):
+        self.pbo_pool.put(pbo)
+
     def initializeChunks(self, zblocks):
         for chunk in reversed(self.chunks.values()):
             if not chunk.in_use:
@@ -2356,7 +2382,7 @@ class Atlas:
                 break
             '''
             if chunk.status == Chunk.Status.INITIALIZED or chunk.status == Chunk.Status.PARTIALLY_LOADED_FROM_DISK:
-                print("request", chunk.dk, chunk.dl)
+                # print("request", chunk.dk, chunk.dl)
                 future = self.executor.submit(chunk.getDataFromDisk)
                 # TODO: need a callback?
                 if in_progress_cb is not None:
@@ -2428,15 +2454,15 @@ class Atlas:
 
     def addBlocks(self, zblocks, in_progress_cb=None):
         timer = Utils.Timer()
-        timer.active = False
+        # timer.active = False
         self.initializeChunks(zblocks)
         timer.time("init")
         self.loadChunks(in_progress_cb)
         timer.time("from disk")
         self.loadPbos()
         timer.time("to pbos")
-        # self.loadTextures(in_progress_cb)
-        # timer.time("to textures")
+        self.loadTextures(in_progress_cb)
+        timer.time("to textures")
 
     def addBlocksOld(self, zblocks, in_progress_cb=None):
         for chunk in reversed(self.chunks.values()):
