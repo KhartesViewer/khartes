@@ -855,7 +855,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
     def paintSlice(self):
         timera = Utils.Timer()
-        timera.active = False
+        # timera.active = False
         timerb = Utils.Timer()
         # timerb.active = False
         dw = self.gldw
@@ -891,7 +891,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         # timera.time("xyz")
         self.drawTrglXyzs(self.xyz_fbo, self.xyz_program)
-        timera.time("xyz 2")
+        timera.time("xyz")
 
         ''''''
         xform = self.stxyXform()
@@ -900,6 +900,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             # NOTE that getBlocks reads from xyz_fbo, which has
             # just been written to
             larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
+            timera.time("get blocks")
             # if zoom_level >= 0 and self.atlas is not None:
             if len(larr) > 0 and self.atlas is not None:
                 if len(larr) >= self.atlas.max_nchunks-1:
@@ -911,9 +912,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                 '''
                 # self.atlas.addBlocks(larr, dw.window.zarrSlot)
                 self.atlas.addBlocks(larr, dw.window.zarrFutureDoneCallback)
+                timera.time("add blocks")
         ''''''
 
         self.drawTrgls(self.trgls_fbo, self.trgls_program)
+        timera.time("trgls")
 
         # This is part of the addBlocks process, but it has been
         # moved here to give time for chunk PBOs to be loaded
@@ -2456,13 +2459,13 @@ class Atlas:
         timer = Utils.Timer()
         # timer.active = False
         self.initializeChunks(zblocks)
-        timer.time("init")
+        timer.time(" init")
         self.loadChunks(in_progress_cb)
-        timer.time("from disk")
+        timer.time(" from disk")
         self.loadPbos()
-        timer.time("to pbos")
+        timer.time(" to pbos")
         self.loadTextures(in_progress_cb)
-        timer.time("to textures")
+        timer.time(" to textures")
 
     def addBlocksOld(self, zblocks, in_progress_cb=None):
         for chunk in reversed(self.chunks.values()):
