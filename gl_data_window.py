@@ -1340,9 +1340,6 @@ class GLDataWindowChild(QOpenGLWidget):
     def areVolBoxesVisible(self):
         return self.gldw.window.getVolBoxesVisible()
 
-    # TODO: need more granular control so that
-    # in map view, only scale bar and tracking cursor are shown
-    # (extra TODO: is map-view scale bar correct?)
     def drawOverlays(self, data):
         dw = self.gldw
         volume_view = dw.volume_view

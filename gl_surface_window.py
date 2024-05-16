@@ -851,8 +851,73 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             else:
                 self.atlas.setVolumeView(self.volume_view)
 
+    '''
     def areVolBoxesVisible(self):
         return False
+    '''
+
+    # (extra TODO: is map-view scale bar correct?)
+    def drawOverlays(self, data, label_text):
+        dw = self.gldw
+        volume_view = dw.volume_view
+        opacity = dw.getDrawOpacity("overlay")
+
+        lw = dw.getDrawWidth("labels")
+        alpha = 1.
+        if dw.getDrawApplyOpacity("labels"):
+            alpha = opacity
+        alpha16 = int(alpha*65535)
+        dww = dw.window
+        # if dww.getVolBoxesVisible():
+        '''
+        if self.areVolBoxesVisible():
+            cur_vol_view = dww.project_view.cur_volume_view
+            cur_vol = dww.project_view.cur_volume
+            for vol, vol_view in dww.project_view.volumes.items():
+                if vol == cur_vol:
+                    continue
+                gs = vol.corners()
+                minxy, maxxy, intersects_slice = dw.cornersToXY(gs)
+                if not intersects_slice:
+                    continue
+                color = vol_view.cvcolor
+                color[3] = alpha16
+                cv2.rectangle(data, minxy, maxxy, color, 2)
+        '''
+        '''
+        tiff_corners = dww.tiff_loader.corners()
+        if tiff_corners is not None:
+            # print("tiff corners", tiff_corners)
+
+            minxy, maxxy, intersects_slice = dw.cornersToXY(tiff_corners)
+            if intersects_slice:
+                # tcolor is a string
+                tcolor = dww.tiff_loader.color()
+                qcolor = QColor(tcolor)
+                rgba = qcolor.getRgbF()
+                cvcolor = [int(65535*c) for c in rgba]
+                cvcolor[3] = alpha16
+                cv2.rectangle(outrgbx, minxy, maxxy, cvcolor, 2)
+        '''
+        
+        if lw > 0:
+            # label = dw.sliceGlobalLabel()
+            # gpos = dw.sliceGlobalPosition()
+            # print("label", self.axis, label, gpos)
+            # txt = "%s: %d" % (label, gpos)
+            # txt = "Zoom level: %d"%(zoom_level,)
+            txt = label_text
+            org = (10,20)
+            size = 1.
+            m = 16000
+            gray = (m,m,m,alpha16)
+            white = (65535,65535,65535,alpha16)
+            
+            cv2.putText(data, txt, org, cv2.FONT_HERSHEY_PLAIN, size, gray, 3)
+            cv2.putText(data, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
+            dw.drawScaleBar(data, alpha16)
+            dw.drawTrackingCursor(data, alpha16)
+    
 
     def paintSlice(self):
         timera = Utils.Timer()
@@ -897,10 +962,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         ''''''
         xform = self.stxyXform()
         self.xyz_arr = None
+        overlay_label_text = ""
         if xform is not None:
             # NOTE that getBlocks reads from xyz_fbo, which has
             # just been written to
-            larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
+            larr, self.xyz_arr, zoom_level = self.getBlocks(self.xyz_fbo)
             timera.time("get blocks")
             # if zoom_level >= 0 and self.atlas is not None:
             if len(larr) > 0 and self.atlas is not None:
@@ -913,6 +979,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                 '''
                 # self.atlas.addBlocks(larr, dw.window.zarrSlot)
                 self.atlas.addBlocks(larr, dw.window.zarrFutureDoneCallback)
+                overlay_label_text = "Zoom Level: %d  Chunks: %d"%(zoom_level, len(larr))
                 timera.time("add blocks")
         ''''''
 
@@ -956,7 +1023,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.slice_program.setUniformValue(uloc, uunit)
 
         overlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
-        self.drawOverlays(overlay_data)
+        self.drawOverlays(overlay_data, overlay_label_text)
         overlay_tex = self.texFromData(overlay_data, QImage.Format_RGBA64)
         oloc = self.slice_program.uniformLocation("overlay_sampler")
         if oloc < 0:
@@ -1000,7 +1067,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         timera.time("combine")
 
         timerb.time("done")
-        print()
+        # print()
 
     def printBlocks(self, blocks):
         for block in blocks:
@@ -1107,7 +1174,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         timera.time("process image")
 
-        return larr, farr
+        return larr, farr, zoom_level
 
     def stxyXform(self):
         dw = self.gldw
@@ -2762,7 +2829,7 @@ class Atlas:
         # self.program.setUniformValue("ncharts", nchunks)
         nloc = self.program.uniformLocation("ncharts")
         # print("nloc, nchunks", nloc, nchunks)
-        print("nchunks", nchunks)
+        # print("nchunks", nchunks)
         gl.glUniform1i(nloc, nchunks)
 
         self.chart_id_ubo.setSubBuffer(nchunks)
