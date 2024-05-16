@@ -143,8 +143,10 @@ class TransposedDataView():
         elif self.direction == 1:
             return (shape[1], shape[0], shape[2])
 
-    def getDataAndMisses(self, slice0, slice1, slice2, immediate=False):
+    # def getDataAndMisses(self, slice0, slice1, slice2, immediate=False):
+    def getDataAndMisses(self, slice0, slice1, slice2):
         klru = self.data.store
+        '''
         old_immediate_mode = klru.getImmediateDataMode()
         with self.mutex:
             klru.setImmediateDataMode(immediate)
@@ -152,6 +154,10 @@ class TransposedDataView():
             data = self[slice0, slice1, slice2]
             misses1 = klru.nz_misses
             klru.setImmediateDataMode(old_immediate_mode)
+        '''
+        misses0 = klru.nz_misses
+        data = self[slice0, slice1, slice2]
+        misses1 = klru.nz_misses
         return data, misses1-misses0
 
 
@@ -287,6 +293,9 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             # to the thread pool, then return.
             wait_for_data = False
             if self.immediate_data_mode:
+                wait_for_data = True
+            thread = threading.current_thread()
+            if hasattr(thread, "immediate_data_mode") and thread.immediate_data_mode:
                 wait_for_data = True
             elif len(key) == 0: # not sure this ever happens
                 wait_for_data = True

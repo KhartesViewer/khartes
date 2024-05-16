@@ -50,6 +50,7 @@ from collections import OrderedDict
 import enum
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor
+import threading
 from queue import Queue
 import numpy as np
 import cv2
@@ -855,7 +856,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
     def paintSlice(self):
         timera = Utils.Timer()
-        # timera.active = False
+        timera.active = False
         timerb = Utils.Timer()
         # timerb.active = False
         dw = self.gldw
@@ -921,7 +922,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # This is part of the addBlocks process, but it has been
         # moved here to give time for chunk PBOs to be loaded
         # to the texture atlas in the background.
-        # self.atlas.loadTextures(dw.window.zarrFutureDoneCallback)
+        self.atlas.loadTexturesFromPbos(dw.window.zarrFutureDoneCallback)
+        timera.time("load textures")
 
         # NOTE that drawData uses the blocks added in addBlocks;
         # xyToTijk uses self.xyz_arr, which is created by getBlocks 
@@ -1681,12 +1683,16 @@ class Chunk:
 
         timera = Utils.Timer()
         timera.active = False
-        ''''''
+
+        thread = threading.current_thread()
+        # print("thread ident", thread.ident)
+        thread.immediate_data_mode = True
+        '''
         # TODO: eliminate need for is_zarr test by adding
         # getDataAndMisses to VolumeView.trdata (need to make
         # trdata into a class)
         if self.atlas.volume_view.volume.is_zarr:
-            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = adata.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), True)
+            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = adata.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]))
             # print(self.ak, misses)
             # print("from disk", self.dk, self.dl, misses)
         else:
@@ -1695,12 +1701,15 @@ class Chunk:
             self.atlas.volume_view.volume.setImmediateDataMode(False)
             # print("from disk", self.dk, self.dl, "*")
             misses = 0
-        ''''''
+        '''
         '''
         buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = adata.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), True)
         print("from disk", self.dk, self.dl, misses)
 
         '''
+        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+        # print("from disk", self.dk, self.dl, "*")
+        misses = 0
 
         self.misses = misses
 
@@ -1783,6 +1792,63 @@ class Chunk:
         self.atlas.xform_ubo.data[ind, :, :] = xformarr
         '''
         self.status = Chunk.Status.LOADED_TO_PBO
+
+    def copyCpuDataToTexmap(self):
+        if self.misses != 0:
+            print("do not call this if misses is not 0", self.misses)
+            return
+        if self.status == Chunk.Status.LOADED_TO_TEXTURE:
+            print("do not call this if texture is set")
+            return
+
+        # print("to texmap", self.dk, self.dl)
+
+        acsz = self.atlas.acsz
+        a = self.ar[0]
+        dk = self.dk
+        dl = self.dl
+        # data chunk size (3 coords, usually 128,128,128)
+        dcsz = self.atlas.dcsz 
+        # data rectangle
+        dr = self.k2r(dk, dcsz)
+        dsz = self.atlas.dsz[dl]
+        asz = self.atlas.asz
+
+        # print("a",a,"acsz",acsz, "db", len(self.data_bytes))
+
+        self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, self.data_bytes)
+
+        # self.texture_status = 2
+        self.status = Chunk.Status.LOADED_TO_TEXTURE
+        # print("loaded")
+        # self.data_bytes = None
+
+        xform = QMatrix4x4()
+        xform.scale(*(1./asz[i] for i in range(len(asz))))
+        xform.translate(*(self.ar[0][i]+self.pad-dr[0][i] for i in range(len(self.ar[0]))))
+        xform.scale(*(dsz[i] for i in range(len(dsz))))
+        self.xform = xform
+
+        # self.atlas.program.bind()
+        ind = self.atlas.index(self.ak)
+
+        self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
+        self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
+        self.atlas.tmax_ubo.data[ind, :3] = self.tmax
+        self.atlas.tmin_ubo.data[ind, :3] = self.tmin
+        self.atlas.tmin_ubo.data[ind, 3] = 1.
+
+        xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
+        self.atlas.xform_ubo.data[ind, :, :] = xformarr
+
+        # Now consolidated in addBlocks
+        # self.atlas.tmin_ubo.setBuffer()
+        # self.atlas.tmax_ubo.setBuffer()
+        # self.atlas.xform_ubo.setBuffer()
+
+        # timera.time("set buffers")
+
+        # self.in_use = True
 
     def copyPboDataToTexmap(self):
         if self.misses != 0:
@@ -2420,7 +2486,30 @@ class Atlas:
         # print(zoom_level, cnt, len(blocks))
         # print("cnt", cnt)
 
-    def loadTextures(self, in_progress_cb=None):
+    def loadTexturesFromCpu(self, in_progress_cb=None):
+        # To get all the active chunks, search backwards from
+        # the end
+        num_textures_set = 0
+        for key,chunk in reversed(self.chunks.items()):
+            if not chunk.in_use:
+                break
+            # if chunk.misses == 0 and not chunk.status == Chunk.Status.LOADED_TO_TEXTURE:
+            if num_textures_set >= self.max_textures_set:
+                break
+            if chunk.status == Chunk.Status.LOADED_FROM_DISK:
+                chunk.copyCpuDataToTexmap()
+                num_textures_set += 1
+
+        if num_textures_set > 0:
+            self.tmin_ubo.setBuffer()
+            self.tmax_ubo.setBuffer()
+            self.xform_ubo.setBuffer()
+
+        if num_textures_set >= self.max_textures_set and in_progress_cb is not None:
+            in_progress_cb()
+
+
+    def loadTexturesFromPbos(self, in_progress_cb=None):
         # cnt = 0
         # To get all the active chunks, search backwards from
         # the end
@@ -2457,15 +2546,25 @@ class Atlas:
 
     def addBlocks(self, zblocks, in_progress_cb=None):
         timer = Utils.Timer()
-        # timer.active = False
+        timer.active = False
         self.initializeChunks(zblocks)
         timer.time(" init")
         self.loadChunks(in_progress_cb)
         timer.time(" from disk")
+        ''''''
         self.loadPbos()
         timer.time(" to pbos")
-        self.loadTextures(in_progress_cb)
+        ''''''
+        '''
+        self.loadPbos()
+        timer.time(" to pbos")
+        self.loadTexturesFromPbos(in_progress_cb)
         timer.time(" to textures")
+        '''
+        '''
+        self.loadTexturesFromCpu(in_progress_cb)
+        timer.time(" to textures")
+        '''
 
     def addBlocksOld(self, zblocks, in_progress_cb=None):
         for chunk in reversed(self.chunks.values()):
