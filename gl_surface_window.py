@@ -86,53 +86,8 @@ class GLSurfaceWindow(DataWindow):
     def allowMouseToDragNode(self):
         return False
 
-    '''
-    def setIjkTf(self, tf):
-        oijk = self.volume_view.ijktf
-        iind = self.iIndex
-        jind = self.jIndex
-        kind = self.kIndex
-        di = tf[iind] - oijk[iind]
-        dj = tf[jind] - oijk[jind]
-        zoom = self.getZoom()
-        dx = di*zoom
-        dy = dj*zoom
-        ww, wh = self.width(), self.height()
-        ox, oy = ww/2, wh/2
-        nx, ny = ox+dx, oy+dy
-        nijk = self.xyToTijk((nx,ny))
-        self.volume_view.setIjkTf(nijk)
-        ostxy = self.volume_view.stxytf
-        nstxy = (ostxy[0]+di, ostxy[1]+dj)
-
-        self.volume_view.setStxyTf(nstxy)
-    '''
-
-    '''
-    def shiftIjk(self, di, dj, dk):
-        oxy = self.volume_view.stxytf
-        nxy = (oxy[0]+di, oxy[1]+dj)
-        zoom = self.getZoom()
-        dx = di*zoom
-        dy = dj*zoom
-        ww, wh = self.width(), self.height()
-        ox, oy = ww/2, wh/2
-        nx, ny = ox+dx, oy+dy
-        nijk = self.xyToTijk((nx,ny))
-        self.volume_view.setIjkTf(nijk)
-        self.volume_view.setStxyTf(nxy)
-    '''
-
     def setIjkTf(self, tf):
         ij = self.tijkToIj(tf)
-        '''
-        xy = self.ijToXy(ij)
-        d = 10
-        xyl = (xy[0]-d, xy[1]-d)
-        xyg = (xy[0]+d, xy[1]+d)
-
-        stxy = self.stxyInBounds(xyl, xyg, tf)
-        '''
         stxy = self.ijkToStxy(tf)
         # print("tf, xy, stxy", tf, xy, stxy)
         if stxy is not None:
@@ -146,9 +101,6 @@ class GLSurfaceWindow(DataWindow):
         return (stxy[0], stxy[1], 0)
         # print("tfs", len(tfs), tfs)
         # return tfs
-
-    # def setTf(self, tf):
-    #     self.setIjkOrStxyTf(tf)
 
     def setTf(self, tf):
         tf = tf[:2]
@@ -246,50 +198,10 @@ class GLSurfaceWindow(DataWindow):
         cj = cij[1]
         ww, wh = self.width(), self.height()
         wcx, wcy = ww//2, wh//2
-        # cij = np.array(cij)
-        # wc = np.array((wcx,wcy))
-        # xys = np.rint(zoom*(ijs-cij)+wc).astype(np.int32)
 
         # note that the values are floats:
         xy = (wcx+zoom*(ij[0]-ci), wcy+zoom*(ij[1]-cj))
         return xy
-
-    def getXyzsInRange(self, stxy, stxy_radius):
-        # From all the pixels in the window, keep only those
-        # whose stxy is in range.
-        # Then get the xyz points from these pixels.
-        # Or less accurately, get all the xyz points from all 
-        # the pixels in the window, and keep those 
-        # within the radius.
-        pass
-
-    '''
-    # NOTE: not debugged or tested
-    # returns a 2D array.  Columns: scroll xyz, stxy, window xy
-    def getXyzGrid(self):
-        xyz_arr = self.glw.xyz_arr
-        if xyz_arr is None:
-            return None
-        zoom = self.getZoom()
-        ratio = self.screen().devicePixelRatio()
-        stxy_center = self.volume_view.stxytf
-        # TODO: ww, wh should be based on size of xyz_arr
-        # ww, wh = int(ratio*self.width()), int(ratio*self.height())
-        # wcx, wcy = ww//2, wh//2
-        window_center = (xyz_arr.shape[1]//2, xyz_arr.shape[0]//2)
-
-        # print("xyz_arr", xyz_arr.shape, xyz_arr.dtype)
-        wxys = np.array(np.nonzero(xyz_arr[:,:,3] != 0)).T
-        # print("wxys", wxys.shape, wxys.dtype)
-        stxys = stxy_center+(wxys-window_center)/(ratio*zoom)
-        # print("stxys", stxys.shape, stxys.dtype)
-        scrxyzs = xyz_arr[wxys[:,0], wxys[:,1], :3]
-        # print("scrxyzs", scrxyzs.shape, scrxyzs.dtype)
-        # TODO: should wxys be OpenGL window coords or Qt coords?
-        xyzgrid = np.concatenate((scrxyzs, stxys, wxys), axis=1)
-        # print("xyzgrid", xyzgrid.shape, xyzgrid.dtype)
-        return xyzgrid
-    '''
 
     def setNearbyNodeIjk(self, ijk, update_xyz, update_st):
         # print("snnijk", ijk)
@@ -307,64 +219,38 @@ class GLSurfaceWindow(DataWindow):
         stxy = stxys[nearbyNode, 0:2]
         oijk = xyijks[nearbyNode, 2:5]
         gijk = vv.transposedIjkToGlobalPosition(ijk)
-        # gijk = vv.transposedIjksToGlobalPositions(np.array([ijk]))[0]
         ogijk = vv.transposedIjkToGlobalPosition(oijk)
-        # ogijk = vv.transposedIjksToGlobalPositions(np.array([oijk]))[0]
 
         # shift in transposed ijk coordinates:
         dijk = [ijk[i]-oijk[i] for i in range(3)]
-        # dijk = ijk-oijk
 
         # shift in global coordinates
         dgijk = [gijk[i]-ogijk[i] for i in range(3)]
 
         # print(dijk, dgijk)
-        # dgijk = gijk-ogijk
         # Use convention that ^ is outwards
-        # dijk[2] *= -1
         index = int(stxys[nearbyNode, 2])
-        # wxy = xyijks[nearbyNode, 0:2]
-        # print(" ", index, oijk, dijk, stxy)
-        # print(" oijk", oijk, self.getNearbyNodeIjk())
-        # print(" dijk", dijk)
-        # size of data window to use, in units of stxy
-        # window_half_width = 20
-        # xyzg = self.getXyzGrid()
-        # fv = self.glw.active_vao.fragment_view
-        # normal = fv.pointNormal(index)
-        # print("axis 1 is", fv.cur_volume_view.globalAxisFromTransposedAxis(1))
-        # gas = [fv.cur_volume_view.globalAxisFromTransposedAxis(i) for i in range(3)]
-        # print("gas", gas)
-        # axes = fv.fragment.pointThreeAxes(index, fv.fpoints[:,:3], fv.stpoints, fv.trgls())
-        # axes = fv.fragment.pointThreeAxes(index, fv.fragment.gpoints, fv.stpoints, fv.trgls())
+
         axes = fv.localStAxes(index)
-        # print(" ", axes)
-        # nijk = oijk + dijk[0]*axes[0]+dijk[1]*axes[1]+dijk[2]*axes[2]
+
         if axes is None:
             print("GLSurfaceWindow.setNearbyNodeIjk: could not compute axes")
             return
-        # nijk = oijk + axes@dijk
-        # shift = axes@dgijk
 
         # Use transposed ijk coordinates to calculate
         # the shift, since dijk represents the original user
         # input in the map-view plane (up, down, right, left, in, out)
         shift = axes@dijk
 
-        # print(dgijk, shift)
-        # TODO: what does this do to the scaling, if the
-        # volume is decimated
-        # But apply the shift to the global coordinates!
+        # apply the shift to the global coordinates
         ngijk = ogijk + shift
+
         # And then transform the shifted result back to ijk coordinates:
         nijk = vv.globalPositionToTransposedIjk(ngijk)
         # print(ngijk, nijk)
-        # TODO: testing!
-        # nijk = oijk + dijk
-        # print(" nijk", nijk)
+
         # This eventually ends up calling movePoint(), which
         # is defined in both FragmentView and TrglFragmentView.
-        # super(GLSurfaceWindow, self).setNearbyNodeIjk(nijk.tolist())
         super(GLSurfaceWindow, self).setNearbyNodeIjk(nijk, update_xyz, update_st)
 
     def stxyWindowBounds(self):
@@ -431,64 +317,6 @@ slice_code = {
       }
     ''',
 }
-
-"""
-data_code = {
-    "name": "data",
-
-    "vertex": '''
-      #version 410 core
-
-      uniform mat4 xform;
-      layout(location=3) in vec3 xyz;
-      layout(location=4) in vec2 stxy;
-      out vec3 fxyz;
-      void main() {
-        gl_Position = xform*vec4(stxy, 0., 1.);
-        fxyz = xyz;
-      }
-    ''',
-
-    "geometry": '''
-      #version 410 core
-      
-      layout(triangles) in;
-      layout(triangle_strip, max_vertices=3) out;
-      out vec2 bary2;
-
-      void main() {
-        for (int i=0; i<3; i++) {
-          vec3 ob = vec3(0.);
-          ob[i] = 1.;
-          vec4 pos = gl_in[i].gl_Position;
-          gl_Position = pos;
-          bary2 = vec2(ob[0],ob[1]);
-          EmitVertex();
-        }
-      }
-    ''',
-
-    "fragment": '''
-      #version 410 core
-
-      in vec3 fxyz;
-      in vec2 bary2;
-      uniform vec4 color;
-      out vec4 fColor;
-
-      void main() {
-        vec3 bary = vec3(bary2, 1.-bary2[0]-bary2[1]);
-        if (
-          bary[0]<=0. || bary[0]>=1. ||
-          bary[1]<=0. || bary[1]>=1. ||
-          bary[2]<=0. || bary[2]>=1.) {
-            discard;
-        }
-        fColor = vec4(bary, 1.);
-      }
-    ''',
-}
-"""
 
 xyz_code = {
     "name": "xyz",
@@ -747,14 +575,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         vp_size = QSize(width, height)
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
-        # We would prefer to store the xyz information as floats.
-        # However, in Qt5, QFrameworkBufferObject.toImage() creates
-        # a uint8 QImage from a float32 fbo.  uint8 is too low
-        # a resolution for our purposes!
-        # The uint16 format can store xyz at a resolution of 1
-        # pixel, which is good enough for our purposes.
         fbo_format.setInternalTextureFormat(pygl.GL_RGBA32F)
-        # fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
         self.xyz_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
         self.xyz_fbo.bind()
         draw_buffers = (pygl.GL_COLOR_ATTACHMENT0,)
@@ -820,21 +641,16 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         mfv = None
         if pv is not None:
             mfv = pv.mainActiveFragmentView(unaligned_ok=True)
-        # if mfv is None:
-        #     dw.volume_view.setStxyTf(None)
-        # if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction or self.active_fragment != mfv :
         if self.active_fragment != mfv:
             self.active_fragment = mfv
         if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction :
             self.volume_view = dw.volume_view
             self.volume_view_direction = self.volume_view.direction
-            # self.active_fragment = mfv
             if self.atlas is None:
                 aw,ah,ad = (2048,2048,400)
                 # TODO: for testing
                 # ad = 150
                 if self.atlas_chunk_size < 65:
-                    # self.atlas = Atlas(self.volume_view, self.gl, tex3dsz=(2048,2048,70), chunk_size=self.atlas_chunk_size)
                     ad = 70
                 # Loop to determine how much GPU memory can
                 # be allocated by Atlas.  If initial allocation
@@ -846,17 +662,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                     if self.atlas.valid:
                         break
                     aw = (aw*3)//4
-                    # aw = (aw*2)//4
-                    # time.sleep(5)
             else:
                 self.atlas.setVolumeView(self.volume_view)
 
-    '''
-    def areVolBoxesVisible(self):
-        return False
-    '''
-
-    # (extra TODO: is map-view scale bar correct?)
+    # TODO: is map-view scale bar correct?
     def drawOverlays(self, data, label_text):
         dw = self.gldw
         volume_view = dw.volume_view
@@ -868,44 +677,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             alpha = opacity
         alpha16 = int(alpha*65535)
         dww = dw.window
-        # if dww.getVolBoxesVisible():
-        '''
-        if self.areVolBoxesVisible():
-            cur_vol_view = dww.project_view.cur_volume_view
-            cur_vol = dww.project_view.cur_volume
-            for vol, vol_view in dww.project_view.volumes.items():
-                if vol == cur_vol:
-                    continue
-                gs = vol.corners()
-                minxy, maxxy, intersects_slice = dw.cornersToXY(gs)
-                if not intersects_slice:
-                    continue
-                color = vol_view.cvcolor
-                color[3] = alpha16
-                cv2.rectangle(data, minxy, maxxy, color, 2)
-        '''
-        '''
-        tiff_corners = dww.tiff_loader.corners()
-        if tiff_corners is not None:
-            # print("tiff corners", tiff_corners)
-
-            minxy, maxxy, intersects_slice = dw.cornersToXY(tiff_corners)
-            if intersects_slice:
-                # tcolor is a string
-                tcolor = dww.tiff_loader.color()
-                qcolor = QColor(tcolor)
-                rgba = qcolor.getRgbF()
-                cvcolor = [int(65535*c) for c in rgba]
-                cvcolor[3] = alpha16
-                cv2.rectangle(outrgbx, minxy, maxxy, cvcolor, 2)
-        '''
         
         if lw > 0:
-            # label = dw.sliceGlobalLabel()
-            # gpos = dw.sliceGlobalPosition()
-            # print("label", self.axis, label, gpos)
-            # txt = "%s: %d" % (label, gpos)
-            # txt = "Zoom level: %d"%(zoom_level,)
             txt = label_text
             org = (10,20)
             size = 1.
@@ -917,7 +690,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             cv2.putText(data, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
             dw.drawScaleBar(data, alpha16)
             dw.drawTrackingCursor(data, alpha16)
-    
 
     def paintSlice(self):
         timera = Utils.Timer()
@@ -936,11 +708,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         whh = wh//2
 
         pv = dw.window.project_view
-        # mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         mfv = self.active_fragment
-        # if mfv is None:
-        #     # print("No currently active fragment")
-        #     return
 
         if self.active_vao is None or self.active_vao.fragment_view != mfv:
             self.active_vao = FragmentMapVao(
@@ -959,7 +727,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.drawTrglXyzs(self.xyz_fbo, self.xyz_program)
         timera.time("xyz")
 
-        ''''''
         xform = self.stxyXform()
         self.xyz_arr = None
         overlay_label_text = ""
@@ -968,27 +735,20 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             # just been written to
             larr, self.xyz_arr, zoom_level = self.getBlocks(self.xyz_fbo)
             timera.time("get blocks")
-            # if zoom_level >= 0 and self.atlas is not None:
             if len(larr) > 0 and self.atlas is not None:
                 if len(larr) >= self.atlas.max_nchunks-1:
                     larr = larr[:self.atlas.max_nchunks-1]
-                '''
-                maxxed_out = self.atlas.addBlocks(larr)
-                if maxxed_out:
-                    dw.window.zarrSlot(None)
-                '''
-                # self.atlas.addBlocks(larr, dw.window.zarrSlot)
                 self.atlas.addBlocks(larr, dw.window.zarrFutureDoneCallback)
                 overlay_label_text = "Zoom Level: %d  Chunks: %d"%(zoom_level, len(larr))
                 timera.time("add blocks")
-        ''''''
 
         self.drawTrgls(self.trgls_fbo, self.trgls_program)
         timera.time("trgls")
 
         # This is part of the addBlocks process, but it has been
         # moved here to give time for chunk PBOs to be loaded
-        # to the texture atlas in the background.
+        # from RAM, in the background.  See comments in addBlocks
+        # for more details
         self.atlas.loadTexturesFromPbos(dw.window.zarrFutureDoneCallback)
         timera.time("load textures")
 
@@ -1052,17 +812,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                          self.slice_indices.size, pygl.GL_UNSIGNED_INT, VoidPtr(0))
         self.slice_program.release()
 
-        ''' # For testing:
-        larr, self.xyz_arr = self.getBlocks(self.xyz_fbo)
-        # if zoom_level >= 0 and self.atlas is not None:
-        if len(larr) > 0 and self.atlas is not None:
-            if len(larr) >= self.atlas.max_nchunks-1:
-                larr = larr[:self.atlas.max_nchunks-1]
-            maxxed_out = self.atlas.addBlocks(larr)
-            if maxxed_out:
-                dw.window.zarrSlot(None)
-        '''
-
         self.slice_vao.release()
         timera.time("combine")
 
@@ -1085,14 +834,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         dw = self.gldw
         f = self.gl
 
-        # im = fbo.toImage(True)
         self.xyz_fbo.bind()
         w = fbo.width()
-        # w = (w//4-1)*4
         h = fbo.height()
-        # h = (h//4-1)*4
-        # print("w h", w, h)
-        # farr = f.glReadPixels(0, 0, w, h, f.GL_RGBA, f.GL_FLOAT)
         self.xyz_pbo.bind()
         raw_uint8_data = f.glGetBufferSubData(f.GL_PIXEL_PACK_BUFFER, 0, h*w*4*4)
         self.xyz_pbo.release()
@@ -1114,8 +858,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         timera.time("array from image")
         # print("arr", arr.shape, arr.dtype)
         zoom = dw.getZoom()
-        # fuzz = 1.0 for full resolution; smaller fuzz values
-        # give less resolution
         vol = dw.volume_view.volume
         if vol.is_zarr:
             nlevels = len(vol.levels)
@@ -1124,6 +866,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # TODO: testing only!
         # nlevels = 1
 
+        # fuzz = 1.0 for full resolution; smaller fuzz values
+        # give less resolution
         fuzz = .75
         iscale = 1
         for izoom in range(nlevels):
@@ -1158,7 +902,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         larr = dvarr[dvarr[:,:,:,0] == 1][:,1:]+nzmin
         larr = np.concatenate((larr, np.full((len(larr),1), izoom)), axis=1)
         # print("larr shape", larr.shape, larr.dtype)
-        # larr = larr[:, :3]
 
         cur_larr = larr[:,:3].copy()
         for izoom in range(zoom_level+1, nlevels):
@@ -1166,9 +909,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             cur_larr = np.unique(nxyzs, axis=0)
             # print("cur_larr shape", cur_larr.shape, cur_larr.dtype)
             clarr = np.concatenate((cur_larr, np.full((len(cur_larr),1), izoom)), axis=1)
-            # larr = np.concatenate((larr, np.concatenate((cur_larr, np.full((len(cur_larr),1), izoom)), axis=1)), axis=0)
-            # larr = np.concatenate((larr, clarr), axis=0)
-
             larr = np.concatenate((clarr, larr), axis=0)
             # print("new larr shape", izoom, larr.shape, larr.dtype)
 
@@ -1198,41 +938,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         mat[3][3] = 1.
         xform = QMatrix4x4(mat.flatten().tolist())
         return xform
-
-    '''
-    def drawDataOrig(self):
-        f = self.gl
-        dw = self.gldw
-
-        self.data_fbo.bind()
-
-        # Be sure to clear with alpha = 0
-        # so that the slice view isn't blocked!
-        f.glClearColor(0.,0.,0.,0.)
-        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
-
-        pv = dw.window.project_view
-        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
-        if mfv is None:
-            # print("No currently active fragment")
-            return
-
-        if self.active_vao is None or self.active_vao.fragment_view != mfv:
-            self.active_vao = FragmentMapVao(
-                    mfv, self.xyz_location, self.stxy_location, self.gl)
-
-        fvao = self.active_vao
-
-        vao = fvao.getVao()
-        vao.bind()
-
-        f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
-                       pygl.GL_UNSIGNED_INT, None)
-        vao.release()
-        self.trgl_program.release()
-
-        QOpenGLFramebufferObject.bindDefault()
-    '''
 
     def drawData(self):
         if self.atlas is None:
@@ -1415,37 +1120,6 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.xyz_pbo.release()
         QOpenGLFramebufferObject.bindDefault()
 
-
-    '''
-    def drawXyz(self, fbo):
-        f = self.gl
-        dw = self.gldw
-        fvao = self.active_vao
-        xform = self.stxyXform()
-        if xform is None:
-            return
-
-        fbo.bind()
-
-        # Be sure to clear with alpha = 0
-        # so that the slice view isn't blocked!
-        f.glClearColor(0.,0.,0.,0.)
-        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
-        f.glViewport(0, 0, fbo.width(), fbo.height())
-
-        self.xyz_program.bind()
-
-        self.xyz_program.setUniformValue("xform", xform)
-
-        f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
-                       pygl.GL_UNSIGNED_INT, None)
-        self.xyz_program.release()
-
-        QOpenGLFramebufferObject.bindDefault()
-        self.setDefaultViewport()
-    '''
-
-
 # two attribute buffers: xyz, and stxy (st = scaled texture)
 class FragmentMapVao:
     def __init__(self, fragment_view, xyz_loc, stxy_loc, gl):
@@ -1569,9 +1243,6 @@ class UniBuf:
         self.buffer_id = gl.glGenBuffers(1)
         gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, self.binding_point, self.buffer_id)
         self.setBuffer()
-        # byte_size = self.data.size * self.data.itemsize
-        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data, gl.GL_STATIC_DRAW)
-        # gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
 
     def bindToShader(self, shader_id, uniform_index):
         gl = self.gl
@@ -1580,7 +1251,6 @@ class UniBuf:
     def setBuffer(self):
         gl = self.gl
         gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, self.binding_point, self.buffer_id)
-        # self.setBuffer(0)
         byte_size = self.data.size * self.data.itemsize
         gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data, gl.GL_STATIC_DRAW)
         gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
@@ -1598,13 +1268,10 @@ class UniBuf:
         else:
             offset = 0
             subdata = self.data[:cnt_size]
-        # byte_size = self.data.size * self.data.itemsize
         # print(cnt, full_size, cnt_size, offset, subdata.shape)
         # print("about to bind buffer", self.buffer_id)
         gl.glBindBuffer(pygl.GL_UNIFORM_BUFFER, self.buffer_id)
-        # pygl.glBufferData(pygl.GL_UNIFORM_BUFFER, byte_size, self.data.tobytes(), pygl.GL_STATIC_DRAW)
         # print("about to set buffer", self.data.shape, self.data.dtype)
-        # gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data, gl.GL_STATIC_DRAW)
         gl.glBufferSubData(gl.GL_UNIFORM_BUFFER, offset, cnt_size, subdata)
         # print("buffer has been set")
         gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
@@ -1650,8 +1317,6 @@ class Chunk:
         asz = atlas.asz
         # rectangle of the entire data set
 
-        # self.setData(dk, dl)
-
         # in_use: one of the currently-displayed blocks
         self.in_use = False
 
@@ -1661,23 +1326,9 @@ class Chunk:
         # < 0 means reading has not started.
         self.misses = -1
 
-        # texture_status:
-        # 0: not loaded
-        # 1: loaded to pbo
-        # 2: loaded into tex atlas
-        # self.texture_status = 0
-
         self.status = Chunk.Status.UNINITIALIZED
 
-        # TODO: when misses reaches 0, should buf.tobytes() result 
-        # be stored locally, so it is available for saving as pbo?
         self.data_bytes = None
-
-        # And clear it out once data is loaded to pbo (or tex atlas)?
-        # And clear pbo once it has been loaded to tex?
-
-        # TODO: When clearing the tex atlas, be sure to clear
-        # local copy of buf, pbo, and reset misses and texture_status
 
     class Status(Enum):
         UNINITIALIZED = enum.auto()
@@ -1697,10 +1348,9 @@ class Chunk:
         ind = self.atlas.index(self.ak)
         self.atlas.tmin_ubo.data[ind, 3] = False
         self.pbo = None
+        self.misses = -1
 
     def getDataFromDisk(self):
-        # if self.status != Chunk.Status.INITIALIZED and self.status != Chunk.Status.PARTIALLY_LOADED_FROM_DISK:
-        # print("getDataFromDisk", self.status)
         if self.status not in [Chunk.Status.INITIALIZED, Chunk.Status.PARTIALLY_LOADED_FROM_DISK]:
             # print("returning")
             return
@@ -1754,26 +1404,6 @@ class Chunk:
         thread = threading.current_thread()
         # print("thread ident", thread.ident)
         thread.immediate_data_mode = True
-        '''
-        # TODO: eliminate need for is_zarr test by adding
-        # getDataAndMisses to VolumeView.trdata (need to make
-        # trdata into a class)
-        if self.atlas.volume_view.volume.is_zarr:
-            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = adata.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]))
-            # print(self.ak, misses)
-            # print("from disk", self.dk, self.dl, misses)
-        else:
-            self.atlas.volume_view.volume.setImmediateDataMode(True)
-            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
-            self.atlas.volume_view.volume.setImmediateDataMode(False)
-            # print("from disk", self.dk, self.dl, "*")
-            misses = 0
-        '''
-        '''
-        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = adata.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), True)
-        print("from disk", self.dk, self.dl, misses)
-
-        '''
         buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
         # print("from disk", self.dk, self.dl, "*")
         misses = 0
@@ -1786,15 +1416,11 @@ class Chunk:
         else:
             self.status = Chunk.Status.PARTIALLY_LOADED_FROM_DISK
 
-        # TODO: still needed here?
-        # self.texture_status = 0
         ind = self.atlas.index(self.ak)
         self.atlas.tmin_ubo.data[ind, 3] = False
 
-    # def isTextureSet(self):
-    #    return self.texture_status == 2
-
-    def copyCpuDataToPbo(self):
+    # usual sequence: copyRamDataToPbo, then copyPboDataToTexmap
+    def copyRamDataToPbo(self):
         if self.misses != 0:
             print("do not call this if misses is not 0", self.misses)
             return
@@ -1817,17 +1443,6 @@ class Chunk:
 
         self.pbo = self.atlas.getPbo()
 
-        '''
-        self.pbo = QOpenGLBuffer(QOpenGLBuffer.PixelUnpackBuffer)
-        self.pbo.create()
-        self.pbo.bind()
-        # Assumes UInt16
-        # pbo_size = acsz[0]*acsz[1]*acsz[2]*2
-        pbo_size = len(self.data_bytes)
-        self.pbo.allocate(pbo_size)
-        '''
-
-        # self.pbo.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, self.data_bytes)
         pbo_size = len(self.data_bytes)
         self.pbo.bind()
         # print("calling pbo.write", pbo_size, self.pbo.bufferId())
@@ -1839,28 +1454,11 @@ class Chunk:
         # Don't set uniforms here, need to wait until
         # tex3d is set
 
-        '''
-        xform = QMatrix4x4()
-        xform.scale(*(1./asz[i] for i in range(len(asz))))
-        xform.translate(*(self.ar[0][i]+self.pad-dr[0][i] for i in range(len(self.ar[0]))))
-        xform.scale(*(dsz[i] for i in range(len(dsz))))
-        self.xform = xform
-
-        # self.atlas.program.bind()
-        ind = self.atlas.index(self.ak)
-
-        self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
-        self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
-        self.atlas.tmax_ubo.data[ind, :3] = self.tmax
-        self.atlas.tmin_ubo.data[ind, :3] = self.tmin
-        self.atlas.tmin_ubo.data[ind, 3] = 1.
-
-        xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
-        self.atlas.xform_ubo.data[ind, :, :] = xformarr
-        '''
         self.status = Chunk.Status.LOADED_TO_PBO
 
-    def copyCpuDataToTexmap(self):
+    # alternate sequence (not currently used):
+    # copyRamDataToTexmap directly, without using PBOs
+    def copyRamDataToTexmap(self):
         if self.misses != 0:
             print("do not call this if misses is not 0", self.misses)
             return
@@ -1908,15 +1506,6 @@ class Chunk:
         xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
         self.atlas.xform_ubo.data[ind, :, :] = xformarr
 
-        # Now consolidated in addBlocks
-        # self.atlas.tmin_ubo.setBuffer()
-        # self.atlas.tmax_ubo.setBuffer()
-        # self.atlas.xform_ubo.setBuffer()
-
-        # timera.time("set buffers")
-
-        # self.in_use = True
-
     def copyPboDataToTexmap(self):
         if self.misses != 0:
             print("do not call this if misses is not 0", self.misses)
@@ -1942,11 +1531,9 @@ class Chunk:
 
         self.pbo.bind()
 
-        # self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, self.data_bytes)
         self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, 0)
         self.pbo.release()
 
-        # self.texture_status = 2
         self.status = Chunk.Status.LOADED_TO_TEXTURE
         self.atlas.releasePbo(self.pbo)
         self.pbo = None
@@ -1958,7 +1545,6 @@ class Chunk:
         xform.scale(*(dsz[i] for i in range(len(dsz))))
         self.xform = xform
 
-        # self.atlas.program.bind()
         ind = self.atlas.index(self.ak)
 
         self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
@@ -1969,132 +1555,6 @@ class Chunk:
 
         xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
         self.atlas.xform_ubo.data[ind, :, :] = xformarr
-
-        # Now consolidated in addBlocks
-        # self.atlas.tmin_ubo.setBuffer()
-        # self.atlas.tmax_ubo.setBuffer()
-        # self.atlas.xform_ubo.setBuffer()
-
-        # timera.time("set buffers")
-
-        # self.in_use = True
-
-    def setDataOld(self, dk, dl):
-        # print("set data", self.ak, dk, dl)
-        self.dk = dk
-        self.dl = dl
-        if dl < 0:
-            return False
-
-        # data chunk size (3 coords, usually 128,128,128)
-        dcsz = self.atlas.dcsz 
-        # data rectangle
-        dr = self.k2r(dk, dcsz)
-        # data corner
-        d = dr[0]
-
-        # padded data rectangle
-        pdr = self.padRect(dr, self.pad)
-        # size of the data on the data's level (3 coords: nx, ny, nz)
-        dsz = self.atlas.dsz[dl]
-        all_dr = ((0, 0, 0), (dsz[0], dsz[1], dsz[2]))
-        # intersection of the padded data rectangle with the data
-        int_dr = self.rectIntersection(pdr, all_dr)
-        if int_dr is None:
-            return False
-        # print(pdr, all_dr, int_dr)
-
-        # Compute change in pdr (padded data-chunk rectangle) 
-        # due to intersection with edges of data array:
-        # Difference in min corner:
-        skip0 = tuple(int_dr[0][i]-pdr[0][i] for i in range(len(int_dr[0])))
-        # Difference in max corner:
-        skip1 = tuple(pdr[1][i]-int_dr[1][i] for i in range(len(pdr[1])))
-
-        # print(pdr, skip0)
-        # print(ar, int_dr, skip0, skip1)
-        # print(skip0, skip1)
-        # print(dr, int_dr)
-        acsz = self.atlas.acsz
-        buf = np.zeros((acsz[2], acsz[1], acsz[0]), np.uint16)
-        c0 = skip0
-        c1 = tuple(acsz[i]-skip1[i] for i in range(len(acsz)))
-        adata = self.atlas.datas[dl]
-
-        timera = Utils.Timer()
-        timera.active = False
-        # TODO: eliminate need for is_zarr test by adding
-        # getDataAndMisses to VolumeView.trdata (need to make
-        # trdata into a class)
-        if self.atlas.volume_view.volume.is_zarr:
-            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]], misses = adata.getDataAndMisses(slice(int_dr[0][2],int_dr[1][2]), slice(int_dr[0][1],int_dr[1][1]), slice(int_dr[0][0],int_dr[1][0]), False)
-            # print(self.ak, misses)
-            print(self.dk, self.dl, misses)
-        else:
-            self.atlas.volume_view.volume.setImmediateDataMode(True)
-            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
-            self.atlas.volume_view.volume.setImmediateDataMode(False)
-            print(self.dk, self.dl, "*")
-            misses = 0
-
-        self.misses = misses
-        timera.time("get data")
-
-        texture_set = False
-        # print("buf", buf.min(), buf.max())
-        a = self.ar[0]
-        # print(a, acsz)
-        if self.misses == 0:
-            self.atlas.tex3d.setData(a[0], a[1], a[2], acsz[0], acsz[1], acsz[2], QOpenGLTexture.Red, QOpenGLTexture.UInt16, buf.tobytes())
-            texture_set = True
-            # self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
-            # self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
-            # print("dsz", dsz)
-            # print("dr", dr)
-            # print("int_dr", int_dr)
-            # print("tmin", self.tmin)
-            # print("tmax", self.tmax)
-            # self.tmin = (0., 0., 0.01)
-            # self.tmax = (1., 1., 1.)
-            timera.time("set texture")
-        else:
-            # self.tmin = (0., 0., 0.)
-            # self.tmax = (-1., -1., -1.)
-            # Signal that texture was not set
-            ind = self.atlas.index(self.ak)
-            self.atlas.tmin_ubo.data[ind, 3] = False
-            timera.time("didn't set texture")
-            return False
-
-        asz = self.atlas.asz
-
-        xform = QMatrix4x4()
-        xform.scale(*(1./asz[i] for i in range(len(asz))))
-        xform.translate(*(self.ar[0][i]+self.pad-dr[0][i] for i in range(len(self.ar[0]))))
-        xform.scale(*(dsz[i] for i in range(len(dsz))))
-        self.xform = xform
-
-        # self.atlas.program.bind()
-        ind = self.atlas.index(self.ak)
-
-        self.tmin = tuple((dr[0][i])/dsz[i] for i in range(len(dsz)))
-        self.tmax = tuple((dr[1][i])/dsz[i] for i in range(len(dsz)))
-        self.atlas.tmax_ubo.data[ind, :3] = self.tmax
-        self.atlas.tmin_ubo.data[ind, :3] = self.tmin
-        self.atlas.tmin_ubo.data[ind, 3] = texture_set
-
-        xformarr = np.array(xform.transposed().copyDataTo(), dtype=np.float32).reshape(4,4)
-        self.atlas.xform_ubo.data[ind, :, :] = xformarr
-
-        # Now consolidated in addBlocks
-        # self.atlas.tmin_ubo.setBuffer()
-        # self.atlas.tmax_ubo.setBuffer()
-        # self.atlas.xform_ubo.setBuffer()
-
-        timera.time("set buffers")
-
-        self.in_use = True
-        return texture_set
 
     @staticmethod
     def k2r(k, csz):
@@ -2209,8 +1669,6 @@ atlas_data_code = {
 # end of this dict.
 
 class Atlas:
-    # def __init__(self, volume_view, gl, tex3dsz=(2048,1500,150), dcsz=(128,128,128)):
-    # def __init__(self, volume_view, gl, tex3dsz=(2048,2048,600), dcsz=(256,256,256)):
 
     class MiniLogger:
         def __init__(self, logger):
@@ -2223,6 +1681,7 @@ class Atlas:
             # self.logger.messageLogged.disconnect(self.connection)
             self.logger.disconnect(self.connection)
 
+
     def __init__(self, volume_view, gl, logger, tex3dsz=(2048,2048,300), chunk_size=126):
         print("Creating atlas")
         dcsz = (chunk_size, chunk_size, chunk_size)
@@ -2232,45 +1691,15 @@ class Atlas:
         self.pbo_pool = Queue()
         pad = 1
         self.pad = pad
-        '''
-        self.volume_view = volume_view
-        '''
         self.dcsz = dcsz
         acsz = tuple(dcsz[i]+2*pad for i in range(len(dcsz)))
         self.acsz = acsz
-        '''
-        vol = volume_view.volume
-        vdir = volume_view.direction
-        is_zarr = vol.is_zarr
-        '''
         if chunk_size < 65:
             self.max_textures_set = 10
         else:
             self.max_textures_set = 3
             self.max_textures_set = 8
 
-        '''
-        datas = []
-        if not is_zarr:
-            data = vol.trdatas[vdir]
-            datas.append(data)
-        else:
-            for level in vol.levels:
-                data = level.trdatas[vdir]
-                datas.append(data)
-        dsz = []
-        for data in datas:
-            shape = data.shape
-            dsz.append(tuple(shape[::-1]))
-        self.datas = datas
-        self.dsz = dsz
-        # number of data chunks in each direction
-        ksz = []
-        for l in range(len(dsz)):
-            lksz = tuple(self.ke(dsz[l][i],dcsz[i]) for i in range(len(dcsz)))
-            ksz.append(lksz)
-        self.ksz = ksz
-        '''
         # number of atlas chunks in each direction
         aksz = tuple(tex3dsz[i]//acsz[i] for i in range(len(acsz)))
         # size of atlas in each direction
@@ -2278,18 +1707,6 @@ class Atlas:
         self.aksz = aksz
 
         self.chunks = OrderedDict()
-
-        '''
-        for k in range(aksz[2]):
-            for j in range(aksz[1]):
-                for i in range(aksz[0]):
-                    ak = (i,j,k)
-                    dk = (i,j,k)
-                    dl = -1
-                    chunk = Chunk(self, ak, dk, dl)
-                    key = self.key(dk, dl)
-                    self.chunks[key] = chunk
-        '''
 
         max_nchunks = aksz[0]*aksz[1]*aksz[2]
         print("max_nchunks", max_nchunks)
@@ -2300,19 +1717,11 @@ class Atlas:
         self.setVolumeView(volume_view)
         
         self.program.bind()
-        '''
-        xyz_xform = self.xyzXform(dsz[0])
-        self.program.setUniformValue("xyz_xform", xyz_xform)
-        '''
         # for var in ["atlas", "xyz_xform", "tmins", "tmaxs", "TMins", "TMaxs", "XForms", "ZChartIds", "chart_ids", "ncharts"]:
         #     print(var, self.program.uniformLocation(var))
         pid = self.program.programId()
         print("program id", pid)
 
-        # the 0 is the binding point, which should be unique for
-        # each UniBuf.
-        # should use glGetUniformBlockIndex, to get ubo_index instead
-        # of hardwiring 0, but that function is missing from PyQt5
         # for var in ["TMaxs", "TMins", "XForms", "ZChartIds"]:
         #    print(var, gl.glGetUniformBlockIndex(pid, var))
         self.tmax_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 0)
@@ -2357,14 +1766,13 @@ class Atlas:
             tex3d.allocateStorage()
             self.tex3d = tex3d
             aunit = 4
-            # If OpenGL module is allowed to throw exceptions
+            # If the OpenGL module is allowed to throw exceptions
             # (the default; this can be changed at the top of
             # gl_data_window.py), the out-of-memory exception
             # will be thrown at the next line, rather than at
             # the allocateStorage() call above
             gl.glActiveTexture(pygl.GL_TEXTURE0+aunit)
             tex3d.bind()
-            # self.program.setUniformValue("atlas", aunit)
             aloc = self.program.uniformLocation("atlas")
             self.program.setUniformValue(aloc, aunit)
             gl.glActiveTexture(pygl.GL_TEXTURE0)
@@ -2507,16 +1915,6 @@ class Atlas:
                 break
             if chunks_loading >= 2*self.max_textures_set:
                 break
-            '''
-            if chunk.status == Chunk.Status.INITIALIZED:
-                chunk.getDataFromDisk()
-            # TODO: may not be needed later
-            if chunk.status == Chunk.Status.PARTIALLY_LOADED_FROM_DISK:
-                chunks_loading += 1
-                chunk.getDataFromDisk()
-            if chunks_loading >= self.max_textures_set:
-                break
-            '''
             if chunk.status == Chunk.Status.INITIALIZED or chunk.status == Chunk.Status.PARTIALLY_LOADED_FROM_DISK:
                 # print("request", chunk.dk, chunk.dl)
                 future = self.executor.submit(chunk.getDataFromDisk)
@@ -2527,7 +1925,8 @@ class Atlas:
 
     def futureCallback(self, in_progress_cb, future):
         # We don't care about the result, but this will throw
-        # an exception if the thread had an exception
+        # an exception if the thread had an exception; without
+        # this, the thread would quietly die without a trace
         result = future.result()
         if in_progress_cb is not None:
             in_progress_cb()
@@ -2539,32 +1938,29 @@ class Atlas:
         for key,chunk in reversed(self.chunks.items()):
             if not chunk.in_use:
                 break
-            # if chunk.misses == 0 and not chunk.status == Chunk.Status.LOADED_TO_TEXTURE:
             if self.pbo_queue.qsize() >= 8*self.max_textures_set:
                 break
             if num_pbos_set >= 1.5*self.max_textures_set:
                 break
             if chunk.status == Chunk.Status.LOADED_FROM_DISK:
-                chunk.copyCpuDataToPbo()
+                chunk.copyRamDataToPbo()
                 self.pbo_queue.put(chunk)
                 num_pbos_set += 1
             # print(chunk.dl, chunk.dk)
-            #     break
         # print(zoom_level, cnt, len(blocks))
         # print("cnt", cnt)
 
-    def loadTexturesFromCpu(self, in_progress_cb=None):
+    def loadTexturesFromRam(self, in_progress_cb=None):
         # To get all the active chunks, search backwards from
         # the end
         num_textures_set = 0
         for key,chunk in reversed(self.chunks.items()):
             if not chunk.in_use:
                 break
-            # if chunk.misses == 0 and not chunk.status == Chunk.Status.LOADED_TO_TEXTURE:
             if num_textures_set >= self.max_textures_set:
                 break
             if chunk.status == Chunk.Status.LOADED_FROM_DISK:
-                chunk.copyCpuDataToTexmap()
+                chunk.copyRamDataToTexmap()
                 num_textures_set += 1
 
         if num_textures_set > 0:
@@ -2577,25 +1973,9 @@ class Atlas:
 
 
     def loadTexturesFromPbos(self, in_progress_cb=None):
-        # cnt = 0
         # To get all the active chunks, search backwards from
         # the end
         num_textures_set = 0
-        '''
-        for key,chunk in reversed(self.chunks.items()):
-            if not chunk.in_use:
-                break
-            # if chunk.misses == 0 and not chunk.status == Chunk.Status.LOADED_TO_TEXTURE:
-            if chunk.status == Chunk.Status.LOADED_TO_PBO:
-                chunk.copyPboDataToTexmap()
-                num_textures_set += 1
-            # print(chunk.dl, chunk.dk)
-            cnt += 1
-            if num_textures_set >= self.max_textures_set:
-                break
-        # print(zoom_level, cnt, len(blocks))
-        # print("cnt", cnt)
-        '''
         while not self.pbo_queue.empty() and num_textures_set < self.max_textures_set:
             chunk = self.pbo_queue.get()
             if chunk.status == Chunk.Status.LOADED_TO_PBO:
@@ -2607,7 +1987,6 @@ class Atlas:
             self.tmax_ubo.setBuffer()
             self.xform_ubo.setBuffer()
 
-        # return textures_set >= self.max_textures_set
         if num_textures_set >= self.max_textures_set and in_progress_cb is not None:
             in_progress_cb()
 
@@ -2616,169 +1995,53 @@ class Atlas:
         timer.active = False
         self.initializeChunks(zblocks)
         timer.time(" init")
+
+        # Load data from disk to RAM
+        # NOTE that each chunk will be loaded in a
+        # separate thread
         self.loadChunks(in_progress_cb)
         timer.time(" from disk")
+
+        # 3 options for getting the data from RAM into 
+        # the Atlas 3D texture:
+
+        # 1) Load data from RAM into a PBO (one per chunk);
+        # data will later (outside of addBlocks) be
+        # loaded from each PBO into the Atlas 3D texture.
+
+        # 2) Load data from RAM into a PBO (one per chunk);
+        # then immediately load data from each PBO into the
+        # Atlas 3D texture (inside addBlocks).
+
+        # 3) Load data from RAM directly into the
+        # Atlas 3D texture.
+
+        # Here Option 1 is used, because delaying the loading
+        # from the PBOs into the 3D texture allows more time
+        # for the GPU to get the data from RAM to the PBOs
+        # (PBOs are designed to allow transferring data from
+        # RAM to GPU in the background)
+
         ''''''
+        # Option 1
         self.loadPbos()
         timer.time(" to pbos")
         ''''''
         '''
+        # Option 2
         self.loadPbos()
         timer.time(" to pbos")
         self.loadTexturesFromPbos(in_progress_cb)
         timer.time(" to textures")
         '''
         '''
-        self.loadTexturesFromCpu(in_progress_cb)
+        # Option 3
+        self.loadTexturesFromRam(in_progress_cb)
         timer.time(" to textures")
         '''
 
-    def addBlocksOld(self, zblocks, in_progress_cb=None):
-        for chunk in reversed(self.chunks.values()):
-            if not chunk.in_use:
-                break
-            chunk.in_use = False
-        ready_for_texture = 0
-        for zblock in zblocks:
-            block = zblock[:3]
-            zoom_level = zblock[3]
-            key = self.key(block, zoom_level)
-            chunk = self.chunks.get(key, None)
-            '''
-            # If the data chunk is not currently stored in the atlas:
-            if chunk is None:
-                if ready_for_texture >= self.max_textures_set:
-                    continue
-                # Get the first Chunk in the OrderedDict: 
-                _, chunk = self.chunks.popitem(last=False)
-                # print("popped", chunk.dk, chunk.dl)
-                # texture_set = chunk.setData(block, zoom_level)
-                chunk.getDataFromDisk(block, zoom_level)
-                # print("set data", chunk.dk, chunk.dl)
-                if chunk.misses == 0:
-                    ready_for_texture += 1
-                self.chunks[key] = chunk
-            else: # If the data is already in the Atlas
-                # move the chunk to the end of the OrderedDict
-                # if chunk.misses > 0:
-                if chunk.misses > 0 and ready_for_texture < self.max_textures_set:
-                    chunk.getDataFromDisk(block, zoom_level)
-                    if chunk.misses == 0:
-                        ready_for_texture += 1
-                self.chunks.move_to_end(key)
-            '''
-            # If the data chunk is not currently stored in the atlas:
-            if chunk is None:
-                # Get the first Chunk in the OrderedDict: 
-                _, chunk = self.chunks.popitem(last=False)
-                chunk.initialize(block, zoom_level)
-                self.chunks[key] = chunk
-            else:
-                self.chunks.move_to_end(key)
-            chunk.in_use = True
-
-        chunks_loading = 0
-        for key,chunk in reversed(self.chunks.items()):
-            if not chunk.in_use:
-                break
-            if chunk.status == Chunk.Status.INITIALIZED:
-                chunk.getDataFromDisk()
-            # TODO: may not be needed later
-            if chunk.status == Chunk.Status.LOADING_FROM_DISK:
-                chunks_loading += 1
-                chunk.getDataFromDisk()
-            if chunks_loading >= self.max_textures_set:
-                break
-
-        # TODO: At img 12310 x 3348 y 4539 there is a little missing piece 
-
-        cnt = 0
-        # To get all the active chunks, search backwards from
-        # the end
-        num_textures_set = 0
-        for key,chunk in reversed(self.chunks.items()):
-            if not chunk.in_use:
-                break
-            if chunk.misses == 0 and not chunk.status:
-                chunk.copyCpuDataToTexmap()
-                num_textures_set += 1
-            # print(chunk.dl, chunk.dk)
-            cnt += 1
-        # print(zoom_level, cnt, len(blocks))
-        # print("cnt", cnt)
-
-
-        if num_textures_set > 0:
-            self.tmin_ubo.setBuffer()
-            self.tmax_ubo.setBuffer()
-            self.xform_ubo.setBuffer()
-
-        # return textures_set >= self.max_textures_set
-        if num_textures_set >= self.max_textures_set and in_progress_cb is not None:
-            in_progress_cb()
-
-
-    # Given a list of blocks, add the blocks that are
-    # not already in the atlas. 
-    def addBlocksOld2(self, zblocks, maxxed_out_cb=None):
-        for chunk in reversed(self.chunks.values()):
-            if chunk.in_use == False:
-                break
-            chunk.in_use = False
-        textures_set = 0
-        for zblock in zblocks:
-            # if textures_set >= self.max_textures_set:
-            #     continue
-            block = zblock[:3]
-            zoom_level = zblock[3]
-            key = self.key(block, zoom_level)
-            chunk = self.chunks.get(key, None)
-            # If the data chunk is not currently stored in the atlas:
-            if chunk is None:
-                if textures_set >= self.max_textures_set:
-                    continue
-                # Get the first Chunk in the OrderedDict: 
-                _, chunk = self.chunks.popitem(last=False)
-                # print("popped", chunk.dk, chunk.dl)
-                texture_set = chunk.setData(block, zoom_level)
-                # print("set data", chunk.dk, chunk.dl)
-                if texture_set:
-                    textures_set += 1
-                self.chunks[key] = chunk
-            else: # If the data is already in the Atlas
-                # move the chunk to the end of the OrderedDict
-                # if chunk.misses > 0:
-                if chunk.misses > 0 and textures_set < self.max_textures_set:
-                    texture_set = chunk.setData(block, zoom_level)
-                    if texture_set:
-                        textures_set += 1
-                self.chunks.move_to_end(key)
-            chunk.in_use = True
-
-        # TODO: At img 12310 x 3348 y 4539 there is a little missing piece 
-
-        cnt = 0
-        # To get all the active chunks, search backwards from
-        # the end
-        for key,chunk in reversed(self.chunks.items()):
-            if not chunk.in_use:
-                break
-            # print(chunk.dl, chunk.dk)
-            cnt += 1
-        # print(zoom_level, cnt, len(blocks))
-        # print("cnt", cnt)
-
-        if textures_set > 0:
-            self.tmin_ubo.setBuffer()
-            self.tmax_ubo.setBuffer()
-            self.xform_ubo.setBuffer()
-
-        # return textures_set >= self.max_textures_set
-        if textures_set >= self.max_textures_set and maxxed_out_cb is not None:
-            maxxed_out_cb()
-            
     # displayBlocks is in a separate operation
-    # than addBlocks, because addBlocks may need to be called later
+    # from addBlocks, because addBlocks may need to be called later
     # than displayBlocks, to prevent GPU round trips
     def displayBlocks(self, data_fbo, fvao, stxy_xform):
         gl = self.gl
@@ -2798,18 +2061,6 @@ class Atlas:
 
         self.program.setUniformValue("stxy_xform", stxy_xform)
 
-        '''
-        nchunks = 0
-        for key,chunk in reversed(self.chunks.items()):
-            if not chunk.in_use:
-                break
-            ak = chunk.ak
-            ind = self.index(ak)
-            # self.program.setUniformValue("chart_ids[%d]"%nchunks, ind)
-            self.chart_id_ubo.data[nchunks,0] = ind
-            # print(nchunks, ind)
-            nchunks += 1
-        '''
         uchunks = []
         for key,chunk in reversed(self.chunks.items()):
             if not chunk.in_use:
@@ -2820,13 +2071,9 @@ class Atlas:
         for chunk in uchunks:
             ak = chunk.ak
             ind = self.index(ak)
-            # self.program.setUniformValue("chart_ids[%d]"%nchunks, ind)
             self.chart_id_ubo.data[nchunks,0] = ind
             nchunks += 1
 
-        # BUG in PySide6
-        # Calls Uniform4fv
-        # self.program.setUniformValue("ncharts", nchunks)
         nloc = self.program.uniformLocation("ncharts")
         # print("nloc, nchunks", nloc, nchunks)
         # print("nchunks", nchunks)
