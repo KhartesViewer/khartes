@@ -131,7 +131,7 @@ class TransposedDataView():
         self.from_vc_render = from_vc_render
         assert direction in [0, 1]
         self.direction = direction
-        self.mutex = threading.Lock()
+        # self.mutex = threading.Lock()
 
     @property
     def shape(self):
@@ -271,6 +271,40 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         except KeyError:
             return False
 
+    # Some complicated code to handle the case of
+    # threading vs non-threading.
+    # The problem is that sometimes the consumer of the data
+    # wants to wait for the data; in that case __getitem__
+    # should block until the data has been loaded from
+    # the data store.
+    # At other times, the consumer prefers not to be blocked;
+    # in this case __getitem__ spins off a thread that will
+    # call a callback once the data has been loaded.
+    # The difficulty is that the consumer does not call __getitem__
+    # directly; it is called from inside the zarr libraries.
+    # So KhartesThreadedLRUCache provides two ways in which
+    # it can be notified of the user's preference.  One way
+    # is to call setImmediateDataMode() with the appropriate
+    # flag.  The problem is that if multiple threads are
+    # all accessing the same zarr data store, different threads
+    # may have different preferences; a single flag shared
+    # among all threads does not work.
+    # Another way the consumer can notify __getitem__ of its
+    # preference, in a multi-threaded environment, is to set 
+    # an attribute on the thread itself.  Sort of dubious, but
+    # it seems to work.
+    # NOTE: don't be confused by the fact that there are two
+    # different sets of threads mentioned in the comment above.
+    # __getitem__ itself will spin off a set of threads if
+    # that is what the consumer wants, in order not to block
+    # while waiting for the data to load.
+    # These threads, internal to __getitem__, are not to be
+    # confused with threads that the consumer may have created
+    # in order to access several parts of the data store at
+    # once.  The threads created by the consumer are the ones
+    # that can carry an attribute indicating whether the
+    # data store should be read in blocking or non-blocking mode.
+    # 
     def __getitem__(self, key):
         try:
             # first try to obtain the value from the cache

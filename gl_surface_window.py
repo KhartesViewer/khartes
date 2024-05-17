@@ -1403,6 +1403,11 @@ class Chunk:
 
         thread = threading.current_thread()
         # print("thread ident", thread.ident)
+        # See the extensive comment in volume_zarr.py, just beforek
+        # the KhartesThreadedLRUCache.__getitems__() function,
+        # for an explanation of what the next line does.  Its
+        # effect is that the line buf[...] = adata[...] below will block
+        # until the data required by adata has been loaded from disk.
         thread.immediate_data_mode = True
         buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
         # print("from disk", self.dk, self.dl, "*")
