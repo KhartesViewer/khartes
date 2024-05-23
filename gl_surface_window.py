@@ -1139,6 +1139,7 @@ class FragmentMapVao:
             return self.vao
 
         self.vao_modified = Utils.timestamp()
+        # print("modifying vao")
 
         if self.vao is None:
             self.vao = QOpenGLVertexArrayObject()

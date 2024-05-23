@@ -456,9 +456,13 @@ class TrglFragmentView(BaseFragmentView):
 
     def setScaledTexturePoints(self):
         f = self.fragment
+        # print("sstp")
         if self.stpoints is not None and len(f.gpoints) == self.prev_pt_count:
+            # print("sstp returning")
             return
         self.stpoints = None
+        self.all_stpoints = None
+        # print("sstp set stpoints to None")
         self.prev_pt_count = len(f.gpoints)
         if len(f.gtpoints) != len(f.gpoints):
             return
@@ -1003,6 +1007,7 @@ class TrglFragmentView(BaseFragmentView):
         for opt in old_pts_t:
             # print("opt", opt)
             if opt not in ptdict:
+                # print("not in dict", opt)
                 # ptdict[opt] = -1
                 if len(old_pts) == len(new_indexes): # point moved
                     # nindset = set(new_indexes)
@@ -1018,10 +1023,11 @@ class TrglFragmentView(BaseFragmentView):
                     ptdict[opt] = ptdict[npt]
 
                     pass
-                elif len(old_pts)-1 == len(new_indexes): # point added
+                elif len(old_pts)-1 == len(new_indexes): # point deleted
                     ptdict[opt] = -1
                     pass
                 else: # not sure how we got here
+                    print("confused")
                     ptdict[opt] = -1
                     pass
         # new indexes of old points
@@ -1091,6 +1097,7 @@ class TrglFragmentView(BaseFragmentView):
         self.fragment.trgls = ltrgls
 
     def movePoint(self, index, new_vijk, update_xyz, update_st):
+        # print("mp")
         vv = self.cur_volume_view
         new_gijk = vv.transposedIjkToGlobalPosition(new_vijk)
         new_uijk = vv.transposedIjkToIjk(new_vijk)
@@ -1102,7 +1109,9 @@ class TrglFragmentView(BaseFragmentView):
         duijk = [new_uijk[i]-old_uijk[i] for i in range(3)]
         # print("movePoint", dvijk, dgijk, duijk)
         # axes = self.fragment.pointThreeAxes(index, self.vpoints[:,:3], self.stpoints, self.trgls())
+        # print("a")
         axes = self.localStAxes(index)
+        # print("b")
         if axes is None:
             print("TrglFragmentView.movePoint: could not compute axes")
             return
@@ -1119,10 +1128,11 @@ class TrglFragmentView(BaseFragmentView):
         # new_gijk = self.cur_volume_view.transposedIjkToGlobalPosition(new_vijk)
         # print(self.fragment.gpoints)
         # print(match, new_gijk)
-        self.fragment.notifyModified()
         if update_xyz:
             self.fragment.gpoints[index, :] = new_gijk
+            # print("c")
             self.setLocalPoints(True, False)
+            # print("d")
         if update_st:
             # call instead of setting self.stpoints
             # self.retriangulateAndMove(index, new_stxy)
@@ -1134,6 +1144,15 @@ class TrglFragmentView(BaseFragmentView):
             # print("hw", half_width, self.avg_st_len)
             old_indexes = self.pointIndexesInWindow(new_stxy, half_width, True)
             # print("oi", old_indexes.shape, old_indexes)
+            '''
+            print("ind", index)
+            if self.stpoints is not None:
+                print("lstp", len(self.stpoints))
+            else:
+                print("self.stpoints is None!")
+                return
+            '''
+
             old_pts = self.all_stpoints[old_indexes]
             self.stpoints[index, :] = new_stxy
             self.all_stpoints[index, :] = new_stxy
@@ -1150,7 +1169,70 @@ class TrglFragmentView(BaseFragmentView):
         # modifyZsurf = False
         # if len(self.workingVpoints()) > 0 and self.workingVpoints()[index]:
         #     modifyZsurf = True
+
+        self.fragment.notifyModified()
         return True
+
+    def deletePointByIndex(self, index):
+        if index < 0:
+            return
+        if index >= len(self.fragment.gpoints):
+            return
+        if self.stpoints is None or index >= len(self.stpoints):
+            return
+        half_width = 3*self.avg_st_len
+        # print("hw", half_width, self.avg_st_len)
+        old_stxy = self.all_stpoints[index]
+        old_indexes = self.pointIndexesInWindow(old_stxy, half_width, True)
+        # print("oi", old_indexes.shape, old_indexes)
+        old_pts = self.all_stpoints[old_indexes]
+        # self.stpoints[index, :] = new_stxy
+        # self.all_stpoints[index, :] = new_stxy
+        # new_indexes = self.pointIndexesInWindow(old_stxy, half_width, True)
+        new_indexes = old_indexes[old_indexes != index]
+        # print("o,n", len(old_indexes), len(new_indexes))
+        result = self.trglDiff(old_pts, new_indexes)
+        print("lt1", len(self.fragment.trgls))
+        # deleted_trgls = (self.fragment.trgls == index).any(axis=1).nonzero()[0]
+        # print("deleted", deleted_trgls)
+        if result is not None:
+            otrgls, ntrgls = result
+            if len(otrgls) > 0 or len(ntrgls) > 0:
+                print("uo", otrgls)
+                print("un", ntrgls)
+                self.replaceTrgls(otrgls, ntrgls)
+        print("lt2", len(self.fragment.trgls))
+        trgls = self.fragment.trgls.copy()
+        print("lt3", len(trgls))
+        deleted_trgls = (trgls == index).any(axis=1).nonzero()[0]
+        print("deleted", deleted_trgls)
+        trgls = np.delete(trgls, deleted_trgls, 0)
+        print("lt4", len(trgls))
+              # new_trgls = all_trgls[(all_trgls < len(stp)).all(axis=1), :]
+        trgls[trgls>index] -= 1
+        print("lt5", len(trgls))
+        self.fragment.trgls = trgls
+
+        self.fragment.gpoints = np.delete(self.fragment.gpoints, index, 0)
+        self.fragment.gtpoints = np.delete(self.fragment.gtpoints, index, 0)
+        # self.vpoints = np.delete(self.vpoints, index, 0)
+        # self.fpoints = np.delete(self.fpoints, index, 0)
+        self.stpoints = np.delete(self.stpoints, index, 0)
+        self.all_stpoints = np.delete(self.all_stpoints, index, 0)
+
+        # prevent setScaledTexturePoints from running
+        # when setLocalPoints is called
+        self.prev_pt_count = len(self.fragment.gpoints)
+        
+        self.setLocalPoints(True, False)
+        self.fragment.notifyModified()
+
+        '''
+        if self.stpoints is None:
+            print("self.stpoints is None a")
+        else:
+            print("lstp a", len(self.stpoints))
+        '''
 
     # returns list of trgl indexes
     def regionByNormals(self, ptind, max_angle):
