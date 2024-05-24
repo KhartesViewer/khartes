@@ -968,6 +968,11 @@ class DataWindow(QLabel):
             self.window.deleteNearbyNode()
             # this repopulates local node list
             self.drawSlice()
+            # Force window to repaint immediately,
+            # which in the case of OpenGL windows is necessary
+            # in order to make sure the deleted node is fully purged
+            # before setNearbyTiffAndNode is called
+            self.repaint()
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
             # nearbyNode = self.findNearbyNode(mxy)
@@ -976,6 +981,7 @@ class DataWindow(QLabel):
             self.setNearbyTiffAndNode(mxy)
             # print("del localNearbyNodeIndex", self.localNearbyNodeIndex)
             self.window.drawSlices()
+
         elif not self.isMovingNode and key == Qt.Key_X:
             # print("key X")
             ijk = self.getNearbyNodeIjk()

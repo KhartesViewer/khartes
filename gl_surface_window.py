@@ -264,6 +264,7 @@ class GLSurfaceWindow(DataWindow):
         return ((stxy[0]-dx,stxy[1]-dy),(stxy[0]+dx,stxy[1]+dy))
 
     def drawSlice(self):
+        # print("gsw drawSlice")
         # the MainWindow.edit widget overlays the
         # fragment map; it was used for displaying 
         # user documentation when khartes would first 
