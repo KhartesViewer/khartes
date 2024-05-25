@@ -6,12 +6,6 @@ from pathlib import Path
 from collections import deque
 from scipy.spatial import Delaunay
 import cv2
-'''
-from scipy.interpolate import (
-        LinearNDInterpolator,
-        NearestNDInterpolator,
-        )
-'''
 
 from utils import Utils
 from base_fragment import BaseFragment, BaseFragmentView
@@ -26,12 +20,6 @@ class TrglFragment(BaseFragment):
         self.gtpoints = np.zeros((0,2), dtype=np.float32)
         self.trgls = np.zeros((0,3), dtype=np.int32)
         self.direction = 0
-        '''
-        self.name = name
-        self.trgls = np.zeros((0,3), dtype=np.int32)
-        self.create = Utils.timestamp()
-        self.modified = Utils.timestamp()
-        '''
 
     # class function
     # expected to return a list of fragments, but always
@@ -407,14 +395,6 @@ class TrglFragmentView(BaseFragmentView):
             self.working_fv.setLocalPoints(False)
             # print("after wfv slp")
 
-    '''
-    def createTetras(self):
-        xyzs = self.vpoints[:,0:3]
-        timer = Utils.Timer()
-        self.tetras = Delaunay(xyzs)
-        timer.time("delaunay")
-        print(len(xyzs), len(self.tetras.simplices))
-    '''
 
     '''
     
@@ -611,20 +591,6 @@ class TrglFragmentView(BaseFragmentView):
 
         # n = len(u)
 
-        '''
-        # slc = slice(500000,600000)
-        # slc = slice(300000,n)
-        # slc = slice(n)
-        # sn = len(range(*slc.indices(n)))
-        print("sn", sn)
-        uu = (u*u)[slc].sum()
-        uv = (u*v)[slc].sum()
-        vv = (v*v)[slc].sum()
-        ux = (u*x)[slc].sum()
-        uy = (u*y)[slc].sum()
-        vx = (v*x)[slc].sum()
-        vy = (v*y)[slc].sum()
-        '''
 
         # Solve a least-squares problem.  The idea is to
         # find 4 numbers, (a,b,c,d), that minimize the error
@@ -833,58 +799,6 @@ class TrglFragmentView(BaseFragmentView):
     def trgls(self):
         return self.fragment.trgls
 
-    '''
-    def localStAxesOld(self, index):
-        axes = BaseFragment.pointThreeAxes(index, self.fragment.gpoints, self.stpoints, self.trgls())
-        return axes
-
-    # returns 3 axes: axis along increasing stx, axis along increasing sty,
-    # normal.  The 3 axes are orthonormal.
-    # TODO: the calculation of stxaxis and styaxis should take into
-    # account the local stxy values (uvpts), intead of looking
-    # at the z axis as a proxy
-    def localStAxesHide(self, pt_index):
-        xyzpts = self.fragment.gpoints
-        uvpts = self.stpoints
-        trgls = self.trgls()
-        if uvpts is None or len(xyzpts) != len(uvpts):
-            return None
-        ltrgl_indexes = BaseFragment.trglsAroundPoint(pt_index, trgls)
-        ltrgls = trgls[ltrgl_indexes]
-
-        v0 = ltrgls[:,0]
-        v1 = ltrgls[:,1]
-        v2 = ltrgls[:,2]
-        d01 = (xyzpts[v1] - xyzpts[v0]).astype(np.float64)
-        d02 = (xyzpts[v2] - xyzpts[v0]).astype(np.float64)
-        n3d = np.cross(d01, d02)
-        npt = n3d.sum(axis=0)
-        # print("npt", npt)
-        l2 = np.sqrt(np.sum(npt*npt))
-        if l2 == 0:
-            return None
-        normal = npt/l2
-        # print("normal", normal)
-        # In the global coordinate system, this represents
-        # the axis along the scroll's original z axis.
-        # This should be more or less aligned with the sty axis
-        zaxis = np.array((0., 0., 1.), dtype=np.float32)
-        stxaxis = np.cross(normal, zaxis)
-        # stxaxis = np.cross(zaxis, normal)
-        # stxaxis *= -1
-        # print("stxaxis", stxaxis)
-        l2 = np.sqrt(np.sum(stxaxis*stxaxis))
-        if l2 == 0:
-            return None
-        stxaxis /= l2
-        styaxis = np.cross(normal, stxaxis)
-        # styaxis *= -1
-        axes = np.array((stxaxis, styaxis, normal)).T
-        # print(normal, axes)
-        # return np.array((stxaxis, styaxis, normal)).T
-        return axes
-    '''
-
     def outsidePoints(self, ptstep):
         stp = self.stpoints
         stmin = self.stmin
@@ -936,16 +850,6 @@ class TrglFragmentView(BaseFragmentView):
         stp = self.stpoints
         if stp is None or len(stp) == 0:
             return
-        '''
-        stsize = self.stmax-self.stmin
-        starea = (stsize*stsize).sum()
-        ptarea = starea / len(self.stpoints)
-        ptstep = math.sqrt(ptarea)
-        print(self.stmin, self.stmax, starea, ptarea, ptstep)
-        outside_pts = self.outsidePoints(ptstep)
-        print("stp", stp.shape, "outside", outside_pts.shape)
-        all_pts = np.concatenate((stp, outside_pts), axis=0)
-        '''
         all_pts = self.all_stpoints
 
         all_trgls = None
@@ -960,176 +864,24 @@ class TrglFragmentView(BaseFragmentView):
             self.fragment.trgls = TrglPointSet.rotateToMin(new_trgls)
             # self.fragment.trgls = new_trgls
 
-    def retriangulateAndMoveOld(self, index, newst):
-        oldst = self.stpoints[index]
-        pass
-
-    '''
-    # Input: a trgls array (3 columns, n rows)
-    # Output: the same array, but each row has been
-    # rotated so that the smallest index of that row is
-    # moved to the first column
-    @staticmethod
-    def rotateToMin(trgls):
-        # print("rtm")
-        mins = np.argmin(trgls, axis=1)
-        otrgls = trgls.copy()
-        otrgls[mins==1] = np.roll(trgls[mins==1], 2, axis=1)
-        otrgls[mins==2] = np.roll(trgls[mins==2], 1, axis=1)
-        return otrgls
-    '''
-
-    def pointIndexesInWindowOld(self, pt, half_width, include_outside_points):
-        if include_outside_points:
-            stp = self.all_stpoints
-        else:
-            stp = self.stpoints
-        if stp is None or len(stp) == 0:
-            return None
-        ptsb = ((pt-half_width <= stp) & 
-                (stp <= pt+half_width)).all(axis=1)
-        # print("ptsb", ptsb.shape, ptsb.dtype, ptsb.sum())
-        # return np.argwhere(ptsb)
-        return np.nonzero(ptsb)[0]
-
-    def trglDiffOld(self, old_pts, new_indexes):
-        # old_pts_t = [tuple(pt.tolist()[0]) for pt in old_pts]
-        old_pts_t = [tuple(pt.tolist()) for pt in old_pts]
-        print("o_p_t", len(old_pts), len(new_indexes), old_pts_t[0])
-        new_indexes = new_indexes.tolist()
-        stp = self.all_stpoints
-        if stp is None or len(stp) == 0:
-            return None
-        new_pts = stp[new_indexes]
-        new_pts_t = [tuple(pt.tolist()) for pt in new_pts]
-        # dictionary of stxy to new index
-        print("stp[ind]", stp[new_indexes[0]], stp[new_indexes[0]].tolist())
-        ptdict = {tuple(stp[ind].tolist()):ind for ind in new_indexes}
-        # if an stxy location is only in old_pts, 
-        # add it with an index of -1
-        for opt in old_pts_t:
-            # print("opt", opt)
-            if opt not in ptdict:
-                # print("not in dict", opt)
-                # ptdict[opt] = -1
-                if len(old_pts) == len(new_indexes): # point moved
-                    # nindset = set(new_indexes)
-                    # oindset = set(ptdict.values())
-                    # missing = nindset-oindset
-                    nstset = set(new_pts_t)
-                    ostset = set(old_pts_t)
-                    # print("missing", missing)
-                    # print("diffs", nstset-ostset, ostset-nstset)
-                    # print(nindset, oindset)
-                    opt = (ostset-nstset).pop()
-                    npt = (nstset-ostset).pop()
-                    ptdict[opt] = ptdict[npt]
-
-                    pass
-                elif len(old_pts)-1 == len(new_indexes): # point deleted
-                    ptdict[opt] = -1
-                    pass
-                else: # not sure how we got here
-                    print("confused")
-                    ptdict[opt] = -1
-                    pass
-        # new indexes of old points
-        old_indexes = [ptdict[loc] for loc in old_pts_t]
-        # print("a")
-
-        old_trgls = None
-        try:
-            # print("a1")
-            # print(old_pts)
-            old_trgls = Delaunay(old_pts).simplices
-            # print("a2")
-        except Exception as err:
-            err = str(err).splitlines()[0]
-            print("trglDiff triangulation error with old pts: %s"%err)
-        if old_trgls is None:
-            return None
-        # print("b")
-
-        new_trgls = None
-        try:
-            new_trgls = Delaunay(new_pts).simplices
-        except Exception as err:
-            err = str(err).splitlines()[0]
-            print("trglDiff triangulation error with new pts: %s"%err)
-        if new_trgls is None:
-            return None
-        # print("c")
-
-        # print("old", old_trgls.dtype)
-        # print(old_trgls)
-        # print(old_indexes)
-        nst = len(self.stpoints)
-        r_old_trgls = self.rotateToMin(np.array(old_indexes)[old_trgls])
-        r_old_trgls = r_old_trgls[r_old_trgls[:,0] >= 0]
-        r_old_trgls = r_old_trgls[(r_old_trgls < nst).all(axis=1)]
-        r_new_trgls = self.rotateToMin(np.array(new_indexes)[new_trgls])
-        r_new_trgls = r_new_trgls[r_new_trgls[:,0] >= 0]
-        r_new_trgls = r_new_trgls[(r_new_trgls < nst).all(axis=1)]
-        # print("old")
-        # print(r_old_trgls)
-        # print("new")
-        # print(r_new_trgls)
-
-        unique_old_trgls = Utils.setDiff2DIndex(r_old_trgls, r_new_trgls)
-        unique_new_trgls = Utils.setDiff2DIndex(r_new_trgls, r_old_trgls)
-        # print("uo", unique_old_trgls)
-        # print("un", unique_new_trgls)
-        return r_old_trgls[unique_old_trgls], r_new_trgls[unique_new_trgls]
-
-    def replaceTrgls(self, uo, un):
-        ltrgls = self.trgls().copy()
-        if len(uo) > 0:
-            orows = []
-            for o in uo:
-                row = (ltrgls == o).all(axis=1).nonzero()[0]
-                # print("row", row, len(row))
-                if len(row) == 0:
-                    continue
-                orows.append(row[0])
-            # print("before", len(ltrgls))
-            # print("orows", orows)
-            ltrgls = np.delete(ltrgls, orows, 0)
-            # print("after", len(ltrgls))
-        if len(un) > 0:
-            ltrgls = np.concatenate((ltrgls, un), axis=0)
-        self.fragment.trgls = ltrgls
-
-
     def movePoint(self, index, new_vijk, update_xyz, update_st):
         # print("mp")
         vv = self.cur_volume_view
         new_gijk = vv.transposedIjkToGlobalPosition(new_vijk)
         new_uijk = vv.transposedIjkToIjk(new_vijk)
         old_vijk = self.vpoints[index, :3]
-        # old_gijk = vv.transposedIjkToGlobalPosition(old_vijk)
         old_uijk = vv.transposedIjkToIjk(old_vijk)
-        # dvijk = new_vijk-old_vijk
-        # dgijk = [new_gijk[i]-old_gijk[i] for i in range(3)]
         duijk = [new_uijk[i]-old_uijk[i] for i in range(3)]
         # print("movePoint", dvijk, dgijk, duijk)
-        # axes = self.fragment.pointThreeAxes(index, self.vpoints[:,:3], self.stpoints, self.trgls())
         # print("a")
         axes = self.localStAxes(index)
         # print("b")
         if axes is None:
             print("TrglFragmentView.movePoint: could not compute axes")
             return
-        # rdvijk = (axes.T)@dvijk
-        # rdgijk = (axes.T)@dgijk
         rduijk = (axes.T)@duijk
-        # rdgijk = (axes)@dgijk
         old_stxy = self.all_stpoints[index]
-        # new_stxy = old_stxy-rdvijk[:2]
-        # new_stxy = old_stxy+rdvijk[:2]
-        # new_stxy = old_stxy+rdgijk[:2]
         new_stxy = old_stxy+rduijk[:2]
-        # new_stxy = old_stxy
-        # new_gijk = self.cur_volume_view.transposedIjkToGlobalPosition(new_vijk)
         # print(self.fragment.gpoints)
         # print(match, new_gijk)
         if update_xyz:
@@ -1141,9 +893,6 @@ class TrglFragmentView(BaseFragmentView):
             # call instead of setting self.stpoints
             # self.retriangulateAndMove(index, new_stxy)
 
-            # TODO: don't hardwire half_width
-            # half_width = 100
-            # half_width = 20
             half_width = 3*self.avg_st_len
             # print("hw", half_width, self.avg_st_len)
 
@@ -1159,35 +908,6 @@ class TrglFragmentView(BaseFragmentView):
                     print("un", ntrgls)
                     # self.replaceTrgls(otrgls, ntrgls)
                     self.fragment.trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
-            """
-            old_indexes = self.pointIndexesInWindow(new_stxy, half_width, True)
-            # print("oi", old_indexes.shape, old_indexes)
-            '''
-            print("ind", index)
-            if self.stpoints is not None:
-                print("lstp", len(self.stpoints))
-            else:
-                print("self.stpoints is None!")
-                return
-            '''
-
-            old_pts = self.all_stpoints[old_indexes]
-            self.stpoints[index, :] = new_stxy
-            self.all_stpoints[index, :] = new_stxy
-            new_indexes = self.pointIndexesInWindow(new_stxy, half_width, True)
-            result = self.trglDiff(old_pts, new_indexes)
-            if result is not None:
-                otrgls, ntrgls = result
-                if len(otrgls) > 0 or len(ntrgls) > 0:
-                    print("uo", otrgls)
-                    print("un", ntrgls)
-                    self.replaceTrgls(otrgls, ntrgls)
-            # self.retriangulateAll()
-            """
-        # print(self.fragment.gpoints)
-        # modifyZsurf = False
-        # if len(self.workingVpoints()) > 0 and self.workingVpoints()[index]:
-        #     modifyZsurf = True
 
         self.fragment.notifyModified()
         return True
@@ -1216,44 +936,9 @@ class TrglFragmentView(BaseFragmentView):
                 trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
                 trgls[trgls>index] -= 1
                 self.fragment.trgls = trgls
-        '''
-        # print("hw", half_width, self.avg_st_len)
-        old_stxy = self.all_stpoints[index]
-        old_indexes = self.pointIndexesInWindow(old_stxy, half_width, True)
-        # print("oi", old_indexes.shape, old_indexes)
-        old_pts = self.all_stpoints[old_indexes]
-        # self.stpoints[index, :] = new_stxy
-        # self.all_stpoints[index, :] = new_stxy
-        # new_indexes = self.pointIndexesInWindow(old_stxy, half_width, True)
-        new_indexes = old_indexes[old_indexes != index]
-        # print("o,n", len(old_indexes), len(new_indexes))
-        result = self.trglDiff(old_pts, new_indexes)
-        print("lt1", len(self.fragment.trgls))
-        # deleted_trgls = (self.fragment.trgls == index).any(axis=1).nonzero()[0]
-        # print("deleted", deleted_trgls)
-        if result is not None:
-            otrgls, ntrgls = result
-            if len(otrgls) > 0 or len(ntrgls) > 0:
-                print("uo", otrgls)
-                print("un", ntrgls)
-                self.replaceTrgls(otrgls, ntrgls)
-        print("lt2", len(self.fragment.trgls))
-        trgls = self.fragment.trgls.copy()
-        print("lt3", len(trgls))
-        deleted_trgls = (trgls == index).any(axis=1).nonzero()[0]
-        print("deleted", deleted_trgls)
-        trgls = np.delete(trgls, deleted_trgls, 0)
-        print("lt4", len(trgls))
-              # new_trgls = all_trgls[(all_trgls < len(stp)).all(axis=1), :]
-        trgls[trgls>index] -= 1
-        print("lt5", len(trgls))
-        '''
-        # self.fragment.trgls = trgls
 
         self.fragment.gpoints = np.delete(self.fragment.gpoints, index, 0)
         self.fragment.gtpoints = np.delete(self.fragment.gtpoints, index, 0)
-        # self.vpoints = np.delete(self.vpoints, index, 0)
-        # self.fpoints = np.delete(self.fpoints, index, 0)
         self.stpoints = np.delete(self.stpoints, index, 0)
         self.all_stpoints = np.delete(self.all_stpoints, index, 0)
 
@@ -1263,13 +948,6 @@ class TrglFragmentView(BaseFragmentView):
         
         self.setLocalPoints(True, False)
         self.fragment.notifyModified()
-
-        '''
-        if self.stpoints is None:
-            print("self.stpoints is None a")
-        else:
-            print("lstp a", len(self.stpoints))
-        '''
 
     # returns list of trgl indexes
     def regionByNormals(self, ptind, max_angle):
@@ -1328,9 +1006,6 @@ class TrglPointSet:
         self.indexes = np.nonzero(ptsb)[0]
         self.pts = all_stpoints[self.indexes]
         self.nstpoints = nstpoints
-        # pts_t = [tuple(pt.tolist()) for pt in self.pts]
-        # self.pt2ind = {
-        #         tuple(all_stpoints[ind].tolist()):ind for ind in self.indexes}
 
     def deletePoint(self, index):
         row = (self.indexes == index).nonzero()[0]
@@ -1396,7 +1071,6 @@ class TrglPointSet:
 
         nst = self.nstpoints
         trgls = self.rotateToMin(np.array(self.indexes)[trgls])
-        # trgls = trgls[trgls[:,0] >= 0]
         trgls = trgls[(trgls < nst).all(axis=1)]
         return trgls
 
@@ -1412,116 +1086,4 @@ class TrglPointSet:
         # print("ptsb", ptsb.shape, ptsb.dtype, ptsb.sum())
         # return np.argwhere(ptsb)
         return np.nonzero(ptsb)[0]
-
-    def trglDiffOld(self, old_pts, new_indexes):
-        # old_pts_t = [tuple(pt.tolist()[0]) for pt in old_pts]
-        old_pts_t = [tuple(pt.tolist()) for pt in old_pts]
-        print("o_p_t", len(old_pts), len(new_indexes), old_pts_t[0])
-        new_indexes = new_indexes.tolist()
-        stp = self.all_stpoints
-        if stp is None or len(stp) == 0:
-            return None
-        new_pts = stp[new_indexes]
-        new_pts_t = [tuple(pt.tolist()) for pt in new_pts]
-        # dictionary of stxy to new index
-        print("stp[ind]", stp[new_indexes[0]], stp[new_indexes[0]].tolist())
-        ptdict = {tuple(stp[ind].tolist()):ind for ind in new_indexes}
-        # if an stxy location is only in old_pts, 
-        # add it with an index of -1
-        for opt in old_pts_t:
-            # print("opt", opt)
-            if opt not in ptdict:
-                # print("not in dict", opt)
-                # ptdict[opt] = -1
-                if len(old_pts) == len(new_indexes): # point moved
-                    # nindset = set(new_indexes)
-                    # oindset = set(ptdict.values())
-                    # missing = nindset-oindset
-                    nstset = set(new_pts_t)
-                    ostset = set(old_pts_t)
-                    # print("missing", missing)
-                    # print("diffs", nstset-ostset, ostset-nstset)
-                    # print(nindset, oindset)
-                    opt = (ostset-nstset).pop()
-                    npt = (nstset-ostset).pop()
-                    ptdict[opt] = ptdict[npt]
-
-                    pass
-                elif len(old_pts)-1 == len(new_indexes): # point deleted
-                    ptdict[opt] = -1
-                    pass
-                else: # not sure how we got here
-                    print("confused")
-                    ptdict[opt] = -1
-                    pass
-        # new indexes of old points
-        old_indexes = [ptdict[loc] for loc in old_pts_t]
-        # print("a")
-
-        old_trgls = None
-        try:
-            # print("a1")
-            # print(old_pts)
-            old_trgls = Delaunay(old_pts).simplices
-            # print("a2")
-        except Exception as err:
-            err = str(err).splitlines()[0]
-            print("trglDiff triangulation error with old pts: %s"%err)
-        if old_trgls is None:
-            return None
-        # print("b")
-
-        new_trgls = None
-        try:
-            new_trgls = Delaunay(new_pts).simplices
-        except Exception as err:
-            err = str(err).splitlines()[0]
-            print("trglDiff triangulation error with new pts: %s"%err)
-        if new_trgls is None:
-            return None
-        # print("c")
-
-        # print("old", old_trgls.dtype)
-        # print(old_trgls)
-        # print(old_indexes)
-        nst = len(self.stpoints)
-        r_old_trgls = self.rotateToMin(np.array(old_indexes)[old_trgls])
-        r_old_trgls = r_old_trgls[r_old_trgls[:,0] >= 0]
-        r_old_trgls = r_old_trgls[(r_old_trgls < nst).all(axis=1)]
-        r_new_trgls = self.rotateToMin(np.array(new_indexes)[new_trgls])
-        r_new_trgls = r_new_trgls[r_new_trgls[:,0] >= 0]
-        r_new_trgls = r_new_trgls[(r_new_trgls < nst).all(axis=1)]
-        # print("old")
-        # print(r_old_trgls)
-        # print("new")
-        # print(r_new_trgls)
-
-        unique_old_trgls = Utils.setDiff2DIndex(r_old_trgls, r_new_trgls)
-        unique_new_trgls = Utils.setDiff2DIndex(r_new_trgls, r_old_trgls)
-        # print("uo", unique_old_trgls)
-        # print("un", unique_new_trgls)
-        return r_old_trgls[unique_old_trgls], r_new_trgls[unique_new_trgls]
-
-    def replaceTrglsOld(self, uo, un):
-        ltrgls = self.trgls().copy()
-        if len(uo) > 0:
-            orows = []
-            for o in uo:
-                row = (ltrgls == o).all(axis=1).nonzero()[0]
-                # print("row", row, len(row))
-                if len(row) == 0:
-                    continue
-                orows.append(row[0])
-            # print("before", len(ltrgls))
-            # print("orows", orows)
-            ltrgls = np.delete(ltrgls, orows, 0)
-            # print("after", len(ltrgls))
-        if len(un) > 0:
-            ltrgls = np.concatenate((ltrgls, un), axis=0)
-        self.fragment.trgls = ltrgls
-
-
-
-
-
 
