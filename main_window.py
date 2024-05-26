@@ -1074,10 +1074,12 @@ class MainWindow(QMainWindow):
         # TODO remove after testing
         # show_tracking_cursors = True
         # if not show_tracking_cursors:
-        if not self.getTrackingCursorsVisible():
+        if tijk is None or not self.getTrackingCursorsVisible():
             self.cursor_tijk = None
             self.cursor_stxyz = None
             self.cursor_window = None
+            if tijk is None:
+                self.drawSlices()
             return
         self.cursor_tijk = tijk
         self.cursor_stxyz = stxyz
@@ -1792,13 +1794,13 @@ class MainWindow(QMainWindow):
         self.fragments_table.model().endResetModel()
         return result
 
-    def addPointToCurrentFragment(self, tijk):
+    def addPointToCurrentFragment(self, tijk, stxy=None):
         cur_frag_view = self.project_view.mainActiveVisibleFragmentView()
         if cur_frag_view is None:
             print("no current fragment view set")
             return
         self.fragments_table.model().beginResetModel()
-        cur_frag_view.addPoint(tijk)
+        cur_frag_view.addPoint(tijk, stxy)
         self.fragments_table.model().endResetModel()
 
     def deleteNearbyNode(self):

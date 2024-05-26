@@ -682,6 +682,15 @@ class TrglFragmentView(BaseFragmentView):
         self.all_stpoints = np.concatenate((stp, self.outside_stpoints), axis=0)
         self.retriangulateAll()
         timer.time("retriangulate time")
+
+    def stxyToUv(self, stxy):
+        stxy = stxy - self.st_shift
+        a,b,c,d = self.st_abcd
+        det = a*d-b*c
+        u = (d*stxy[0] - b*stxy[1])/det
+        v = (-c*stxy[0] + a*stxy[1])/det
+        return (u,v)
+        
         
     def setVolumeViewDirection(self, direction):
         self.setWorkingRegion(-1, 0.)
@@ -884,11 +893,17 @@ class TrglFragmentView(BaseFragmentView):
         new_stxy = old_stxy+rduijk[:2]
         # print(self.fragment.gpoints)
         # print(match, new_gijk)
+
+        if update_st and self.pointExists(new_stxy):
+            print("move: point already exists")
+            return
+
         if update_xyz:
             self.fragment.gpoints[index, :] = new_gijk
             # print("c")
             self.setLocalPoints(True, False)
             # print("d")
+
         if update_st:
             # call instead of setting self.stpoints
             # self.retriangulateAndMove(index, new_stxy)
@@ -899,6 +914,9 @@ class TrglFragmentView(BaseFragmentView):
             ops = TrglPointSet(self.all_stpoints, len(self.stpoints), new_stxy, half_width)
             self.stpoints[index, :] = new_stxy
             self.all_stpoints[index, :] = new_stxy
+            uv = self.stxyToUv(new_stxy)
+            self.fragment.gtpoints[index, :] = uv
+            self.stpoints[index, :] = new_stxy
             nps = TrglPointSet(self.all_stpoints, len(self.stpoints), new_stxy, half_width)
             result = TrglPointSet.trglDiff(ops, nps)
             if result is not None:
@@ -911,6 +929,60 @@ class TrglFragmentView(BaseFragmentView):
 
         self.fragment.notifyModified()
         return True
+
+    def pointExists(self, stxy):
+        existing = np.nonzero((self.stpoints == stxy).all(axis=1))[0]
+        return len(existing)
+
+    def addPoint(self, tijk, stxy):
+        print("tf add point", tijk, stxy)
+        if stxy is None:
+            print("TrglFragment.addPoint failed because stxy not given")
+            return
+
+        vv = self.cur_volume_view
+        gijk = vv.transposedIjkToGlobalPosition(tijk)
+
+        # existing = np.nonzero((self.stpoints == stxy).all(axis=1))[0]
+        # if len(existing > 0):
+        #     print("Point already exists at stxy", stxy)
+        #     return
+        if self.pointExists(stxy):
+            print("Point already exists at stxy", stxy)
+            return
+
+        self.fragment.gpoints = np.append(self.fragment.gpoints, [gijk], axis=0)
+        # TODO: need to put uv, not stxy, here!
+        uv = self.stxyToUv(stxy)
+        nstp = len(self.stpoints)
+        self.fragment.gtpoints = np.append(self.fragment.gtpoints, [uv], axis=0)
+        self.stpoints = np.append(self.stpoints, [stxy], axis=0)
+        self.all_stpoints = np.insert(self.all_stpoints, nstp, stxy, axis=0)
+
+        astxy = np.array(stxy)
+        # agijk = np.array(gijk)
+        half_width = 3*self.avg_st_len
+        ops = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
+        nps = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
+        ops.deletePoint(nstp)
+        # nps.addPointAtEnd(stxy)
+
+        result = TrglPointSet.trglDiff(ops, nps)
+        if result is not None:
+            otrgls, ntrgls = result
+            if len(otrgls) > 0 or len(ntrgls) > 0:
+                print("uo", otrgls)
+                print("un", ntrgls)
+                trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
+                # trgls[trgls>index] -= 1
+                self.fragment.trgls = trgls
+
+        # prevent setScaledTexturePoints from running
+        # when setLocalPoints is called
+        self.prev_pt_count = len(self.fragment.gpoints)
+        
+        self.setLocalPoints(True, False)
+        self.fragment.notifyModified()
 
     def deletePointByIndex(self, index):
         if index < 0:
@@ -1005,15 +1077,27 @@ class TrglPointSet:
                 (all_stpoints <= pt+half_width)).all(axis=1)
         self.indexes = np.nonzero(ptsb)[0]
         self.pts = all_stpoints[self.indexes]
+        # number of normal (not outside) points in all_stpoints
         self.nstpoints = nstpoints
+        bs = np.nonzero(self.indexes < nstpoints)[0]
+        # number of normal (not outside) points in self.indexes
+        self.nipoints = bs[-1]
 
     def deletePoint(self, index):
         row = (self.indexes == index).nonzero()[0]
         self.indexes = np.delete(self.indexes, row, 0)
         self.pts = np.delete(self.pts, row, 0)
 
-    def addPoint(self, stxy, index):
-        pass
+    # insert at end of normal (not outside) points
+    def addPointAtEnd(self, stxy):
+        # print("indexes before", self.indexes.shape)
+        self.indexes = np.insert(self.indexes, self.nipoints, self.nstpoints)
+        # print("indexes after", self.indexes.shape)
+        # print("pts before", self.pts.shape)
+        self.pts = np.insert(self.pts, self.nipoints, stxy, axis=0)
+        # print("pts after", self.pts.shape)
+        self.nstpoints += 1
+        self.nipoints += 1
 
     @staticmethod
     def trglDiff(oldps, newps):

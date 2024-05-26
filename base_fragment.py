@@ -252,7 +252,7 @@ class BaseFragmentView:
     def triangulate(self):
         return None
 
-    def addPoint(self, tijk):
+    def addPoint(self, tijk, stxy):
         return None
 
     def deletePointByIndex(self, index):

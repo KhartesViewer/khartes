@@ -1738,7 +1738,8 @@ class FragmentView(BaseFragmentView):
             vijk = (fijk[2], fijk[1], fijk[0])
         return vijk
 
-    def addPoint(self, tijk):
+    # stxy is ignored
+    def addPoint(self, tijk, stxy):
         # ijk using volume-view's direction
         fijk = self.vijkToFijk(tijk)
 

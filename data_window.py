@@ -173,7 +173,8 @@ class DataWindow(QLabel):
         j = tijk[self.jIndex] + int(dy/zoom)
         return (i, j)
 
-    def xyToTijk(self, xy):
+    # overridden in GLSurfaceWindow
+    def xyToTijk(self, xy, return_none_if_outside=False):
         ij = self.xyToIj(xy)
         tijk = self.ijToTijk(ij)
         return tijk
@@ -420,6 +421,9 @@ class DataWindow(QLabel):
     def computeTfStartPoint(self):
         return self.volume_view.ijktf
 
+    def addPoint(self, tijk):
+        self.window.addPointToCurrentFragment(tijk)
+
     def mousePressEvent(self, e):
         if self.volume_view is None:
             return
@@ -433,11 +437,12 @@ class DataWindow(QLabel):
                 # print('Shift+Click')
                 # ij = self.xyToIj(wxy)
                 # tijk = self.ijToTijk(ij)
-                tijk = self.xyToTijk(wxy)
+                tijk = self.xyToTijk(wxy, True)
                 # print("adding point at",tijk)
-                if self.currentFragmentView() is not None:
+                if tijk is not None and self.currentFragmentView() is not None:
                     self.setWaitCursor()
-                    self.window.addPointToCurrentFragment(tijk)
+                    # self.window.addPointToCurrentFragment(tijk)
+                    self.addPoint(tijk)
                     nearbyNode = self.findNearbyNode(wxy)
                     if not self.setNearbyNode(nearbyNode):
                         self.window.drawSlices()
@@ -553,7 +558,10 @@ class DataWindow(QLabel):
             return
         # ij = self.xyToIj(xy)
         # ijk = self.ijToTijk(ij)
-        ijk = self.xyToTijk(xy)
+        ijk = self.xyToTijk(xy, True)
+        if ijk is None:
+            self.window.setStatusText("Outside")
+            return
         gijk = self.volume_view.transposedIjkToGlobalPosition(ijk)
         # gi,gj,gk = gijk
         vol = self.volume_view.volume
@@ -655,6 +663,7 @@ class DataWindow(QLabel):
     # def setIjkOrStxyTf(self, tf):
     #     self.setIjkTf(tf)
 
+    # overridden in GLSurfaceWindow
     def setTf(self, tf):
         self.setIjkTf(tf)
 
@@ -737,7 +746,7 @@ class DataWindow(QLabel):
             '''
         # ij = self.xyToIj(mxy)
         # tijk = self.ijToTijk(ij)
-        tijk = self.xyToTijk(mxy)
+        tijk = self.xyToTijk(mxy, True)
         # self.window.setCursorPosition(self, tijk)
         self.setCursorPosition(tijk)
         self.checkCursor()

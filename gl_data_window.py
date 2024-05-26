@@ -147,6 +147,12 @@ class GLDataWindow(DataWindow):
         # print("tf, xy, stxy", tf, xy, stxy)
         self.window.setCursorPosition(self, tijk, stxyz)
 
+    def addPoint(self, tijk):
+        # print("gldw add point", tijk)
+        d = 50
+        stxy = self.stxyInRange(tijk, d)
+        # print("stxy", stxy)
+        self.window.addPointToCurrentFragment(tijk, stxy)
 
     def setStxyTfFromIjkTf(self):
         # dw = self.glw

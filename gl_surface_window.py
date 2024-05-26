@@ -87,12 +87,18 @@ class GLSurfaceWindow(DataWindow):
         return False
 
     def setIjkTf(self, tf):
-        ij = self.tijkToIj(tf)
+        # ij = self.tijkToIj(tf)
         stxy = self.ijkToStxy(tf)
         # print("tf, xy, stxy", tf, xy, stxy)
         if stxy is not None:
             self.volume_view.setStxyTf(stxy)
         self.volume_view.setIjkTf(tf)
+
+    def addPoint(self, tijk):
+        # print("glsw add point", tijk)
+        stxy = self.ijkToStxy(tijk)
+        # print("stxy", stxy)
+        self.window.addPointToCurrentFragment(tijk, stxy)
 
     def computeTfStartPoint(self):
         stxy = self.volume_view.stxytf
@@ -146,7 +152,7 @@ class GLSurfaceWindow(DataWindow):
         nstxy = (ostxy[0]+dx, ostxy[1]+dy)
         return nstxy
 
-    def xyToTijk(self, xy):
+    def xyToTijk(self, xy, return_none_if_outside=False):
         x, y = xy
         iind = self.iIndex
         jind = self.jIndex
@@ -164,7 +170,10 @@ class GLSurfaceWindow(DataWindow):
             return self.volume_view.ijktf
         xyza = xyz_arr[iy, ix]
         if xyza[3] == 0:
-            return self.volume_view.ijktf
+            if return_none_if_outside:
+                return None
+            else:
+                return self.volume_view.ijktf
         i = xyza[iind]
         j = xyza[jind]
         k = xyza[kind]
