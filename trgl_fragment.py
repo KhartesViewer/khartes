@@ -361,6 +361,12 @@ class TrglFragmentView(BaseFragmentView):
         if len(trgl_fragment.trgls) == 0:
             self.mesh_visible = False
 
+    def allowAutoExtrapolation(self):
+        return False
+
+    def allowAutoInterpolation(self):
+        return False
+
     # TODO: if cur_volume_view changed, unset working region
     # NOTE that Fragment.setLocalPoints sets stpoints,
     # but TrglFragment.setLocalPoints does not.
@@ -894,7 +900,7 @@ class TrglFragmentView(BaseFragmentView):
         # print(self.fragment.gpoints)
         # print(match, new_gijk)
 
-        if update_st and self.pointExists(new_stxy):
+        if update_st and (new_stxy != old_stxy).all() and self.pointExists(new_stxy):
             print("move: point already exists")
             return
 
@@ -968,6 +974,8 @@ class TrglFragmentView(BaseFragmentView):
         # nps.addPointAtEnd(stxy)
 
         result = TrglPointSet.trglDiff(ops, nps)
+        if result is None:
+            print("Add point: result is none")
         if result is not None:
             otrgls, ntrgls = result
             if len(otrgls) > 0 or len(ntrgls) > 0:
@@ -976,6 +984,9 @@ class TrglFragmentView(BaseFragmentView):
                 trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
                 # trgls[trgls>index] -= 1
                 self.fragment.trgls = trgls
+            else:
+                print("set local points")
+                self.setLocalPoints(True, False)
 
         # prevent setScaledTexturePoints from running
         # when setLocalPoints is called
@@ -1103,6 +1114,7 @@ class TrglPointSet:
     def trglDiff(oldps, newps):
         old_trgls = oldps.triangulate()
         new_trgls = newps.triangulate()
+        # print("None", old_trgls is None, new_trgls is None)
 
         if old_trgls is None or new_trgls is None:
             return None

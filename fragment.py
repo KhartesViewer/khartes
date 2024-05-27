@@ -956,6 +956,12 @@ class FragmentView(BaseFragmentView):
         # direction
         self.vpoints = np.zeros((0,4), dtype=np.float32)
 
+    def allowAutoExtrapolation(self):
+        return True
+
+    def allowAutoInterpolation(self):
+        return True
+
     def calculateSqCm(self):
         # project_view is None if self.fragment is a working fragment
         # of a TrglFragment
@@ -1762,7 +1768,7 @@ class FragmentView(BaseFragmentView):
             # Move existing point rather than deleting and replacing
             # it, to avoid reindexing the list of points
             print("addPoint: duplicate at", ij, tijk)
-            self.movePoint(matches[0], tijk)
+            self.movePoint(matches[0], tijk, True, False)
             return
         # create new point
         gijk = self.cur_volume_view.transposedIjkToGlobalPosition(tijk)

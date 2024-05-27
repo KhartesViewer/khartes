@@ -225,6 +225,12 @@ class BaseFragmentView:
         self.modified = Utils.timestamp()
         self.local_points_modified = Utils.timestamp()
 
+    def allowAutoExtrapolation(self):
+        return False
+
+    def allowAutoInterpolation(self):
+        return False
+
     def setVolumeView(self, vol_view):
         if vol_view == self.cur_volume_view:
             return

@@ -326,6 +326,8 @@ class DataWindow(QLabel):
             return None
         xys = xyijks[:,0:2]
         curfv = self.currentFragmentView()
+        if not curfv.allowAutoInterpolation():
+            return None
 
         d = 3
         xyl = (xy[0]-d, xy[1]-d)
@@ -899,7 +901,7 @@ class DataWindow(QLabel):
         # TODO: See 
         # https://doc.qt.io/qt-6/qt.html#KeyboardModifier-enum
         # on how ctrl is mapped in MacOS
-        ctrl_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.ControlModifier) != 0
+        alt_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.AltModifier) != 0
         opts = {
             Qt.Key_Left: (1*sgn,0,0),
             Qt.Key_A:    (1*sgn,0,0),
@@ -964,7 +966,7 @@ class DataWindow(QLabel):
                     nij[1] -= d[1]
                     nij[2] -= d[2]
                     self.setWaitCursor()
-                    self.setNearbyNodeIjk(nij, True, not ctrl_pressed)
+                    self.setNearbyNodeIjk(nij, True, not alt_pressed)
         elif not self.isMovingNode and (key == Qt.Key_Backspace or key == Qt.Key_Delete):
             # print("backspace/delete")
             # ijk = self.getNearbyNodeIjk()
@@ -1133,6 +1135,8 @@ class DataWindow(QLabel):
         if volume is None :
             return
         curfv = self.currentFragmentView()
+        if not curfv.allowAutoInterpolation():
+            return
         if self.bounding_nodes_fv != curfv:
             return
         bns = self.bounding_nodes
@@ -1253,6 +1257,8 @@ class DataWindow(QLabel):
             return
         if self.currentFragmentView() is None:
             return
+        if not self.currentFragmentView().allowAutoExtrapolation():
+            return False
         ww = self.size().width()
         wh = self.size().height()
         # ij* are corners of the viewing window, in data coordinates

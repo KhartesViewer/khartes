@@ -149,9 +149,16 @@ class GLDataWindow(DataWindow):
 
     def addPoint(self, tijk):
         # print("gldw add point", tijk)
-        d = 50
-        stxy = self.stxyInRange(tijk, d)
-        # print("stxy", stxy)
+        d = 100
+        stxyz = self.stxyzInRange(tijk, d)
+        print("stxyz", stxyz)
+        maxz = 10
+        if stxyz is None:
+            stxy = None
+        else:
+            stxy = stxyz[:2]
+            if abs(stxyz[2]) > maxz:
+                stxy = None
         self.window.addPointToCurrentFragment(tijk, stxy)
 
     def setStxyTfFromIjkTf(self):
