@@ -64,7 +64,7 @@ def VoidPtr(i):
 
 from utils import Utils
 from data_window import DataWindow
-from gl_data_window import GLDataWindowChild
+from gl_data_window import GLDataWindowChild, fragment_trgls_code, common_offset_code
 
 
 class GLSurfaceWindow(DataWindow):
@@ -633,9 +633,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
     def buildPrograms(self):
         self.xyz_program = self.buildProgram(xyz_code)
         self.slice_program = self.buildProgram(slice_code)
-        trgls_code["geometry"] = trgls_code["geometry_template"] % self.common_offset_code
+        trgls_code["geometry"] = trgls_code["geometry_template"] % common_offset_code
         self.trgls_program = self.buildProgram(trgls_code)
         self.trgl_pts_program = self.buildProgram(trgl_pts_code)
+        self.fragment_trgls_program = self.buildProgram(fragment_trgls_code)
 
     # Rebuild atlas if volume_view or volume_view.direction
     # changes
@@ -674,6 +675,27 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                     aw = (aw*3)//4
             else:
                 self.atlas.setVolumeView(self.volume_view)
+
+
+    def drawUnderlays(self, data):
+        dw = self.gldw
+        volume_view = dw.volume_view
+
+        ww = dw.size().width()
+        wh = dw.size().height()
+        opacity = dw.getDrawOpacity("overlay")
+        bw = dw.getDrawWidth("borders")
+        if bw > 0:
+            bwh = (bw-1)//2
+            axis_color = dw.axisColor(dw.axis)
+            alpha = 1.
+            if dw.getDrawApplyOpacity("borders"):
+                alpha = opacity
+            alpha16 = int(alpha*65535)
+            axis_color[3] = alpha16
+            cv2.rectangle(data, (bwh,bwh), (ww-bwh-1,wh-bwh-1), axis_color, bw)
+            cv2.rectangle(data, (0,0), (ww-1,wh-1), (0,0,0,alpha*65535), 1)
+
 
     # TODO: is map-view scale bar correct?
     def drawOverlays(self, data, label_text):
@@ -752,6 +774,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                 overlay_label_text = "Zoom Level: %d  Chunks: %d"%(zoom_level, len(larr))
                 timera.time("add blocks")
 
+        self.drawAxes(self.trgls_fbo, self.fragment_trgls_program)
+        timera.time("axes")
         self.drawTrgls(self.trgls_fbo, self.trgls_program)
         timera.time("trgls")
 
@@ -993,7 +1017,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # Be sure to clear with alpha = 0
         # so that the slice view isn't blocked!
         f.glClearColor(0.,0.,0.,0.)
-        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
+        # f.glClear(pygl.GL_COLOR_BUFFER_BIT)
         xform = self.stxyXform()
         if xform is None:
             QOpenGLFramebufferObject.bindDefault()
@@ -1094,6 +1118,87 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             self.trgl_pts_program.release()
 
         QOpenGLFramebufferObject.bindDefault()
+
+    def drawAxes(self, fbo, fragment_trgls_program):
+        # bind program, bind fbo, assume vao is already bound
+        f = self.gl
+        dw = self.gldw
+        fvao = self.active_vao
+
+        fbo.bind()
+
+        # Be sure to clear with alpha = 0
+        # so that the slice view isn't blocked!
+        # f.glClearColor(0.,0.,0.,0.)
+        f.glClear(pygl.GL_COLOR_BUFFER_BIT)
+        stxy_xform = self.stxyXform()
+        if stxy_xform is None:
+            QOpenGLFramebufferObject.bindDefault()
+            return
+
+        f.glViewport(0, 0, fbo.width(), fbo.height())
+
+        opacity = dw.getDrawOpacity("overlay")
+        apply_line_opacity = dw.getDrawApplyOpacity("axes")
+        line_alpha = 1.
+        if apply_line_opacity:
+            line_alpha = opacity
+        line_thickness = dw.getDrawWidth("axes")
+        line_thickness = (3*line_thickness)//2
+        # fv = fvao.fragment_view
+        pv = dw.window.project_view
+
+        # if fv.visible and line_thickness != 0 and line_alpha != 0:
+        if line_thickness != 0 and line_alpha != 0:
+            fragment_trgls_program.bind()
+            fragment_trgls_program.setUniformValue("stxform", stxy_xform)
+            fragment_trgls_program.setUniformValue("flag", 1)
+
+            vv = dw.volume_view
+            wsize = QVector2D(fbo.width(), fbo.height())
+            fragment_trgls_program.setUniformValue("window_size", wsize)
+
+            tloc = self.fragment_trgls_program.uniformLocation("thickness")
+            f.glUniform1f(tloc, 1.*line_thickness)
+
+            for axis in range(3):
+                iind, jind = vv.volume.ijIndexesInPlaneOfSlice(axis)
+                kind = axis
+                # qcolor = fv.fragment.color
+                # rgba = list(qcolor.getRgbF())
+                irgb = dw.axisColor(axis)
+                rgba = (irgb[0]/65535, irgb[1]/65535, irgb[2]/65535, line_alpha)
+                # rgba[3] = line_alpha
+                # rgba[axis] = 255.
+                self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
+                mat = np.zeros((4,4), dtype=np.float32)
+                # ww = dw.size().width()
+                # wh = dw.size().height()
+                # print("w h", ww, wh)
+                # TODO: 20000 was hardwired in; this should actually
+                # be twice the size of the scroll (in pixels) in the i axis
+                # and j axis directions?
+                ww = 20000.
+                wh = 20000.
+                zoom = 1.
+                wf = zoom/(.5*ww)
+                hf = zoom/(.5*wh)
+                df = 1/.5
+                cijk = vv.ijktf
+                mat[0][iind] = wf
+                mat[0][3] = -wf*cijk[iind]
+                mat[1][jind] = -hf
+                mat[1][3] = hf*cijk[jind]
+                mat[2][kind] = df
+                mat[2][3] = -df*cijk[kind]
+                mat[3][3] = 1.
+                xyz_xform = QMatrix4x4(mat.flatten().tolist())
+                fragment_trgls_program.setUniformValue("xform", xyz_xform)
+
+                f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size,
+                       pygl.GL_UNSIGNED_INT, VoidPtr(0))
+
+            fragment_trgls_program.release()
 
     def drawTrglXyzs(self, fbo, program):
         f = self.gl

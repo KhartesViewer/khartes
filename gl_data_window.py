@@ -651,9 +651,14 @@ fragment_trgls_code = {
       #version 410 core
 
       uniform mat4 xform;
-      layout(location=3) in vec3 position;
+      uniform mat4 stxform;
+      // uniform int flag;
+      layout(location=3) in vec3 xyz;
+      layout(location=4) in vec2 stxy;
+      out vec4 stxyt;
       void main() {
-        gl_Position = xform*vec4(position, 1.0);
+        gl_Position = xform*vec4(xyz, 1.0);
+        stxyt = stxform*vec4(stxy, 0., 1.0);
       }
     ''',
 
@@ -663,11 +668,17 @@ fragment_trgls_code = {
   
       uniform float thickness;
       uniform vec2 window_size;
+
+      // flag=0: Used by GLDataWindow to draw fragment cross sections
+      // on data slices.
+      // flag=1: Used by GLSurfaceWindow to draw axes on map view
+      uniform int flag;
   
       layout(triangles) in;
       // max_vertices = 10+4 (10 for thick line, 4 for pick line)
       layout(triangle_strip, max_vertices = 14) out;
       flat out int trgl_type;
+      in vec4 stxyt[];
   
       %s
   
@@ -760,8 +771,15 @@ fragment_trgls_code = {
           float db = dist[ijk.y];
           if (da*db > 0 || (da == 0 && db == 0)) continue;
   
-          vec4 pa = gl_in[ijk.x].gl_Position;
-          vec4 pb = gl_in[ijk.y].gl_Position;
+          vec4 pa;
+          vec4 pb;
+          if (flag == 0) {
+            pa = gl_in[ijk.x].gl_Position;
+            pb = gl_in[ijk.y].gl_Position;
+          } else if (flag == 1) {
+            pa = stxyt[ijk.x];
+            pb = stxyt[ijk.y];
+          }
           float fa = abs(da);
           float fb = abs(db);
           vec4 pc = pa;
@@ -808,12 +826,14 @@ fragment_trgls_code = {
         }
         EndPrimitive();
 
-        for (int i=0; i<4; i++) {
-          ivec2 iv = v4[i];
-          gl_Position = pcs[iv.x] + 1.*offsets[iv.y];
-          trgl_type = 1;
-          gl_PrimitiveID = gl_PrimitiveIDIn;
-          EmitVertex();
+        if (flag == 0) {
+          for (int i=0; i<4; i++) {
+            ivec2 iv = v4[i];
+            gl_Position = pcs[iv.x] + 1.*offsets[iv.y];
+            trgl_type = 1;
+            gl_PrimitiveID = gl_PrimitiveIDIn;
+            EmitVertex();
+          }
         }
       }
     ''' % common_offset_code,
@@ -823,6 +843,9 @@ fragment_trgls_code = {
 
       uniform vec4 gcolor;
       uniform vec4 icolor;
+
+      // uniform int flag;
+
       // out vec4 fColor;
       layout(location = 0) out vec4 frag_color;
       layout(location = 1) out vec4 pick_color;
@@ -864,7 +887,7 @@ class GLDataWindowChild(QOpenGLWidget):
         # synchronous mode is said to be much slower
         # self.logging_mode = QOpenGLDebugLogger.SynchronousLogging
         self.logging_mode = QOpenGLDebugLogger.AsynchronousLogging
-        self.common_offset_code = common_offset_code
+        # self.common_offset_code = common_offset_code
         self.localInit()
 
     def localInit(self):
