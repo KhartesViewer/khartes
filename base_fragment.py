@@ -224,6 +224,7 @@ class BaseFragmentView:
         self.mesh_visible = True
         self.modified = Utils.timestamp()
         self.local_points_modified = Utils.timestamp()
+        self.normal_offset = 0.
 
     def allowAutoExtrapolation(self):
         return False

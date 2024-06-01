@@ -86,6 +86,18 @@ class GLSurfaceWindow(DataWindow):
     def allowMouseToDragNode(self):
         return False
 
+    def ctrlArrowKey(self, direction):
+        print("cak", direction)
+        if direction[1] == 0:
+            return
+        offset = self.window.getNormalOffsetOnCurrentFragment()
+        if offset is None:
+            return
+        offset += direction[1]
+        self.window.setNormalOffsetOnCurrentFragment(offset)
+        print("offset", self.window.getNormalOffsetOnCurrentFragment())
+        
+
     def setIjkTf(self, tf):
         # ij = self.tijkToIj(tf)
         stxy = self.ijkToStxy(tf)
@@ -337,10 +349,12 @@ xyz_code = {
       uniform mat4 xform;
       layout(location=3) in vec3 xyz;
       layout(location=4) in vec2 stxy;
+      layout(location=5) in vec3 normal;
+      float normal_offset;
       out vec3 fxyz;
       void main() {
         gl_Position = xform*vec4(stxy, 0., 1.);
-        fxyz = xyz;
+        fxyz = xyz + normal_offset*normal;
       }
     ''',
 
@@ -365,7 +379,7 @@ trgls_code = {
       #version 410 core
 
       uniform mat4 xform;
-      layout(location=3) in vec3 xyz;
+      // layout(location=3) in vec3 xyz;
       layout(location=4) in vec2 stxy;
       // out vec3 fxyz;
       void main() {
@@ -532,6 +546,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # This corresponds to the line in the vertex shader(s):
         # layout(location=4) in vec3 stxy;
         self.stxy_location = 4
+        self.normal_location = 5
         self.message_prefix = "sw"
         # Cache these so we can recalculate the atlas 
         # whenever volume_view or volume_view.direction change
@@ -744,7 +759,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         if self.active_vao is None or self.active_vao.fragment_view != mfv:
             self.active_vao = FragmentMapVao(
-                    mfv, self.xyz_location, self.stxy_location, self.gl)
+                    mfv, self.xyz_location, self.stxy_location, self.normal_location, self.gl)
 
         fvao = self.active_vao
 
@@ -761,7 +776,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         xform = self.stxyXform()
         self.xyz_arr = None
-        overlay_label_text = ""
+        overlay_label_text = "%s  Offset: %g" % (mfv.fragment.name, mfv.normal_offset)
         if xform is not None:
             # NOTE that getBlocks reads from xyz_fbo, which has
             # just been written to
@@ -771,7 +786,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                 if len(larr) >= self.atlas.max_nchunks-1:
                     larr = larr[:self.atlas.max_nchunks-1]
                 self.atlas.addBlocks(larr, dw.window.zarrFutureDoneCallback)
-                overlay_label_text = "Zoom Level: %d  Chunks: %d"%(zoom_level, len(larr))
+                overlay_label_text += "  Zoom Level: %d  Chunks: %d"%(zoom_level, len(larr))
                 timera.time("add blocks")
 
         self.drawAxes(self.trgls_fbo, self.fragment_trgls_program)
@@ -1237,7 +1252,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
 # two attribute buffers: xyz, and stxy (st = scaled texture)
 class FragmentMapVao:
-    def __init__(self, fragment_view, xyz_loc, stxy_loc, gl):
+    def __init__(self, fragment_view, xyz_loc, stxy_loc, normal_loc, gl):
         self.fragment_view = fragment_view
         self.gl = gl
         self.vao = None
@@ -1245,6 +1260,7 @@ class FragmentMapVao:
         self.is_line = False
         self.xyz_loc = xyz_loc
         self.stxy_loc = stxy_loc
+        self.normal_loc = normal_loc
         self.getVao()
 
     def getVao(self):
@@ -1269,6 +1285,7 @@ class FragmentMapVao:
 
         f = self.gl
 
+
         self.xyz_vbo = QOpenGLBuffer()
         self.xyz_vbo.create()
         self.xyz_vbo.bind()
@@ -1287,6 +1304,7 @@ class FragmentMapVao:
         # This needs to be called while the current VAO is bound
         f.glEnableVertexAttribArray(self.xyz_loc)
 
+
         self.stxy_vbo = QOpenGLBuffer()
         self.stxy_vbo.create()
         self.stxy_vbo.bind()
@@ -1303,6 +1321,25 @@ class FragmentMapVao:
         self.stxy_vbo.release()
         # This needs to be called while the current VAO is bound
         f.glEnableVertexAttribArray(self.stxy_loc)
+
+
+        self.normal_vbo = QOpenGLBuffer()
+        self.normal_vbo.create()
+        self.normal_vbo.bind()
+
+        normals = np.ascontiguousarray(fv.normals, dtype=np.float32)
+        self.normals_size = normals.size
+
+        nbytes = normals.size*normals.itemsize
+        self.normal_vbo.allocate(normals, nbytes)
+        f.glVertexAttribPointer(
+                self.normal_loc,
+                normals.shape[1], int(pygl.GL_FLOAT), int(pygl.GL_FALSE), 
+                0, VoidPtr(0))
+        self.normal_vbo.release()
+        # This needs to be called while the current VAO is bound
+        f.glEnableVertexAttribArray(self.normal_loc)
+
 
         self.ibo = QOpenGLBuffer(QOpenGLBuffer.IndexBuffer)
         self.ibo.create()
@@ -1715,12 +1752,15 @@ atlas_data_code = {
 
       uniform mat4 stxy_xform;
       uniform mat4 xyz_xform;
+      uniform float normal_offset;
       layout(location=3) in vec3 xyz;
       layout(location=4) in vec2 stxy;
+      layout(location=5) in vec3 normal;
       out vec4 fxyz;
       void main() {
         gl_Position = stxy_xform*vec4(stxy, 0., 1.);
-        fxyz = xyz_xform*vec4(xyz, 1.);
+        // fxyz = xyz_xform*vec4(xyz, 1.);
+        fxyz = xyz_xform*vec4(xyz+normal_offset*normal, 1.);
       }
     ''',
 
@@ -2181,6 +2221,8 @@ class Atlas:
         self.program.bind()
 
         self.program.setUniformValue("stxy_xform", stxy_xform)
+        normal_offset = fvao.fragment_view.normal_offset
+        self.program.setUniformValue("normal_offset", normal_offset)
 
         uchunks = []
         for key,chunk in reversed(self.chunks.items()):
