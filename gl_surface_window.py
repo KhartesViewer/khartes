@@ -924,7 +924,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # print("nzarr", nzarr.shape, nzarr.dtype)
 
         if len(nzarr) == 0:
-            return [], farr
+            print("zero-length nzarr")
+            print("arr", arr.shape, arr.dtype)
+            return [], farr, zoom_level
 
         nzmin = nzarr.min(axis=0)
         nzmax = nzarr.max(axis=0)
