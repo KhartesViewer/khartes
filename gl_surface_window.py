@@ -756,6 +756,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         pv = dw.window.project_view
         mfv = self.active_fragment
+        if mfv is None:
+            # print("No fragment visible")
+            return
 
         if self.active_vao is None or self.active_vao.fragment_view != mfv:
             self.active_vao = FragmentMapVao(
