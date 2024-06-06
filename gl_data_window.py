@@ -1209,8 +1209,8 @@ class GLDataWindowChild(QOpenGLWidget):
                 rgba[3] = math.sqrt(line_alpha)
                 iindex = self.indexed_fvs.index(fv)
                 findex = iindex/65535.
-                self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
-                self.fragment_trgls_program.setUniformValue("icolor", findex,0.,0.,1.)
+                self.fragment_lines_program.setUniformValue("gcolor", *rgba)
+                self.fragment_lines_program.setUniformValue("icolor", findex,0.,0.,1.)
                 vao = fvao.getVao()
                 vao.bind()
     
@@ -1756,6 +1756,7 @@ class FragmentVao:
         self.vbo.create()
         self.vbo.bind()
         pts3d = np.ascontiguousarray(fv.vpoints[:,:3], dtype=np.float32)
+        # print("pts3d", pts3d.shape, pts3d.dtype)
         self.pts_size = pts3d.size
 
         nbytes = pts3d.size*pts3d.itemsize
