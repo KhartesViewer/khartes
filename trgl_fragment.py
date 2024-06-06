@@ -937,8 +937,8 @@ class TrglFragmentView(BaseFragmentView):
             if result is not None:
                 otrgls, ntrgls = result
                 if len(otrgls) > 0 or len(ntrgls) > 0:
-                    print("uo", otrgls)
-                    print("un", ntrgls)
+                    # print("uo", otrgls)
+                    # print("un", ntrgls)
                     # self.replaceTrgls(otrgls, ntrgls)
                     self.fragment.trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
 
@@ -988,8 +988,8 @@ class TrglFragmentView(BaseFragmentView):
         if result is not None:
             otrgls, ntrgls = result
             if len(otrgls) > 0 or len(ntrgls) > 0:
-                print("uo", otrgls)
-                print("un", ntrgls)
+                # print("uo", otrgls)
+                # print("un", ntrgls)
                 trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
                 # trgls[trgls>index] -= 1
                 self.fragment.trgls = trgls
@@ -1022,8 +1022,8 @@ class TrglFragmentView(BaseFragmentView):
         if result is not None:
             otrgls, ntrgls = result
             if len(otrgls) > 0 or len(ntrgls) > 0:
-                print("uo", otrgls)
-                print("un", ntrgls)
+                # print("uo", otrgls)
+                # print("un", ntrgls)
                 # self.replaceTrgls(otrgls, ntrgls)
                 trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
                 trgls[trgls>index] -= 1
