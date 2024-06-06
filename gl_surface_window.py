@@ -177,7 +177,7 @@ class GLSurfaceWindow(DataWindow):
         ix = round(x*ratio)
         iy = round(y*ratio)
         if iy < 0 or iy >= xyz_arr.shape[0] or ix < 0 or ix >= xyz_arr.shape[1]:
-            print("error", x, y, xyz_arr.shape)
+            # print("error", x, y, xyz_arr.shape)
             return self.volume_view.ijktf
         xyza = xyz_arr[iy, ix]
         if xyza[3] == 0:
@@ -565,6 +565,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
     def localInitializeGL(self):
         f = self.gl
+        # Color when no project is loaded
         f.glClearColor(.6,.3,.3,1.)
         self.buildPrograms()
         self.buildSliceVao()
@@ -640,7 +641,12 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         # print("paintGL (surface)")
         f = self.gl
-        f.glClearColor(.6,.3,.6,1.)
+        # This is the color users will see when
+        # no fragment is active.
+        # If a fragment is active but not in range,
+        # this is NOT the color that will be shone.
+        # f.glClearColor(.6,.3,.6,1.)
+        f.glClearColor(.1,.1,.1,1.)
         f.glClear(pygl.GL_COLOR_BUFFER_BIT)
         self.paintSlice()
 
@@ -741,6 +747,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         timera = Utils.Timer()
         timera.active = False
         timerb = Utils.Timer()
+        timerb.active = False
         # timerb.active = False
         dw = self.gldw
         volume_view = self.volume_view
