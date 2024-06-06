@@ -1788,6 +1788,21 @@ class MainWindow(QMainWindow):
         self.fragments_table.model().scrollToRow(index)
         self.drawSlices()
 
+    def getNormalOffsetOnCurrentFragment(self):
+        cur_frag_view = self.project_view.mainActiveVisibleFragmentView()
+        if cur_frag_view is None:
+            print("no current fragment view set")
+            return None
+        return cur_frag_view.normal_offset
+
+    def setNormalOffsetOnCurrentFragment(self, offset):
+        cur_frag_view = self.project_view.mainActiveVisibleFragmentView()
+        if cur_frag_view is None:
+            print("no current fragment view set")
+            return
+        cur_frag_view.normal_offset = offset
+        self.drawSlices()
+
     def movePoint(self, fragment_view, index, new_tijk, update_xyz, update_st):
         self.fragments_table.model().beginResetModel()
         result = fragment_view.movePoint(index, new_tijk, update_xyz, update_st)

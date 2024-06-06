@@ -888,6 +888,9 @@ class DataWindow(QLabel):
         self.setCursor(self.waitCursor)
         # self.window.app.processEvents()
 
+    def ctrlArrowKey(self, direction):
+        pass
+
     # Note that this is called from MainWindow whenever MainWindow
     # catches a keyPressEvent; since the DataWindow widgets never
     # have focus, they never receive keyPressEvents directly
@@ -902,6 +905,7 @@ class DataWindow(QLabel):
         # https://doc.qt.io/qt-6/qt.html#KeyboardModifier-enum
         # on how ctrl is mapped in MacOS
         alt_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.AltModifier) != 0
+        ctrl_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.ControlModifier) != 0
         opts = {
             Qt.Key_Left: (1*sgn,0,0),
             Qt.Key_A:    (1*sgn,0,0),
@@ -918,6 +922,9 @@ class DataWindow(QLabel):
         }
         if key in opts:
             d = opts[key]
+            if ctrl_pressed:
+                self.ctrlArrowKey(d)
+                return
             # if self.inAddNodeMode() or (self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0):
             if self.localNearbyNodeIndex < 0 and self.nearby_tiff_corner < 0:
                 # pan

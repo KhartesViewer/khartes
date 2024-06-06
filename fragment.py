@@ -1036,6 +1036,8 @@ class FragmentView(BaseFragmentView):
         gai = self.cur_volume_view.volume.globalAxisFromTransposedAxis(0, self.fragment.direction)
         gaj = self.cur_volume_view.volume.globalAxisFromTransposedAxis(1, self.fragment.direction)
         self.stpoints = self.fragment.gpoints[:,(gai,gaj)]
+        self.normals = np.zeros((npts, 3), dtype=np.float32)
+        self.normals[:,2] = -1.
         # self.xyzmin = (0.,0.,0.)
         # self.xyzmin = (0.,0.,0.)
         self.working_vpoints = np.full((len(self.vpoints),),True)

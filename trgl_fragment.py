@@ -358,6 +358,8 @@ class TrglFragmentView(BaseFragmentView):
         self.prev_pt_count = 0
         self.stpoints = None
         self.all_stpoints = None
+        self.normals = None
+        self.normal_offset = 0.
         if len(trgl_fragment.trgls) == 0:
             self.mesh_visible = False
 
@@ -371,6 +373,7 @@ class TrglFragmentView(BaseFragmentView):
     # NOTE that Fragment.setLocalPoints sets stpoints,
     # but TrglFragment.setLocalPoints does not.
     def setLocalPoints(self, recursion_ok=True, always_update_zsurfs=True):
+        # print("set local points")
         self.local_points_modified = Utils.timestamp()
         if self.cur_volume_view is None:
             self.vpoints = np.zeros((0,4), dtype=np.float32)
@@ -389,6 +392,12 @@ class TrglFragmentView(BaseFragmentView):
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
         self.calculateSqCm()
         self.setScaledTexturePoints()
+        # timer = Utils.Timer()
+        # print("computing normals")
+        # TODO: compute only modified normals
+        self.normals = BaseFragment.pointNormals(self.vpoints[:,:3], self.trgls())
+        # timer.time("normals")
+        
         # self.createTetras()
         # self.setWorkingRegion(35555, 60.)
         # TODO:
@@ -928,8 +937,8 @@ class TrglFragmentView(BaseFragmentView):
             if result is not None:
                 otrgls, ntrgls = result
                 if len(otrgls) > 0 or len(ntrgls) > 0:
-                    print("uo", otrgls)
-                    print("un", ntrgls)
+                    # print("uo", otrgls)
+                    # print("un", ntrgls)
                     # self.replaceTrgls(otrgls, ntrgls)
                     self.fragment.trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
 
@@ -979,8 +988,8 @@ class TrglFragmentView(BaseFragmentView):
         if result is not None:
             otrgls, ntrgls = result
             if len(otrgls) > 0 or len(ntrgls) > 0:
-                print("uo", otrgls)
-                print("un", ntrgls)
+                # print("uo", otrgls)
+                # print("un", ntrgls)
                 trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
                 # trgls[trgls>index] -= 1
                 self.fragment.trgls = trgls
@@ -1013,8 +1022,8 @@ class TrglFragmentView(BaseFragmentView):
         if result is not None:
             otrgls, ntrgls = result
             if len(otrgls) > 0 or len(ntrgls) > 0:
-                print("uo", otrgls)
-                print("un", ntrgls)
+                # print("uo", otrgls)
+                # print("un", ntrgls)
                 # self.replaceTrgls(otrgls, ntrgls)
                 trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
                 trgls[trgls>index] -= 1

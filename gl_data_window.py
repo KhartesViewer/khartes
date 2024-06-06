@@ -45,6 +45,7 @@ from PyQt5.QtCore import (
         )
 
 import time
+import math
 import collections
 import traceback
 
@@ -134,6 +135,17 @@ class GLDataWindow(DataWindow):
         print(i,j,ci,cj)
         return (x,y)
     '''
+
+    def ctrlArrowKey(self, direction):
+        # print("cak", direction)
+        if direction[1] == 0:
+            return
+        offset = self.window.getNormalOffsetOnCurrentFragment()
+        if offset is None:
+            return
+        offset += direction[1]
+        self.window.setNormalOffsetOnCurrentFragment(offset)
+        # print("offset", self.window.getNormalOffsetOnCurrentFragment())
 
     def setCursorPosition(self, tijk):
         ij = self.tijkToIj(tijk)
@@ -625,7 +637,7 @@ fragment_lines_code = {
       // The most important thing about empty_color
       // is that alpha = 0., so with blending enabled,
       // empty_color is effectively not drawn
-      const vec4 empty_color = vec4(0.,0.,0.,0.);
+      const vec4 empty_color = vec4(1.,1.,1.,0.);
       flat in int trgl_type;
 
       void main()
@@ -655,9 +667,12 @@ fragment_trgls_code = {
       // uniform int flag;
       layout(location=3) in vec3 xyz;
       layout(location=4) in vec2 stxy;
+      layout(location=5) in vec3 normal;
+      uniform float normal_offset;
       out vec4 stxyt;
       void main() {
-        gl_Position = xform*vec4(xyz, 1.0);
+        // gl_Position = xform*vec4(xyz, 1.0);
+        gl_Position = xform*vec4(xyz+normal_offset*normal, 1.0);
         stxyt = stxform*vec4(stxy, 0., 1.0);
       }
     ''',
@@ -897,6 +912,7 @@ class GLDataWindowChild(QOpenGLWidget):
         # This is specified by the shader line:
         # layout(location=3) in vec3 postion;
         self.position_location = 3
+        self.normal_location = 5
         self.message_prefix = "dw"
 
     def dwKeyPressEvent(self, e):
@@ -1086,6 +1102,18 @@ class GLDataWindowChild(QOpenGLWidget):
         line_thickness = dw.getDrawWidth("line")
         line_thickness = (3*line_thickness)//2
 
+        # In the fragment shader of the fragment_trgls_code program, 
+        # each fragment is written to two textures.  But we only
+        # want each given fragment to be drawn onto one particular texture,
+        # not on both.  So when drawing to the texture that we don't
+        # really want to draw on, we draw a dummy fragment with alpha = 0.
+        # So that this dummy fragment is effectively ignored, we
+        # need to use alpha blending.
+        # Because alpha itself is multiplied by alpha during 
+        # alpha blending, we need to supply the sqrt of line_alpha below.
+        f.glEnable(pygl.GL_BLEND)
+        f.glBlendFunc(pygl.GL_SRC_ALPHA, pygl.GL_ONE_MINUS_SRC_ALPHA)
+
         self.fragment_trgls_program.bind()
         self.fragment_trgls_program.setUniformValue("xform", xform)
         self.fragment_trgls_program.setUniformValue("window_size", dw.size())
@@ -1103,14 +1131,26 @@ class GLDataWindowChild(QOpenGLWidget):
         new_fragment_vaos = {}
         self.indexed_fvs = []
         lines = []
-        for fv in dw.fragmentViews():
+        fvs = list(dw.fragmentViews())
+        if line_thickness == 0 or line_alpha == 0:
+            fvs = []
+        pv = dw.window.project_view
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        # draw main active fragment last, so that it
+        # overdraws any other co-located fragments
+        if mfv in fvs:
+            fvs.remove(mfv)
+            fvs.append(mfv)
+        else:
+            mfv = None
+
+
+        for fv in fvs:
             if not fv.visible:
-                continue
-            if line_thickness == 0 or line_alpha == 0:
                 continue
             # self.fragment_trgls_program.setUniformValue("icolor", 1.,0.,0.,1.)
             if fv not in self.fragment_vaos:
-                fvao = FragmentVao(fv, self.position_location, self.gl)
+                fvao = FragmentVao(fv, self.position_location, self.normal_location, self.gl)
                 self.fragment_vaos[fv] = fvao
             fvao = self.fragment_vaos[fv]
             new_fragment_vaos[fv] = fvao
@@ -1121,17 +1161,39 @@ class GLDataWindowChild(QOpenGLWidget):
                 continue
             qcolor = fv.fragment.color
             rgba = list(qcolor.getRgbF())
-            rgba[3] = line_alpha
+            # rgba[3] = line_alpha
+            rgba[3] = math.sqrt(line_alpha)
             iindex = len(self.indexed_fvs)
             findex = iindex/65535.
             self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
             self.fragment_trgls_program.setUniformValue("icolor", findex,0.,0.,1.)
+            self.fragment_trgls_program.setUniformValue("normal_offset", 0.)
             vao = fvao.getVao()
             vao.bind()
 
             f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size, 
                              pygl.GL_UNSIGNED_INT, VoidPtr(0))
             vao.release()
+
+        if mfv is not None:
+            fvao = self.fragment_vaos[mfv]
+            normal_offset = fvao.fragment_view.normal_offset
+            if not fvao.is_line and normal_offset != 0.:
+                # rgba = [1., 1., 1., line_alpha]
+                qcolor = mfv.fragment.color
+                rgba = list(qcolor.getRgbF())
+                rgba[3] = .8*math.sqrt(line_alpha)
+                self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
+                self.fragment_trgls_program.setUniformValue("icolor", 0.,0.,0.,1.)
+                self.fragment_trgls_program.setUniformValue("normal_offset", normal_offset)
+                vao = fvao.getVao()
+                vao.bind()
+
+                f.glDrawElements(pygl.GL_TRIANGLES, fvao.trgl_index_size, 
+                             pygl.GL_UNSIGNED_INT, VoidPtr(0))
+                vao.release()
+
+
         self.fragment_trgls_program.release()
 
         if len(lines) > 0:
@@ -1144,11 +1206,11 @@ class GLDataWindowChild(QOpenGLWidget):
     
                 qcolor = fv.fragment.color
                 rgba = list(qcolor.getRgbF())
-                rgba[3] = line_alpha
+                rgba[3] = math.sqrt(line_alpha)
                 iindex = self.indexed_fvs.index(fv)
                 findex = iindex/65535.
-                self.fragment_trgls_program.setUniformValue("gcolor", *rgba)
-                self.fragment_trgls_program.setUniformValue("icolor", findex,0.,0.,1.)
+                self.fragment_lines_program.setUniformValue("gcolor", *rgba)
+                self.fragment_lines_program.setUniformValue("icolor", findex,0.,0.,1.)
                 vao = fvao.getVao()
                 vao.bind()
     
@@ -1183,7 +1245,7 @@ class GLDataWindowChild(QOpenGLWidget):
         # nearby_node = (pv.nearby_node_fv, pv.nearby_node_index)
         dw.nearbyNode = -1
         i0 = 0
-        for fv in dw.fragmentViews():
+        for fv in fvs:
             if not fv.visible:
                 continue
             node_thickness = default_node_thickness
@@ -1202,7 +1264,7 @@ class GLDataWindowChild(QOpenGLWidget):
             if not fv.mesh_visible:
                 color = fv.fragment.cvcolor
             rgba = [c/65535 for c in color]
-            rgba[3] = node_alpha
+            rgba[3] = math.sqrt(node_alpha)
             # print(color, rgba)
             self.fragment_pts_program.setUniformValue("node_color", *rgba)
 
@@ -1234,7 +1296,7 @@ class GLDataWindowChild(QOpenGLWidget):
             dw.cur_frag_pts_fv.extend([fv]*len(pts))
 
             if fv not in self.fragment_vaos:
-                fvao = FragmentVao(fv, self.position_location, self.gl)
+                fvao = FragmentVao(fv, self.position_location, self.normal_location, self.gl)
                 self.fragment_vaos[fv] = fvao
             fvao = self.fragment_vaos[fv]
             new_fragment_vaos[fv] = fvao
@@ -1246,6 +1308,11 @@ class GLDataWindowChild(QOpenGLWidget):
             vao.release()
 
         self.fragment_pts_program.release()
+
+        # Disable blending, which was set up at the top
+        # of this routine
+        f.glDisable(pygl.GL_BLEND)
+
         if len(xyptslist) > 0:
             dw.cur_frag_pts_xyijk = np.concatenate(xyptslist, axis=0)
         else:
@@ -1486,20 +1553,7 @@ class GLDataWindowChild(QOpenGLWidget):
         overlay_tex.bind()
         self.slice_program.setUniformValue(oloc, ounit)
 
-        # In the fragment shader of the fragment_trgls_code program, 
-        # each fragment is written to two textures.  But we only
-        # want each given fragment to be drawn onto one particular texture,
-        # not on both.  So when drawing to the texture that we don't
-        # really want to draw on, we draw a dummy fragment with alpha = 0.
-        # So that this dummy fragment is effectively ignored, we
-        # need to use alpha blending.
-        # I'm not sure whether enabling alpha blending affects
-        # only the current fbo, or whether it affects every drawing
-        # operation everywhere from now on.
-        f.glEnable(pygl.GL_BLEND)
-        f.glBlendFunc(pygl.GL_SRC_ALPHA, pygl.GL_ONE_MINUS_SRC_ALPHA)
         self.drawFragments()
-        # f.glDisable(pygl.GL_BLEND)
 
         self.slice_program.bind()
         floc = self.slice_program.uniformLocation("fragments_sampler")
@@ -1671,13 +1725,14 @@ class GLDataWindowChild(QOpenGLWidget):
 
 
 class FragmentVao:
-    def __init__(self, fragment_view, position_location, gl):
+    def __init__(self, fragment_view, position_location, normal_location, gl):
         self.fragment_view = fragment_view
         self.gl = gl
         self.vao = None
         self.vao_modified = ""
         self.is_line = False
         self.position_location = position_location
+        self.normal_location = normal_location
         self.getVao()
 
     def getVao(self):
@@ -1696,10 +1751,12 @@ class FragmentVao:
         # print("updating vao")
         self.vao.bind()
 
+
         self.vbo = QOpenGLBuffer()
         self.vbo.create()
         self.vbo.bind()
         pts3d = np.ascontiguousarray(fv.vpoints[:,:3], dtype=np.float32)
+        # print("pts3d", pts3d.shape, pts3d.dtype)
         self.pts_size = pts3d.size
 
         nbytes = pts3d.size*pts3d.itemsize
@@ -1715,6 +1772,28 @@ class FragmentVao:
 
         # This needs to be called while the current VAO is bound
         f.glEnableVertexAttribArray(vloc)
+
+
+        self.normal_vbo = QOpenGLBuffer()
+        self.normal_vbo.create()
+        self.normal_vbo.bind()
+        normals = np.ascontiguousarray(fv.normals, dtype=np.float32)
+        self.normals_size = normals.size
+
+        nbytes = normals.size*normals.itemsize
+        self.normal_vbo.allocate(normals, nbytes)
+
+        nloc = self.normal_location
+        f = self.gl
+        f.glVertexAttribPointer(
+                nloc,
+                normals.shape[1], int(pygl.GL_FLOAT), int(pygl.GL_FALSE), 
+                0, VoidPtr(0))
+        self.normal_vbo.release()
+
+        # This needs to be called while the current VAO is bound
+        f.glEnableVertexAttribArray(nloc)
+
 
         self.ibo = QOpenGLBuffer(QOpenGLBuffer.IndexBuffer)
         self.ibo.create()
