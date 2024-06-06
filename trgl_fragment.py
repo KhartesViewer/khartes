@@ -395,7 +395,7 @@ class TrglFragmentView(BaseFragmentView):
         # timer = Utils.Timer()
         # print("computing normals")
         # TODO: compute only modified normals
-        self.normals = BaseFragment.faceNormals(self.vpoints[:,:3], self.trgls())
+        self.normals = BaseFragment.pointNormals(self.vpoints[:,:3], self.trgls())
         # timer.time("normals")
         
         # self.createTetras()

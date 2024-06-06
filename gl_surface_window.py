@@ -87,7 +87,7 @@ class GLSurfaceWindow(DataWindow):
         return False
 
     def ctrlArrowKey(self, direction):
-        print("cak", direction)
+        # print("cak", direction)
         if direction[1] == 0:
             return
         offset = self.window.getNormalOffsetOnCurrentFragment()
@@ -95,8 +95,7 @@ class GLSurfaceWindow(DataWindow):
             return
         offset += direction[1]
         self.window.setNormalOffsetOnCurrentFragment(offset)
-        print("offset", self.window.getNormalOffsetOnCurrentFragment())
-        
+        # print("offset", self.window.getNormalOffsetOnCurrentFragment())
 
     def setIjkTf(self, tf):
         # ij = self.tijkToIj(tf)
@@ -350,7 +349,7 @@ xyz_code = {
       layout(location=3) in vec3 xyz;
       layout(location=4) in vec2 stxy;
       layout(location=5) in vec3 normal;
-      float normal_offset;
+      uniform float normal_offset;
       out vec3 fxyz;
       void main() {
         gl_Position = xform*vec4(stxy, 0., 1.);
