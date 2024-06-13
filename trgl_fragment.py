@@ -43,6 +43,8 @@ class TrglFragment(BaseFragment):
         for line in fd:
             line = line.strip()
             words = line.split()
+            if words == []: # prevent crash on empty line
+                continue
             if words[0][0] == '#':
                 if len(words) > 2: 
                     if words[1] == "Created:":
