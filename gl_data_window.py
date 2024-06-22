@@ -1175,7 +1175,7 @@ class GLDataWindowChild(QOpenGLWidget):
                              pygl.GL_UNSIGNED_INT, VoidPtr(0))
             vao.release()
 
-        if mfv is not None:
+        if mfv is not None and mfv in self.fragment_vaos:
             fvao = self.fragment_vaos[mfv]
             normal_offset = fvao.fragment_view.normal_offset
             if not fvao.is_line and normal_offset != 0.:
