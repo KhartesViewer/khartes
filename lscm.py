@@ -106,6 +106,8 @@ class LSCM:
         self.angles = trglangles
         # print("angles", self.angles)
 
+    # TODO: adjust angles only if point is not on a 
+    # boundary, and sum is < 2 pi
     # if sum(angles around a point) is > 2 pi, reduce
     # the angles proportionally.  Don't make any changes
     # if the sum is < 2 pi (this can happen if the point
@@ -118,10 +120,8 @@ class LSCM:
         points = self.points
         trgls = self.trgls
         sums = np.zeros(len(points), dtype=np.float32)
-        # indexed_angles = np.stack((trgls.flatten(), angles.flatten()), axis=1)
-        # sums[indexed_angles[:,0]] += indexed_angles[:,1]
         print(trgls.shape, angles.shape)
-        # sums[trgls.flatten()] += angles.flatten()
+
         # https://stackoverflow.com/questions/60481343/numpy-sum-over-repeated-entries-in-index-array
         np.add.at(sums, trgls.flatten(), angles.flatten())
         sums /= 2*np.pi
@@ -130,12 +130,8 @@ class LSCM:
         print("adjusted", (factors < 1).sum())
         angles *= factors[trgls]
         print("adjusted", (angles[:,:] != self.angles[:,:]).sum())
+        # TODO: should return angles instead of setting them
         self.angles = angles
-
-
-        # print("sums")
-        # print(sums)
-
 
     def computeUvs(self):
         return self.computeUvsFromXyzs()
@@ -151,13 +147,9 @@ class LSCM:
         points = self.points
         trgls = self.trgls
         constraints = self.constraints
-        # if angles is None or len(angles) < 3:
         if angles is None:
             print("Not enough angles")
             return None
-        # if points is None or len(points) < 3:
-        #     print("Not enough points")
-        #     return None
         if trgls is None or len(trgls) == 0:
             print("No triangles")
             return None
@@ -176,11 +168,6 @@ class LSCM:
         # The point with the largest angle should be moved to index 2
         axis1 = np.full(nt, 1, dtype=np.int32)
         print(angles.shape, rindex.shape, axis1.shape)
-
-        # rtrgls = np.roll(trgls, 2-rindex, axis1)
-        # rangles = np.roll(angles, (2-rindex).tolist(), axis1.tolist())
-        # print(angles)
-        # print(2-rindex)
 
         # roll trgls and angles along axis=1, according
         # to (2 - rindex), which give the per-row value of the shift.
@@ -216,37 +203,13 @@ class LSCM:
         cs = ratio*np.cos(rangles[:,0])
         ones = np.full(ratio.shape, 1., dtype=np.float32)
         zeros = np.zeros(ratio.shape, dtype=np.float32)
-        # twos = np.full(ratio.shape, 2., dtype=np.float32)
-        # threes = np.full(ratio.shape, 3., dtype=np.float32)
-        # fours = np.full(ratio.shape, 4., dtype=np.float32)
 
         # m has shape nt, 3, 2, 2
         # in other words, m has a 2x2 matrix for
         # each vertex of each trgl
         m = np.zeros((nt, 3, 2, 2), dtype=np.float32)
 
-        '''
-        m[:, 0, 0, 0] = cs-1
-        m[:, 0, 0, 1] = sn
-        m[:, 0, 1, 0] = -sn
-        m[:, 0, 1, 1] = cs-1
-
-        m[:, 1, 0, 0] = -cs
-        m[:, 1, 0, 1] = -sn
-        m[:, 1, 1, 0] = sn
-        m[:, 1, 1, 1] = -cs
-
-        m[:, 2, 0, 0] = ones
-        m[:, 2, 0, 1] = zeros
-        m[:, 2, 1, 0] = zeros
-        m[:, 2, 1, 1] = ones
-        '''
-
         m[:, 0] = np.array([[cs-1, sn],  [-sn, cs-1]]).transpose(2,0,1)
-        # m[:, 0] = np.array([[ones, twos],  [threes, fours]]).transpose(2,0,1)
-        # print("m after 0")
-        # print(m)
-        # exit()
         m[:, 1] = np.array([[-cs,  -sn], [sn,  -cs]]).transpose(2,0,1)
         m[:, 2] = np.array([[ones, zeros], [zeros, ones]]).transpose(2,0,1)
         # print("m")
@@ -255,15 +218,6 @@ class LSCM:
         minds = np.indices(m.shape)
         # print("minds")
         # print(minds)
-
-        '''
-        mflat = np.stack(
-                (minds[0].flatten(),
-                 minds[1].flatten(),
-                 minds[2].flatten(),
-                 minds[3].flatten(),
-                 m.flatten()), axis=1)
-        '''
 
         # print((minds[0].flatten()*2+minds[2].flatten()).shape)
         # print((rtrgls[:, minds[1].flatten()]*2+minds[3].flatten()).shape)
@@ -278,58 +232,6 @@ class LSCM:
 
         # print("m_sparse")
         # print(m_sparse)
-
-        '''
-        # create a sparse matrix.  For each non-zero point
-        # in the matrix need the trgl index, the pt index, and
-        # the value at that point
-        # mx = trglm[:,:,0]
-        # my = trglm[:,:,1]
-        # mxval = mx.flatten()
-        # myval = my.flatten()
-
-        # triangle indices
-        # mtind = np.indices((nt, 3))[0].flatten()
-        mtind = np.arange(nt).astype(np.int32)
-
-        # point indices
-        # mptind = trgls.flatten()
-        # m_sparse = np.stack((mtind, mptind, mxval, myval), axis=1)
-        # print(mtind.shape, mptind.shape, sn.shape, (cs-1).shape)
-        # m_sparse = np.stack((mtind, mptind, 
-        #                      cs-1, sn, -sn, cs-1,
-        #                      -cs, -sn, sn, -cs,
-        #                      1, 0, 0, 1), axis=1)
-
-        # ms000 = np.stack(4*mtind, 2*trgls[:,0], m[:, :, 0, 0])
-        # ms001 = np.stack(4*mtind, 2*trgls[:,0], m[:, :, 0, 0])
-        # print(mtind.shape, trgls[:,0].shape, m[:, 0].reshape(-1,4).shape)
-        ms0 = np.concatenate((mtind[:,np.newaxis], rtrgls[:,0][:,np.newaxis], m[:, 0].reshape(-1,4)), axis=1)
-        # print(ms0)
-        ms1 = np.concatenate((mtind[:,np.newaxis], rtrgls[:,1][:,np.newaxis], m[:, 1].reshape(-1,4)), axis=1)
-        ms2 = np.concatenate((mtind[:,np.newaxis], rtrgls[:,2][:,np.newaxis], m[:, 2].reshape(-1,4)), axis=1)
-        msall = np.concatenate((ms0, ms1, ms2), axis=0)
-
-        # TODO: need to split free from pinned points 
-        # in msall
-
-        msall[:,0] *= 2
-        msall[:,1] *= 2
-        ms00 = msall[:,(0,1,2+0)]
-        ms00[:,0] += 0
-        ms00[:,1] += 0
-        ms01 = msall[:,(0,1,2+1)]
-        ms01[:,0] += 0
-        ms01[:,1] += 1
-        ms10 = msall[:,(0,1,2+2)]
-        ms10[:,0] += 1
-        ms10[:,1] += 0
-        ms11 = msall[:,(0,1,2+3)]
-        ms11[:,0] += 1
-        ms11[:,1] += 1
-
-        m_sparse = np.concatenate((ms00, ms01, ms10, ms11), axis=0)
-        '''
 
         # constraint indices
         # NOTE that cindex is not sorted
@@ -360,7 +262,6 @@ class LSCM:
         # print("where", np.nonzero(isfree)[0])
         pt2mf[2*free_ind] = 2*np.arange(nfp)
         pt2mf[2*free_ind+1] = 2*np.arange(nfp)+1
-        # pt2mf[isfree] = np.arange(nfp)
         # print("pt2mf", pt2mf)
 
         # renumber the pt indices in mf_sparse to use
@@ -376,22 +277,6 @@ class LSCM:
         AJ = mf_sparse[:,1]
         A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(2*nt, 2*nfp))
 
-        # A_coo = np.concatenate((ms0, ms1, ms2), axis=0)
-        # print(A_coo)
-        '''
-        AV = mf_sparse[:,2]
-        AI = mf_sparse[:,0]
-        AJ = mf_sparse[:,1]
-        # A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(3*nt, 4*nfp))
-        A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(2*nt, 2*nfp))
-        '''
-
-        # coo
-        # A_coo = np.concatenate((ms0, ms1, ms2), axis=0)
-        # complete matrix (free plus pinned) has nt
-        # rows, and 2*na columns.
-
-
         # pinned points in sparse array
         mp_sparse = m_sparse[np.isin(m_sparse[:,1]//2, constraints[:,0])]
         # print("mp_sparse", mp_sparse)
@@ -400,10 +285,6 @@ class LSCM:
         # each element either contains the corresponding mp pt index,
         # or -1 if original point is free
         pt2mp = np.full((2*npt), -1, dtype=np.int32)
-        # pt2mp[~isfree] = np.arange(ncp)
-        # pinned_ind = np.nonzero(~isfree)[0]
-        # pt2mp[2*pinned_ind] = 2*np.arange(ncp)
-        # pt2mp[2*pinned_ind+1] = 2*np.arange(ncp)+1
         # NOTE: cindex is not sorted
         pt2mp[2*cindex] = 2*np.arange(ncp)
         pt2mp[2*cindex+1] = 2*np.arange(ncp)+1
@@ -438,15 +319,10 @@ class LSCM:
         # print("x", x)
         print("diagnostics", diagnostics)
         uv = np.zeros((npt, 2), dtype=np.float32)
-        # mf2pt = np.arange(npt)[pt2mf >= 0]
-        # uv[isfree, :] = x.reshape(2, nfp).transpose()
         uv[isfree, :] = x.reshape(nfp, 2)
-        # uv[~isfree, :] = constraints[:,(1,2)]
         uv[cindex, :] = constraints[:,(1,2)]
         # print("uv", uv)
         return uv
-
-
 
     def computeUvsFromXyzs(self):
         timer = Utils.Timer()
@@ -492,14 +368,9 @@ class LSCM:
         # choose the axis (x, y, z) that is most
         # orthogonal to normvec
         orth = np.zeros((nt, 3), dtype=np.float32)
-        # ones = np.full(nt, 1., dtype=np.float32)
-        # print("orth 0", orth.shape)
-        # For some reason, this way is very slow!
-        # orth[:,cmin] = 1.
 
         rows = np.ogrid[:nt]
         orth[rows, cmin] = 1.
-        # orth[:,cmin] = ones
         # print("orth", orth.shape)
 
         # compute a local x axis and a local y axis that are
@@ -524,8 +395,6 @@ class LSCM:
         dT[dT==0.] = 1.
         trglm = trglw / np.sqrt(dT)[:,np.newaxis,np.newaxis]
         # print("trglm", trglm.shape)
-        # trglwx = trglw[:,:,0]
-        # trglwy = trglw[:,:,1]
 
         # create a sparse matrix.  For each non-zero point
         # in the matrix need the trgl index, the pt index, and
