@@ -9,7 +9,7 @@ from trgl_fragment import TrglFragment
 from base_fragment import BaseFragment
 from utils import Utils
 
-class LSCM:
+class UVMapper:
     def __init__(self, points, trgls):
         self.points = points
         self.trgls = trgls
@@ -50,7 +50,6 @@ class LSCM:
         if self.neighbors is None:
             self.createNeighbors()
         self.boundaries = np.argwhere(self.neighbors[:,:] < 0)
-        # print("bds", self.boundaries)
 
     def onBoundaryArray(self):
         if self.boundaries is None:
@@ -82,12 +81,10 @@ class LSCM:
             bds = self.boundaries
             pt0 = self.points[self.trgls[bds[:,0], (bds[:,1]+1)%3]]
             pt1 = self.points[self.trgls[bds[:,0], (bds[:,1]+2)%3]]
-            # print("pt0", pt0)
             d = pt1-pt0
             l2 = (d*d).sum(axis=1)
             bdy_index = np.argmax(l2)
         bd = self.boundaries[bdy_index]
-        # bd = self.boundaries[-1]
         pt0 = self.trgls[bd[0], (bd[1]+1)%3]
         pt1 = self.trgls[bd[0], (bd[1]+2)%3]
         return pt0, pt1
@@ -110,11 +107,6 @@ class LSCM:
         # that is, vector from pt 0 to pt 2, vector from
         # pt 1 to pt 0, and vector from pt 2 to pt 1
         trglvecs = np.roll(trglxyz, 1, axis=1) - trglxyz
-        # print(dtrgl[:2])
-        # print(d02[:2])
-        # print(d10[:2])
-        # print(d21[:2])
-        # print("dtrgl", dtrgl)
 
         # length of each vector
         trgllens = np.sqrt((trglvecs*trglvecs).sum(axis=2))
@@ -131,9 +123,7 @@ class LSCM:
         trglndps = (-trglnvecs*np.roll(trglnvecs, -1, axis=1)).sum(axis=2)
         # angle in radians is arccos of dot product of normalized vectors
         trglangles = np.arccos(trglndps)
-        # print(trglangles)
         self.angles = trglangles
-        # print("angles", self.angles)
 
     # adjust angles if point is not on a 
     # boundary, and sum is < (2 pi - min_deficit).
@@ -148,25 +138,18 @@ class LSCM:
         sums = np.zeros(len(points), dtype=np.float64)
         print(trgls.shape, angles.shape)
         is_on_boundary = self.onBoundaryArray()
-        # print("iob", is_on_boundary)
 
         # https://stackoverflow.com/questions/60481343/numpy-sum-over-repeated-entries-in-index-array
         np.add.at(sums, trgls.flatten(), angles.flatten())
-        # sums = np.abs(sums)
-        # sums /= 2*np.pi
         factors = np.full(len(points), 1., dtype=np.float64)
-        # print("sums", sums)
         has_deficit = np.logical_and(np.logical_and(~is_on_boundary, sums < (2*np.pi-min_deficit)), sums > 0)
-        # print("hd", has_deficit)
         factors[has_deficit] = (2*np.pi)/sums[has_deficit]
-        print("adjusted", (factors > 1).sum())
+        # print("adjusted", (factors > 1).sum())
         angles *= factors[trgls]
         # Try to prevent case where angle = 0
         tol = .001
         angles[angles < tol] = tol
-        print("adjusted", (angles[:,:] != self.angles[:,:]).sum())
-        # TODO: should return angles instead of setting them
-        # self.angles = angles
+        # print("adjusted", (angles[:,:] != self.angles[:,:]).sum())
         return angles
 
     def computeUvs(self):
@@ -177,9 +160,6 @@ class LSCM:
         if self.angles is None:
             self.createAngles()
             timer.time("angles created")
-            # self.adjustAngles()
-            # adjusted = self.adjustedAngles(1.)
-            # timer.time("angles adjusted")
         adjusted_angles = self.adjustedAngles(1.)
         points = self.points
         trgls = self.trgls
@@ -191,9 +171,7 @@ class LSCM:
             return None
 
         interior_points_bool = np.logical_and(~self.onBoundaryArray(), self.usedInTrglArray())
-        # interior_points_bool = ~self.onBoundaryArray()
         interior_points = np.where(interior_points_bool)[0]
-        # print("ip", interior_points)
 
         nt = trgls.shape[0]
         npt = points.shape[0]
@@ -201,7 +179,6 @@ class LSCM:
         print("nt, npt, nipt", nt, npt, nipt)
         pt2ipt = np.full((npt), -1, dtype=np.int64)
         pt2ipt[interior_points] = np.arange(nipt)
-        # inverse (ipt2pt) already exists: interior_points
 
         # Matrix A has nt+2*nipt rows and 3*nt columns
         # Vector b has 3*nt elements
@@ -216,32 +193,21 @@ class LSCM:
         # Vertex consistency (internal points only):
         # (but start with all points, not just internal)
         A1triplet = np.stack((trgls.flatten(), tptid.flatten(), np.broadcast_to(1., 3*nt)), axis=1)
-        # print("A1t")
-        # print(A1triplet)
         # Convert pt index to interior-point index
         A1triplet[:,0] = pt2ipt[A1triplet[:,0].astype(np.int64)]
         # eliminate non-interior points
         A1triplet = A1triplet[A1triplet[:,0] >= 0]
-        # print("A1t")
-        # print(A1triplet)
-        # print("A1t", A1triplet.shape)
         pt_angle_sum = np.zeros(npt, dtype=np.float64)
         np.add.at(pt_angle_sum, trgls.flatten(), adjusted_angles.flatten())
         pt_angle_sum = pt_angle_sum[interior_points_bool]
         pt_angle_sum = 2*np.pi - pt_angle_sum
-        # print(pt_angle_sum)
         b1 = pt_angle_sum
-        # print("b1", b1.shape)
 
         # Triangle consistency:
         A2triplet = np.stack((tgrid[0].flatten(), tptid.flatten(), np.broadcast_to(1., 3*nt)), axis=1)
-        # print("A2triplet")
-        # print(A2triplet)
         A2triplet[:,0] += nipt
 
         b2 = np.pi - adjusted_angles.sum(axis=1)
-        # print("b2")
-        # print(b2)
 
         # Wheel consistency (internal points only):
         # cotangent of angles
@@ -253,34 +219,20 @@ class LSCM:
         A3triplet = np.concatenate((A3left, A3right), axis=0)
         A3triplet[:,0] = pt2ipt[A3triplet[:,0].astype(np.int64)]
         A3triplet = A3triplet[A3triplet[:,0] >= 0]
-        # print("A3")
-        # print(A3triplet)
-
-        # TODO: testing
-        A3test = np.zeros(nipt, dtype=np.float64)
-        np.add.at(A3test, A3triplet[:,0].astype(np.int64), A3triplet[:,2])
-        # print(A3test)
 
         A3triplet[:,0] += nt + nipt
 
-        # dct = np.roll(ct, -1, axis=1) - np.roll(ct, 1, axis=1)
         # log of sine of angles
         ls = np.log(np.sin(adjusted_angles))
         # difference between the two angles opposite a point
-        # dls = np.roll(ls, -1, axis=1) - np.roll(ls, 1, axis=1)
         b3 = np.zeros(npt, dtype=np.float64) 
         # notice the minus sign before ls
         np.add.at(b3, np.roll(trgls, 1, axis=1).flatten(), -ls.flatten())
         np.add.at(b3, np.roll(trgls, -1, axis=1).flatten(), ls.flatten())
         b3 = b3[interior_points_bool]
-        # print("b3")
-        # print(b3)
 
         Atriplet = np.concatenate((A1triplet, A2triplet, A3triplet), axis=0)
         b = np.concatenate((b1, b2, b3))
-        # Atriplet = np.concatenate((A1triplet, A2triplet), axis=0)
-        # print("t dtypes", A1triplet.dtype, A2triplet.dtype, A3triplet.dtype, Atriplet.dtype)
-        # b = np.concatenate((b1, b2))
 
         Atriplet[:,2] *= adjusted_angles.flatten()[Atriplet[:,1].astype(np.int64)]
 
@@ -288,40 +240,18 @@ class LSCM:
         AI = Atriplet[:,0]
         AJ = Atriplet[:,1]
         A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(nt+2*nipt, 3*nt))
-        # A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(nt+nipt, 3*nt))
 
-        ''''''
-        # print("calling tocsr")
         Acsc = A_sparse.tocsc()
-        # print("calling transpose")
         At = Acsc.transpose()
         timer.time("  created Acsc, At")
-        # print("creating splu")
         AAt = Acsc@At
-        # print(type(AAt))
         lu = sparse.linalg.splu(AAt)
         timer.time("  created splu")
-        # print("calling lu solver")
-        # x = lu.solve(At@b)
         x = At@lu.solve(b)
         timer.time("  solved splu")
         print("x min max", x.min(), x.max())
-        ''''''
-
-        '''
-        res = sparse.linalg.lsmr(A_sparse, b)
-        diagnostics = res[1:]
-        print("diagnostics", diagnostics)
-        x = res[0]
-        # print("x")
-        # print(x)
-        print("x min max", x.min(), x.max())
-        timer.time("  solved lsqr")
-        '''
 
         flattened_angles = adjusted_angles*(x.reshape(nt, 3) + 1.)
-        # print("flattened")
-        # print(flattened_angles)
         return flattened_angles
 
     def angleQuality(self, angles):
@@ -342,21 +272,20 @@ class LSCM:
 
         trgl_angle_sum = np.pi - angles.sum(axis=1)
 
-        print("zero angles", (angles==0.).sum())
-        print("negative angles", (angles<0.).sum())
+        # print("zero angles", (angles==0.).sum())
+        # print("negative angles", (angles<0.).sum())
         naind = (angles<0.).nonzero()
-        print("negative angles", naind, angles[naind])
-        ls = np.log(np.sin(angles))
-        print("nan ls", np.isnan(ls).sum())
+        # print("negative angles", naind, angles[naind])
+        sn = np.sin(angles)
+        isnegsn = (sn <= 0)
+        sn[isnegsn] = 1.
+        ls = np.log(sn)
+        ls[isnegsn] = np.nan
         # difference between the two angles opposite a point
         wheel_error = np.zeros(npt, dtype=np.float64) 
         # notice the minus sign before ls
         np.add.at(wheel_error, np.roll(trgls, 1, axis=1).flatten(), -ls.flatten())
         np.add.at(wheel_error, np.roll(trgls, -1, axis=1).flatten(), ls.flatten())
-        # isn = np.isnan(wheel_error)
-        # print(isn.shape)
-        # isn = isn.any(axis=1)
-        # print(isn.shape)
         interior_points_bool[np.isnan(wheel_error)] = False
         wheel_error = wheel_error[interior_points_bool]
 
@@ -379,16 +308,16 @@ class LSCM:
         nt = trgls.shape[0]
         npt = points.shape[0]
         nipt = interior_points.shape[0]
-        ls = np.log(np.sin(angles))
+        sn = np.sin(angles)
+        isnegsn = (sn <= 0)
+        sn[isnegsn] = 1.
+        ls = np.log(sn)
+        ls[isnegsn] = np.nan
         # difference between the two angles opposite a point
         wheel_error = np.zeros(npt, dtype=np.float64) 
         # notice the minus sign before ls
         np.add.at(wheel_error, np.roll(trgls, 1, axis=1).flatten(), -ls.flatten())
         np.add.at(wheel_error, np.roll(trgls, -1, axis=1).flatten(), ls.flatten())
-        # isn = np.isnan(wheel_error)
-        # print(isn.shape)
-        # isn = isn.any(axis=1)
-        # print(isn.shape)
         interior_points_bool[np.isnan(wheel_error)] = False
         wheel_error = wheel_error[interior_points_bool]
         return np.max(np.abs(wheel_error))
@@ -438,7 +367,6 @@ class LSCM:
 
         # find the index of the point with the
         # largest angle
-        # rindex = np.argmax(np.abs(angles), axis=1)
         rindex = np.argmax(np.sin(angles), axis=1)
         # The point with the largest angle should be moved to index 2
         axis1 = np.full(nt, 1, dtype=np.int64)
@@ -457,14 +385,7 @@ class LSCM:
         column_indices = column_indices - r[:, np.newaxis]
         rangles = angles[rows, column_indices]
         rtrgls = trgls[rows, column_indices]
-        # print(rangles)
 
-        # print("constraints", constraints)
-        # print("rangles", rangles)
-        # print("rtrgls", rtrgls)
-        # For testing:
-        # rangles = angles.copy()
-        # rtrgls = trgls.copy()
         angles = None
         trgls = None
 
@@ -475,17 +396,11 @@ class LSCM:
         # abs(den) is >= abs(num), due to the shift above
         # if den == 0, then num must == 0 too.
         ooc = (den < num).sum()
-        print("num/den out of order", ooc)
-        '''
-        if ooc > 0:
-            ind = np.argwhere(den < num)
-            print(ind, den[ind], num[ind], 
-        '''
+        # print("num/den out of order", ooc)
 
-        print("zero-value den", (den==0).sum())
+        # print("zero-value den", (den==0).sum())
         den[den == 0] = 1.
         ratio = num/den
-        # print("ratio", ratio)
         sn = ratio*np.sin(rangles[:,0])
         cs = ratio*np.cos(rangles[:,0])
         ones = np.full(ratio.shape, 1., dtype=np.float64)
@@ -499,26 +414,13 @@ class LSCM:
         m[:, 0] = np.array([[cs-1, sn],  [-sn, cs-1]]).transpose(2,0,1)
         m[:, 1] = np.array([[-cs,  -sn], [sn,  -cs]]).transpose(2,0,1)
         m[:, 2] = np.array([[ones, zeros], [zeros, ones]]).transpose(2,0,1)
-        # print("m")
-        # print(m)
 
         minds = np.indices(m.shape)
-        # print("minds")
-        # print(minds)
 
-        # print((minds[0].flatten()*2+minds[2].flatten()).shape)
-        # print((rtrgls[:, minds[1].flatten()]*2+minds[3].flatten()).shape)
-        # print(m.flatten().shape)
-        # print(minds[1].flatten())
-        # print(rtrgls)
-        # print(rtrgls[:, minds[1].flatten()]*2)
         m_sparse = np.stack((
             minds[0].flatten()*2+minds[2].flatten(),
             rtrgls[minds[0].flatten(), minds[1].flatten()]*2+minds[3].flatten(),
             m.flatten()), axis=1)
-
-        # print("m_sparse")
-        # print(m_sparse)
 
         # constraint indices
         # NOTE that cindex is not sorted
@@ -528,15 +430,10 @@ class LSCM:
         # boolean array, length na: whether point is
         # free (True) or constrained (False)
         isfree = np.logical_not(np.isin(ptindex, cindex))
-        # print("isfree", isfree)
 
         # free points in sparse array (m_sparse[:,1] contains
         # point index)
         mf_sparse = m_sparse[np.logical_not(np.isin(m_sparse[:,1]//2, constraints[:,0]))]
-        # print("mf_sparse")
-        # print(mf_sparse)
-        # print("m, mf", m_sparse.shape, mf_sparse.shape)
-        # print(m_sparse)
 
         # pt index to mf pt index
         # each element either contains the corresponding mf pt index,
@@ -546,30 +443,24 @@ class LSCM:
         pt2mf = np.full((2*npt), -1, dtype=np.int64)
         # indexes of free points
         free_ind = np.nonzero(isfree)[0]
-        # print("where", np.nonzero(isfree)[0])
         pt2mf[2*free_ind] = 2*np.arange(nfp)
         pt2mf[2*free_ind+1] = 2*np.arange(nfp)+1
-        # print("pt2mf", pt2mf)
 
         # renumber the pt indices in mf_sparse to use
         # the free-point indexing
 
         mf_sparse[:,1] = pt2mf[mf_sparse[:,1].astype(np.int64)]
-        # print(mf_sparse)
-        # print("mf_sparse renumbered")
-        # print(mf_sparse)
 
         AV = mf_sparse[:,2].astype(np.float64)
         AI = mf_sparse[:,0]
         AJ = mf_sparse[:,1]
         A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(2*nt, 2*nfp))
 
-        print("A shape", 2*nt, 2*nfp)
-        print(AI.min(), AI.max(), AJ.min(), AJ.max())
+        # print("A shape", 2*nt, 2*nfp)
+        # print(AI.min(), AI.max(), AJ.min(), AJ.max())
 
         # pinned points in sparse array
         mp_sparse = m_sparse[np.isin(m_sparse[:,1]//2, constraints[:,0])]
-        # print("mp_sparse", mp_sparse)
 
         # pt index to mp pt index
         # each element either contains the corresponding mp pt index,
@@ -581,10 +472,7 @@ class LSCM:
 
         # renumber the pt indices in mp_sparse to use
         # the pinned-point indexing
-        # print("mp_sparse")
-        # print(mp_sparse)
         mp_sparse[:,1] = pt2mp[mp_sparse[:,1].astype(np.int64)]
-        # print(mp_sparse)
 
         # to compute b, need the full (non-sparse) version
         # of mp.  Create this by first creating an
@@ -592,49 +480,18 @@ class LSCM:
         # the points from mp_sparse
         mp_full = np.zeros((2*nt, 2*ncp), dtype=np.float64)
         mp_full[mp_sparse[:,0].astype(np.int64), mp_sparse[:,1].astype(np.int64)] = mp_sparse[:, 2]
-        # print(mp_full)
-        '''
-        print("mp_sparse, mp_full, constraints")
-        print(mp_sparse)
-        print(mp_full.shape)
-        print(mp_full)
-        print(mp_full[0:10])
-        # print(mp_full[12:14])
-        print(constraints)
-        print(constraints[:,(1,2)].flatten())
-        '''
 
         b = -mp_full @ constraints[:,(1,2)].flatten()
-        # b = mp_full @ constraints[:,(1,2)].flatten()
-        # b *= 0.
-        # b[0] = 1.
-        # print("b")
-        # print(b[:20])
 
         timer.time("  created arrays")
 
-        # print(mf_sparse)
-        # print(b)
-
-        # res = sparse.linalg.lsqr(A_sparse, b)
-        # res = sparse.linalg.lsmr(A_sparse, b)
-        # res = sparse.linalg.lsmr(A_sparse, b, atol=0., btol=0., maxiter=10000)
-        # res = sparse.linalg.lsmr(A_sparse, b, atol=0., btol=0.)
-        # timer.time("  solved lsqr")
         Acsr = A_sparse.tocsr()
         At = Acsr.transpose()
         lu = sparse.linalg.splu(At@Acsr)
         x = lu.solve(At@b)
-        # x = lu.solve(b)
-        # timer.time("  solved superlu")
-        # x = res[0]
-        # diagnostics = res[1:]
-        # print("x", x)
-        # print("diagnostics", diagnostics)
         uv = np.zeros((npt, 2), dtype=np.float64)
         uv[isfree, :] = x.reshape(nfp, 2)
         uv[cindex, :] = constraints[:,(1,2)]
-        # print("uv", uv)
         return uv
 
     def computeUvsFromXyzs(self):
@@ -658,25 +515,17 @@ class LSCM:
         nfp = npt-ncp
         print("nt, npt, ncp", nt, npt, ncp)
 
-        # print("input", points.shape, points.dtype, trgls.shape, trgls.dtype)
         trglxyz = points[trgls]
-        # print("trglxyz", trglxyz.shape)
-        # print(trglxyz)
         trgld = np.zeros((trglxyz.shape[0],3,3))
         trgld[:,0] = trglxyz[:,2] - trglxyz[:,1]
         trgld[:,1] = trglxyz[:,0] - trglxyz[:,2]
         trgld[:,2] = trglxyz[:,1] - trglxyz[:,0]
-        # print("trgld", trgld.shape)
-        # print(trgld)
         d21 = trgld[:,0]
         d02 = trgld[:,1]
         d10 = trgld[:,2]
         normvec = np.cross(d10, -d02)
-        # print("normvec", normvec.shape)
         area = .5*np.sqrt(((normvec*normvec).sum(axis=1)))
-        # print("area", area.shape)
         cmin = np.argmin(np.abs(normvec), axis=1)
-        # print("cmin", cmin.shape, cmin.dtype)
 
         # choose the axis (x, y, z) that is most
         # orthogonal to normvec
@@ -684,7 +533,6 @@ class LSCM:
 
         rows = np.ogrid[:nt]
         orth[rows, cmin] = 1.
-        # print("orth", orth.shape)
 
         # compute a local x axis and a local y axis that are
         # mutually orthogonal and that both lie in the
@@ -693,12 +541,10 @@ class LSCM:
         leny = np.sqrt((trgl_yaxis*trgl_yaxis).sum(axis=1))
         leny[leny==0] = 1.
         trgl_yaxis /= leny[:,np.newaxis]
-        # print("trgl_yaxis", trgl_yaxis.shape)
         trgl_xaxis = np.cross(trgl_yaxis, normvec)
         lenx = np.sqrt((trgl_xaxis*trgl_xaxis).sum(axis=1))
         lenx[lenx==0] = 1.
         trgl_xaxis /= lenx[:,np.newaxis]
-        # print("trgl_xaxis", trgl_xaxis.shape)
         trglw = np.zeros((trglxyz.shape[0], 3, 2), dtype=np.float64)
 
         # difference vector
@@ -707,7 +553,6 @@ class LSCM:
         dT = area.copy()
         dT[dT==0.] = 1.
         trglm = trglw / np.sqrt(dT)[:,np.newaxis,np.newaxis]
-        # print("trglm", trglm.shape)
 
         # create a sparse matrix.  For each non-zero point
         # in the matrix need the trgl index, the pt index, and
@@ -723,7 +568,6 @@ class LSCM:
         # point indices
         mptind = trgls.flatten()
         m_sparse = np.stack((mtind, mptind, mxval, myval), axis=1)
-        # print("m_sparse", m_sparse)
 
         # constraint indices
         cindex = constraints[:,0].astype(np.int64)
@@ -736,7 +580,6 @@ class LSCM:
         # free points in sparse array (m_sparse[:,1] contains
         # point index)
         mf_sparse = m_sparse[np.logical_not(np.isin(m_sparse[:,1], constraints[:,0]))]
-        # print("mf_sparse", mf_sparse)
 
         # pt index to mf pt index
         # each element either contains the corresponding mf pt index,
@@ -747,11 +590,9 @@ class LSCM:
         # renumber the pt indices in mf_sparse to use
         # the free-point indexing
         mf_sparse[:,1] = pt2mf[mf_sparse[:,1].astype(np.int64)]
-        # print("mf_sparse", mf_sparse)
 
         # pinned points in sparse array
         mp_sparse = m_sparse[np.isin(m_sparse[:,1], constraints[:,0])]
-        # print("mp_sparse", mp_sparse)
 
         # pt index to mp pt index
         # each element either contains the corresponding mp pt index,
@@ -762,7 +603,6 @@ class LSCM:
         # renumber the pt indices in mp_sparse to use
         # the pinned-point indexing
         mp_sparse[:,1] = pt2mp[mp_sparse[:,1].astype(np.int64)]
-        # print("mp_sparse", mp_sparse)
 
         # to compute b, need the full (non-sparse) version
         # of mp.  Create this by first creating an
@@ -770,7 +610,6 @@ class LSCM:
         # the points from mp_sparse
         mp_full = np.zeros((nt, ncp, 2), dtype=np.float64)
         mp_full[mp_sparse[:,0].astype(np.int64), mp_sparse[:,1].astype(np.int64)] = mp_sparse[:, (2,3)]
-        # print("mp_full", mp_full)
         u1p = constraints[:,1]
         u2p = constraints[:,2]
         m1p = mp_full[:,:,0]
@@ -778,7 +617,6 @@ class LSCM:
         b = np.concatenate((
             -m1p@u1p + m2p@u2p,
             -m2p@u1p - m1p@u2p))
-        # print("b", b)
 
         m1f = mf_sparse[:,(0,1,2)]
         m2f = mf_sparse[:,(0,1,3)]
@@ -791,8 +629,8 @@ class LSCM:
         lr = m1f.copy()
         lr[:,0] += nt
         lr[:,1] += nfp
+
         A_coo = np.concatenate((ul, ur, ll, lr), axis=0)
-        # print("A", A_coo)
         AV = A_coo[:,2]
         AI = A_coo[:,0]
         AJ = A_coo[:,1]
@@ -803,15 +641,6 @@ class LSCM:
         At = Acsr.transpose()
         lu = sparse.linalg.splu(At@Acsr)
         x = lu.solve(At@b)
-        '''
-        # res = sparse.linalg.lsqr(A_sparse, b)
-        res = sparse.linalg.lsmr(A_sparse, b)
-        timer.time("  solved lsqr")
-        x = res[0]
-        diagnostics = res[1:]
-        # print("x", x)
-        print("diagnostics", diagnostics)
-        '''
         uv = np.zeros((npt, 2), dtype=np.float64)
         # mf2pt = np.arange(npt)[pt2mf >= 0]
         uv[isfree, :] = x.reshape(2, nfp).transpose()
@@ -839,34 +668,22 @@ if __name__ == '__main__':
         exit()
     # print(points.shape, points.dtype, trgls.shape, trgls.dtype)
     timer.time("read")
-    lscm = LSCM(points, trgls)
+    lscm = UVMapper(points, trgls)
     pt0, pt1 = lscm.getTwoAdjacentBoundaryPoints(0)
-    print("pt0, pt1", pt0, pt1)
-    pt2, pt3 = lscm.getTwoAdjacentBoundaryPoints(-1)
-    print("pt2, pt3", pt2, pt3)
-    ptmn, ptmx = lscm.getTwoAdjacentBoundaryPoints()
-    print("ptmn, ptmx", ptmn, ptmx)
-    # lscm.constraints = np.array([[ptmn, 0., 0.], [ptmx, 1., 0.]], dtype=np.float64)
+    # print("pt0, pt1", pt0, pt1)
+    # pt2, pt3 = lscm.getTwoAdjacentBoundaryPoints(-1)
+    # print("pt2, pt3", pt2, pt3)
+    # ptmn, ptmx = lscm.getTwoAdjacentBoundaryPoints()
+    # print("ptmn, ptmx", ptmn, ptmx)
     lscm.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.]], dtype=np.float64)
-    # lscm.constraints = np.array([[pt2, 0., 0.], [pt3, 1., 0.]], dtype=np.float64)
-    # lscm.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.], [pt3, 1.,0.], [pt2, 1.,1.]], dtype=np.float64)
-    # lscm.constraints = np.array([[pt0, 0., 0.], [pt2, 1., 0.]], dtype=np.float64)
-    # lscm.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.], [pt2, 0.,1.]], dtype=np.float64)
-    # lscm.constraints = np.array([[pt0, 0., 0.], [pt0+10, 0., 1.]], dtype=np.float64)
-    # lscm.constraints = np.array([[0, 0., 0.], [1, 0., 1.]], dtype=np.float64)
-    # lscm.constraints = np.array([[0, 100., 2200.], [3, 200., 2300.]], dtype=np.float64)
-    # lscm.constraints = np.array([[0, 0., 0.], [len(points)-1, 1., 1.]], dtype=np.float64)
-    # lscm.constraints = np.array([[0, 0., 0.], [len(points)-1, 1., 0.]], dtype=np.float64)
-    # lscm.constraints = np.array([[0, 0., 0.], [1, 1., 0.]], dtype=np.float64)
     # uvs = lscm.computeUvs()
-    # uvs = lscm.computeUvsFromAngles()
+    uvs = lscm.computeUvsFromAngles()
     # uvs = lscm.computeUvsFromXyzs()
-    uvs = lscm.computeUvsFromABF()
+    # uvs = lscm.computeUvsFromABF()
     timer.time("computed uvs")
-    # print("uvs", uvs)
     uvmin = uvs.min(axis=0)
     uvmax = uvs.max(axis=0)
-    print("uv min max", uvmin, uvmax)
+    # print("uv min max", uvmin, uvmax)
     duv = uvmax-uvmin
     if (duv>0).all():
         uvs -= uvmin
