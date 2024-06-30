@@ -1,13 +1,133 @@
 import sys
-sys.path.append('..')
-from pathlib import Path
-
+import time
 import numpy as np
+from pathlib import Path
 from scipy import sparse
 
-from trgl_fragment import TrglFragment
-from base_fragment import BaseFragment
-from utils import Utils
+
+"""
+This file contains numpy implementations of
+various uv mappers (functions that map a 3D triangulated
+surface to a 2D uv coordinate system).
+
+Here are the papers that I consulted, along with the nicknames I've
+given to the algorithms they describe:
+
+"Xyz-based LSCM"
+Lévy B., Petitjean S., Ray N., Maillot J.: Least squares conformal maps
+for automatic texture atlas generation. ACM Transactions on Graphics
+(Proc. SIGGRAPH) 21, 3 (2002), 362–371.
+
+"ABF"
+Sheffer A., de Sturler E.: Parameterization of faceted surfaces
+for meshing using angle based flattening. Engineering with
+Computers 17, 3 (2001), 326–337.
+
+"ABF++", "Angle-based LSCM"
+Sheffer A., Lévy B., Mogilnitsky M., Bogomyakov A.: ABF++: fast and
+robust angle based flattening.  ACM Trans. Graph. 24, 2 (2005), 311–330.
+
+NOTE: If you look for the ABF++ paper online, make sure you get
+the correct version.  If, just below the title, you see the phrase
+"Temporary version- In print", you have the WRONG version, which is
+missing the description of angle-based LSCM.
+The following link points to the correct version, as of June 2024:
+https://people.engr.tamu.edu/schaefer/teaching/689_Fall2006/p311-sheffer.pdf
+Also, as of June 2024, the version of the paper on sci-hub.se contains
+only the first page!
+
+"Linearized ABF"
+Zayer R., Levy B., Seidel H.P. Linear Angle Based Parameterization.
+Belyaev A., Garland M. Fifth Eurographics Symposium on Geometry
+Processing SGP 2007, Jul 2007, Barcelona, Spain. Eurographics
+Association, pp.135-141, 2007.
+
+It is interesting to note that three of the four papers have Bruno Lévy
+as a co-author.
+
+Comments on the individual algorithms:
+
+Xyz-based LSCM, as the name suggests, uses the xyz locations
+of the vertices as input to the algorithm that finds the uv
+parameterization.  The algorithm sets up a linear system, which
+is slightly under-determined.  In order to make it fully deterministic,
+the uv coordinates of two points must be specified (the "pinned points").
+On a typical non-flat surface, the end result (the uv parameterization)
+is dependent on the location of the pinned points, since the algorithm
+drifts when far from these points.  For best results, the authors
+recommend selecting two pinned points that are as far apart from each
+other as possible.
+
+The current file contains a numpy implementation of xyz-based LSCM.
+
+Angle-based LSCM uses the angles of the individual triangles
+as input to the uv parameterization algorithm.  The angles can
+of course be computed from the xyz locations of the vertices,
+but they can also come from other sources, such as angle-based
+flattening (See below).  This algorithm is described in the ABF++ paper.
+Like the xyz-based LSCM algorithm, the angle-based algorithm requires
+that uv values be specified at two pinned points, and like xyz-based
+LSCM, the uv values will drift when far from the pinned points.  However,
+if the surface is flat (that is, if the input angles are consistent
+with a perfectly flat surface), the location of the pinned points
+does not matter; the uv values do not drift in that case.
+
+The current file contains a numpy implementation of angle-based LSCM.
+This implementation was guided, in part, by the C++ header-file-only
+implementation of angle-based LSCM at https://github.com/educelab/OpenABF
+
+ABF and ABF++ are two angle-based flattening methods.  That is,
+they take as input the angles around the individual triangles,
+and as output they produce modified angles that are consistent
+with a perfectly flat surface.  These algorithms are non-linear.
+The difference between ABF and ABF++ is that ABF++ uses a more
+efficient formulation of the problem.  I have not programmed either
+of these algorithms.  A C++ header-file-only implementation of ABF++
+is provided at https://github.com/educelab/OpenABF.
+
+Since ABF and ABF++ output angles rather than uv values, the
+uv values must subsequently be computed using an algorithm such
+as angle-based LSCM.
+
+Linearized ABF (often referred to as LinABF) is based on a linearized
+form of the equations developed in the ABF paper.  Like ABF and ABF++,
+it takes as input the angles around the triangles, and produces
+modified angles that are supposed to be consistent with a perfectly
+flat surface.  Because the original equations are non-linear,
+linearized ABF does not provide a perfectly accurate (that is,
+perfectly flat) set of angles.  This is noticeable when the angles
+produced by LinABF are fed into angle-based LSCM to compute uv
+locations.  Because the input angles don't represent a perfectly
+flat surface, the output of angle-based LSCM turns out, in this
+case, to be dependent on the location of the pinned points.
+
+My solution to this inaccuracy is to rerun linearized ABF as many
+times as necessary to reduce the angle inconsistencies below a
+certain tolerance level.  After that, the angles can be passed
+to angle-based LSCM.  Because I have not implemented the ABF++
+algorithm, I don't know whether it would be faster to run ABF++
+once, or rerun LinABF as many times as necessary.
+
+The current file contains a numpy implementation of linearized ABF.
+This implementation was guided, in part, by the C++ implementation
+of linearized ABF at https://gist.github.com/ialhashim/c34aa1159350bce13835
+
+
+"""
+
+# copied from utils.py to remove dependency
+class Timer():
+
+    def __init__(self, active=True):
+        self.t0 = time.time()
+        self.active = active
+
+    def time(self, msg=""):
+        t = time.time()
+        if self.active:
+            print("%.3f %s"%(t-self.t0, msg))
+        self.t0 = t
+
 
 class UVMapper:
     def __init__(self, points, trgls):
@@ -33,17 +153,55 @@ class UVMapper:
 
         # shape (nb, 2) and dtype int64,
         # nb is number of boundary edges,
-        # each row has trgl index, edge index 
+        # each row has trgl index, edge index
         # (0,1,2, based on opposing vertex)
         # boundary edges are NOT given in any particular order
         self.boundaries = None
+
+    # Copied from base_fragment.py in order
+    # to remove dependency
+    @staticmethod
+    def findNeighbors(trgls):
+        index = np.indices((len(trgls),1))[0]
+        ones = np.ones((len(trgls),1), dtype=np.int32)
+        zeros = np.zeros((len(trgls),1), dtype=np.int32)
+        twos = 2*ones
+        
+        e01 = np.concatenate((trgls[:, (0,1)], index, twos, ones), axis=1)
+        e12 = np.concatenate((trgls[:, (1,2)], index, zeros, ones), axis=1)
+        e20 = np.concatenate((trgls[:, (2,0)], index, ones, ones), axis=1)
+        
+        edges = np.concatenate((e01,e12,e20), axis=0)
+        rev = (edges[:,0] > edges[:,1])
+        edges[rev,0:2] = edges[rev,1::-1]
+        edges[rev,4] = -1
+        edges = edges[edges[:,4].argsort()]
+        edges = edges[edges[:,1].argsort(kind='mergesort')]
+        edges = edges[edges[:,0].argsort(kind='mergesort')]
+        
+        ediff = np.diff(edges, axis=0)
+        duprows = np.where(((ediff[:,0]==0) & (ediff[:,1]==0)))[0]
+        duprows2 = np.sort(np.append(duprows, duprows+1))
+        bdup = np.zeros((len(edges)), dtype=np.bool_)
+        bdup[duprows2] = True
+        
+        neighbors = np.full((len(trgls), 3), -1, dtype=np.int32)
+        
+        eplus = edges[duprows+1,:4]
+        eminus = edges[duprows,:4]
+        # print(eplus)
+        # print(eminus)
+        neighbors[eplus[:,2],eplus[:,3]] = eminus[:,2]
+        neighbors[eminus[:,2],eminus[:,3]] = eplus[:,2]
+        return neighbors
+    
 
     def createNeighbors(self):
         if self.trgls is None or self.points is None:
             print("createNeighbors: no triangles specified!")
             return
         print("Creating neighbors")
-        self.neighbors = BaseFragment.findNeighbors(self.trgls)
+        self.neighbors = self.findNeighbors(self.trgls)
 
     def createBoundaries(self):
         print("Creating boundaries")
@@ -119,15 +277,15 @@ class UVMapper:
         # the number stored at position i in the array
         # corresponds to the dot product of the two vectors
         # that share vertex i.
-        # minus sign because one of the two vectors is reversed 
+        # minus sign because one of the two vectors is reversed
         trglndps = (-trglnvecs*np.roll(trglnvecs, -1, axis=1)).sum(axis=2)
         # angle in radians is arccos of dot product of normalized vectors
         trglangles = np.arccos(trglndps)
         self.angles = trglangles
 
-    # adjust angles if point is not on a 
+    # adjust angles if point is not on a
     # boundary, and sum is < (2 pi - min_deficit).
-    # if so, reduce the angles proportionally.  
+    # if so, reduce the angles proportionally.
     def adjustedAngles(self, min_deficit):
         angles = self.angles.copy()
         if angles is None:
@@ -156,7 +314,7 @@ class UVMapper:
         return self.computeUvsFromXyzs()
 
     def linABF(self):
-        timer = Utils.Timer()
+        timer = Timer()
         if self.angles is None:
             self.createAngles()
             timer.time("angles created")
@@ -225,7 +383,7 @@ class UVMapper:
         # log of sine of angles
         ls = np.log(np.sin(adjusted_angles))
         # difference between the two angles opposite a point
-        b3 = np.zeros(npt, dtype=np.float64) 
+        b3 = np.zeros(npt, dtype=np.float64)
         # notice the minus sign before ls
         np.add.at(b3, np.roll(trgls, 1, axis=1).flatten(), -ls.flatten())
         np.add.at(b3, np.roll(trgls, -1, axis=1).flatten(), ls.flatten())
@@ -282,7 +440,7 @@ class UVMapper:
         ls = np.log(sn)
         ls[isnegsn] = np.nan
         # difference between the two angles opposite a point
-        wheel_error = np.zeros(npt, dtype=np.float64) 
+        wheel_error = np.zeros(npt, dtype=np.float64)
         # notice the minus sign before ls
         np.add.at(wheel_error, np.roll(trgls, 1, axis=1).flatten(), -ls.flatten())
         np.add.at(wheel_error, np.roll(trgls, -1, axis=1).flatten(), ls.flatten())
@@ -314,7 +472,7 @@ class UVMapper:
         ls = np.log(sn)
         ls[isnegsn] = np.nan
         # difference between the two angles opposite a point
-        wheel_error = np.zeros(npt, dtype=np.float64) 
+        wheel_error = np.zeros(npt, dtype=np.float64)
         # notice the minus sign before ls
         np.add.at(wheel_error, np.roll(trgls, 1, axis=1).flatten(), -ls.flatten())
         np.add.at(wheel_error, np.roll(trgls, -1, axis=1).flatten(), ls.flatten())
@@ -339,7 +497,7 @@ class UVMapper:
         return self.computeUvsFromAngles()
 
     def computeUvsFromAngles(self):
-        timer = Utils.Timer()
+        timer = Timer()
         if self.angles is None:
             self.createAngles()
             timer.time("angles created")
@@ -476,7 +634,7 @@ class UVMapper:
 
         # to compute b, need the full (non-sparse) version
         # of mp.  Create this by first creating an
-        # array with all zeros, and then filling in 
+        # array with all zeros, and then filling in
         # the points from mp_sparse
         mp_full = np.zeros((2*nt, 2*ncp), dtype=np.float64)
         mp_full[mp_sparse[:,0].astype(np.int64), mp_sparse[:,1].astype(np.int64)] = mp_sparse[:, 2]
@@ -495,7 +653,7 @@ class UVMapper:
         return uv
 
     def computeUvsFromXyzs(self):
-        timer = Utils.Timer()
+        timer = Timer()
         points = self.points
         trgls = self.trgls
         constraints = self.constraints
@@ -606,7 +764,7 @@ class UVMapper:
 
         # to compute b, need the full (non-sparse) version
         # of mp.  Create this by first creating an
-        # array with all zeros, and then filling in 
+        # array with all zeros, and then filling in
         # the points from mp_sparse
         mp_full = np.zeros((nt, ncp, 2), dtype=np.float64)
         mp_full[mp_sparse[:,0].astype(np.int64), mp_sparse[:,1].astype(np.int64)] = mp_sparse[:, (2,3)]
@@ -649,9 +807,10 @@ class UVMapper:
         return uv
 
 if __name__ == '__main__':
+    from trgl_fragment import TrglFragment
     points = None
     trgls = None
-    timer = Utils.Timer()
+    timer = Timer()
     out_file = "test_out.obj"
     if len(sys.argv) > 1:
         obj_file = sys.argv[1]
@@ -677,10 +836,11 @@ if __name__ == '__main__':
     # print("ptmn, ptmx", ptmn, ptmx)
     lscm.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.]], dtype=np.float64)
     # uvs = lscm.computeUvs()
-    uvs = lscm.computeUvsFromAngles()
+    # uvs = lscm.computeUvsFromAngles()
     # uvs = lscm.computeUvsFromXyzs()
-    # uvs = lscm.computeUvsFromABF()
+    uvs = lscm.computeUvsFromABF()
     timer.time("computed uvs")
+    # lscm.angleQuality(lscm.angles)
     uvmin = uvs.min(axis=0)
     uvmax = uvs.max(axis=0)
     # print("uv min max", uvmin, uvmax)
