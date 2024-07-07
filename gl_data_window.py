@@ -159,6 +159,16 @@ class GLDataWindow(DataWindow):
         # print("tf, xy, stxy", tf, xy, stxy)
         self.window.setCursorPosition(self, tijk, stxyz)
 
+    '''
+    This is called from data_window.py mousePressEvent().
+    tijk is the ijk location in the transposed data cube.
+    addPoint() calls stxyzInRange, which looks in the
+    current data slice for the closest pixel (closest
+    to the ijk point) that contains a valid triangle id. 
+    stxyzInRange() then computes the corresponding stxy
+    by performing a barycentric interpolation of the
+    stxy values of the triangle vertices.
+    '''
     def addPoint(self, tijk):
         # print("gldw add point", tijk)
         d = 100

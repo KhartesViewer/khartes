@@ -10,6 +10,7 @@ import cv2
 from utils import Utils
 from base_fragment import BaseFragment, BaseFragmentView
 from fragment import Fragment, FragmentView
+from uv_mapper import UVMapper
 
 from PyQt5.QtGui import QColor
 
@@ -209,6 +210,10 @@ class TrglFragment(BaseFragment):
         print("Ka %f %f %f"%(rgb[0],rgb[1],rgb[2]), file=of)
         print("Kd %f %f %f"%(rgb[0],rgb[1],rgb[2]), file=of)
         print("Ks 0.0 0.0 0.0", file=of)
+
+        # TODO: testing only!
+        print("map_Kd asdf.tif", file=of)
+
         print("illum 2", file=of)
         print("d 1.0", file=of)
         # TODO: print this only if TIFF file exists
@@ -394,6 +399,15 @@ class TrglFragmentView(BaseFragmentView):
             self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
         self.calculateSqCm()
         self.setScaledTexturePoints()
+        '''
+        mapper = UVMapper(self.fragment.gtpoints, self.trgls())
+        pt0, pt1 = mapper.getTwoAdjacentBoundaryPoints()
+        mapper.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.]], dtype=np.float64)
+        uvs = mapper.computeUvsFromABF()
+        self.fragment.gtpoints = uvs
+        self.stpoints = None
+        self.setScaledTexturePoints()
+        '''
         # timer = Utils.Timer()
         # print("computing normals")
         # TODO: compute only modified normals
@@ -708,6 +722,14 @@ class TrglFragmentView(BaseFragmentView):
         v = (-c*stxy[0] + a*stxy[1])/det
         return (u,v)
         
+    def stxysToUvs(self, stxys):
+        stxys = stxys.copy() - self.st_shift
+        a,b,c,d = self.st_abcd
+        det = a*d-b*c
+        uvs = np.zeros((stxys.shape[0], 2), dtype=np.float64)
+        uvs[:,0] = (d*stxys[:,0] - b*stxys[:,1])/det
+        uvs[:,1] = (-c*stxys[:,0] + a*stxys[:,1])/det
+        return uvs
         
     def setVolumeViewDirection(self, direction):
         self.setWorkingRegion(-1, 0.)
@@ -928,12 +950,26 @@ class TrglFragmentView(BaseFragmentView):
             half_width = 3*self.avg_st_len
             # print("hw", half_width, self.avg_st_len)
 
+
             ops = TrglPointSet(self.all_stpoints, len(self.stpoints), new_stxy, half_width)
-            self.stpoints[index, :] = new_stxy
-            self.all_stpoints[index, :] = new_stxy
-            uv = self.stxyToUv(new_stxy)
-            self.fragment.gtpoints[index, :] = uv
-            self.stpoints[index, :] = new_stxy
+
+            # osts = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, .25*half_width)
+            osts = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
+            retval = osts.adjustSts(self.fragment.gpoints, self.fragment.trgls, index)
+            if retval is not None:
+                adjusted_inds, adjusted_sts = retval
+                # print(len(adjusted_sts))
+                self.stpoints[adjusted_inds] = adjusted_sts
+                self.all_stpoints[adjusted_inds] = adjusted_sts
+                adj_uvs = self.stxysToUvs(adjusted_sts)
+                self.fragment.gtpoints[adjusted_inds] = adj_uvs
+            else:
+                self.stpoints[index, :] = new_stxy
+                self.all_stpoints[index, :] = new_stxy
+                uv = self.stxyToUv(new_stxy)
+                self.fragment.gtpoints[index, :] = uv
+                # self.stpoints[index, :] = new_stxy
+
             nps = TrglPointSet(self.all_stpoints, len(self.stpoints), new_stxy, half_width)
             result = TrglPointSet.trglDiff(ops, nps)
             if result is not None:
@@ -956,6 +992,9 @@ class TrglFragmentView(BaseFragmentView):
         if stxy is None:
             print("TrglFragment.addPoint failed because stxy not given")
             return
+        if tijk is None:
+            print("TrglFragment.addPoint failed because tijk not given")
+            return
 
         vv = self.cur_volume_view
         gijk = vv.transposedIjkToGlobalPosition(tijk)
@@ -969,7 +1008,6 @@ class TrglFragmentView(BaseFragmentView):
             return
 
         self.fragment.gpoints = np.append(self.fragment.gpoints, [gijk], axis=0)
-        # TODO: need to put uv, not stxy, here!
         uv = self.stxyToUv(stxy)
         nstp = len(self.stpoints)
         self.fragment.gtpoints = np.append(self.fragment.gtpoints, [uv], axis=0)
@@ -980,8 +1018,9 @@ class TrglFragmentView(BaseFragmentView):
         # agijk = np.array(gijk)
         half_width = 3*self.avg_st_len
         ops = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
-        nps = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
         ops.deletePoint(nstp)
+
+        nps = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
         # nps.addPointAtEnd(stxy)
 
         result = TrglPointSet.trglDiff(ops, nps)
@@ -1092,24 +1131,29 @@ class TrglFragmentView(BaseFragmentView):
 
 class TrglPointSet:
 
+    # Create a TrglPointSet that contains all stpoints
+    # that lie in a square whose center and half-width are given
     def __init__(self, all_stpoints, nstpoints, pt, half_width):
         if all_stpoints is None or len(all_stpoints) == 0:
             return None
         ptsb = ((pt-half_width <= all_stpoints) & 
                 (all_stpoints <= pt+half_width)).all(axis=1)
         self.indexes = np.nonzero(ptsb)[0]
+        self.reverse_indexes = np.full((len(all_stpoints)), -1, dtype=np.int64)
+        self.reverse_indexes[ptsb] = np.ogrid[:ptsb.sum()]
         self.pts = all_stpoints[self.indexes]
         # number of normal (not outside) points in all_stpoints
         self.nstpoints = nstpoints
         bs = np.nonzero(self.indexes < nstpoints)[0]
         # number of normal (not outside) points in self.indexes
-        self.nipoints = bs[-1]
+        self.nipoints = bs[-1]+1
 
     def deletePoint(self, index):
         row = (self.indexes == index).nonzero()[0]
         self.indexes = np.delete(self.indexes, row, 0)
         self.pts = np.delete(self.pts, row, 0)
 
+    '''
     # insert at end of normal (not outside) points
     def addPointAtEnd(self, stxy):
         # print("indexes before", self.indexes.shape)
@@ -1120,6 +1164,7 @@ class TrglPointSet:
         # print("pts after", self.pts.shape)
         self.nstpoints += 1
         self.nipoints += 1
+    '''
 
     @staticmethod
     def trglDiff(oldps, newps):
@@ -1177,9 +1222,63 @@ class TrglPointSet:
             return None
 
         nst = self.nstpoints
-        trgls = self.rotateToMin(np.array(self.indexes)[trgls])
+        # Besides rotating to min pt index, this line
+        # replaces the local pt index by the global pt index
+        # trgls = self.rotateToMin(np.array(self.indexes)[trgls])
+        trgls = self.rotateToMin(self.indexes[trgls])
+        # Remove trgls that contain 1 or more outside points
         trgls = trgls[(trgls < nst).all(axis=1)]
         return trgls
+
+    def adjustSts(self, xyzpts, trgls, ptindex):
+        inds = self.indexes[:self.nipoints]
+        pts = self.pts[:self.nipoints]
+        # print("inds", inds)
+        # print("xyzpts", xyzpts.shape)
+        localxyz = xyzpts[inds]
+        # trgls = self.triangulate()
+        if trgls is None:
+            return
+        # print(trgls)
+        trgls = self.reverse_indexes[trgls]
+        trgls = trgls[(trgls >= 0).all(axis=1)]
+        mapper = UVMapper(localxyz, trgls)
+        bounds_flag = mapper.onBoundaryArray()
+        # input point is never used as a constraint
+        bounds_flag[self.reverse_indexes[ptindex]] = False
+
+        '''
+        ptrgls = trgls.copy()
+        ptrgls[bounds_flag[ptrgls]] *= -1
+        print(ptrgls)
+        '''
+
+        nb = bounds_flag.sum()
+        constraints = np.zeros((nb, 3), dtype=np.float64)
+        # print(bounds_flag)
+        # print(xyzpts.shape, localxyz.shape, self.pts.shape, pts.shape, constraints.shape)
+        constraints[:, 0] = np.nonzero(bounds_flag)[0]
+        constraints[:, (1,2)] = pts[bounds_flag]
+        mapper.constraints = constraints
+        # adjusted_sts = mapper.computeUvsFromABF()
+        adjusted_sts = mapper.computeUvsFromXyzs()
+        # adjusted_sts = mapper.computeUvsFromAngles()
+        if adjusted_sts is None:
+            # print("adjustSts: no adjustment made")
+            # return inds, pts
+            return None
+        # print("before", pts[~bounds_flag])
+        # print("after", adjusted_sts[~bounds_flag])
+        # print("delta", (adjusted_sts-pts)[~bounds_flag])
+        '''
+        delta = adjusted_sts-pts
+        delta = np.sqrt((delta*delta).sum(axis=1))
+        delta[bounds_flag] *= -1
+        np.set_printoptions(suppress=True)
+        print(delta)
+        '''
+        return inds, adjusted_sts
+
 
     def pointIndexesInWindowOld(self, pt, half_width, include_outside_points):
         if include_outside_points:

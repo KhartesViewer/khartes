@@ -105,10 +105,38 @@ class GLSurfaceWindow(DataWindow):
             self.volume_view.setStxyTf(stxy)
         self.volume_view.setIjkTf(tf)
 
-    def addPoint(self, tijk):
+    '''
+    When the user clicks on a point in the map view window
+    in add-point mode, mousePressEvent() in data_window.py
+    is called.  mousePressEvent() calls xyToTijk() to convert
+    the mouse xy location to an ijk location in the transposed
+    cube.  gl_surface_window.py contains a version of xyToTijk()
+    that overrides the version in data_window.py.  The overriding
+    xyToTijk() takes the mouse xy location, and converts it to
+    pixel coordinates in the map view window.  These coordinates
+    in turn are used to look up, in xyz_arr, the corresponding
+    xyz location on the surface (xyz_arr was generated in drawTrglXyzs(),
+    using OpenGL calls). The xyz values are returned by xyToTijk().
+    Getting back to mousePressEvent: the xyz coordinates returned
+    by xyToTijk are passed on to addPoint().  This function is
+    also overridden in gl_surface_window.py; here, addPoint()
+    calls ijkToStxy() to convert the xyz coordinates to stxy 
+    coordinates.  This is done by looking at xyz_arr (again!)
+    to find the closest pixel in the map window, whose location is
+    converted to stxy coordinates.
+    TODO: this seems a bit convoluted...
+    '''
+    def addPointOld(self, tijk):
         # print("glsw add point", tijk)
         stxy = self.ijkToStxy(tijk)
         # print("stxy", stxy)
+        self.window.addPointToCurrentFragment(tijk, stxy)
+
+    def addPoint(self, stxy):
+        # print("glsw add point", tijk)
+        # stxy = self.ijkToStxy(tijk)
+        # print("stxy", stxy)
+        tijk = self.stxyToTijk(stxy, True)
         self.window.addPointToCurrentFragment(tijk, stxy)
 
     def computeTfStartPoint(self):
@@ -163,6 +191,36 @@ class GLSurfaceWindow(DataWindow):
         nstxy = (ostxy[0]+dx, ostxy[1]+dy)
         return nstxy
 
+    # given mouse position xy, return stxy position
+    def xyToT(self, xy):
+        x, y = xy
+        ww, wh = self.width(), self.height()
+        wcx, wcy = ww//2, wh//2
+        dx, dy = x-wcx, y-wcy
+        cij = self.volume_view.stxytf
+        # print("tf", tijk)
+        zoom = self.getZoom()
+        # i = cij[0] + int(dx/zoom)
+        # j = cij[1] + int(dy/zoom)
+        i = cij[0] + dx/zoom
+        j = cij[1] + dy/zoom
+        return (i, j)
+
+    # It might seem backwards to have stxyToTijk call
+    # xyToTijk, instead of the other way around.  But
+    # because the ijk (or xyz) location is stored in
+    # the window pixels, it kind of makes sense.
+    def stxyToTijk(self, stxy, return_none_if_outside=False):
+        xy = self.stxyToWindowXy(stxy)
+        return self.xyToTijk(xy, return_none_if_outside)
+
+
+    '''
+    xy is the mouse position in the map view window.
+    Returns ijk (xyz) location of the mouse.
+    Does this by looking at xyz_arr (generated in drawTrglXyzs()
+    via OpenGL calls) at the given mouse position.
+    '''
     def xyToTijk(self, xy, return_none_if_outside=False):
         x, y = xy
         iind = self.iIndex
@@ -178,7 +236,11 @@ class GLSurfaceWindow(DataWindow):
         iy = round(y*ratio)
         if iy < 0 or iy >= xyz_arr.shape[0] or ix < 0 or ix >= xyz_arr.shape[1]:
             # print("error", x, y, xyz_arr.shape)
-            return self.volume_view.ijktf
+            # return self.volume_view.ijktf
+            if return_none_if_outside:
+                return None
+            else:
+                return self.volume_view.ijktf
         xyza = xyz_arr[iy, ix]
         if xyza[3] == 0:
             if return_none_if_outside:
@@ -2050,7 +2112,7 @@ class Atlas:
             pbo_size = acsz[0]*acsz[1]*acsz[2]*2
             pbo.allocate(pbo_size)
             pbo.release()
-            print("created pbo", pbo.bufferId(), pbo_size)
+            # print("created pbo", pbo.bufferId(), pbo_size)
             self.pbo_pool.put(pbo)
         return self.pbo_pool.get()
 

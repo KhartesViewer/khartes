@@ -179,6 +179,13 @@ class DataWindow(QLabel):
         tijk = self.ijToTijk(ij)
         return tijk
 
+    # overridden in GLSurfaceWindow
+    def xyToT(self, xy):
+        # return self.xyToTijk(xy, return_none_if_outside)
+        ij = self.xyToIj(xy)
+        tijk = self.ijToTijk(ij)
+        return tijk
+
     # slice ij position to window xy position
     def ijToXy(self, ij):
         i,j = ij
@@ -439,7 +446,8 @@ class DataWindow(QLabel):
                 # print('Shift+Click')
                 # ij = self.xyToIj(wxy)
                 # tijk = self.ijToTijk(ij)
-                tijk = self.xyToTijk(wxy, True)
+                # tijk = self.xyToTijk(wxy, True)
+                tijk = self.xyToT(wxy)
                 # print("adding point at",tijk)
                 if tijk is not None and self.currentFragmentView() is not None:
                     self.setWaitCursor()

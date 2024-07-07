@@ -58,7 +58,15 @@ drifts when far from these points.  For best results, the authors
 recommend selecting two pinned points that are as far apart from each
 other as possible.
 
+When given only two pinned points, xyz-based LSCM, as implemented
+here, produces counter-clockwise triangles in uv space (this assumes
+that the uv coordinate system is right-handed). However, if
+there are more than two pinned points, and these points imply
+the triangles should be clockwise, then xyz-based LSCM will
+create clockwise triangles.
+
 The current file contains a numpy implementation of xyz-based LSCM.
+
 
 Angle-based LSCM uses the angles of the individual triangles
 as input to the uv parameterization algorithm.  The angles can
@@ -72,9 +80,26 @@ if the surface is flat (that is, if the input angles are consistent
 with a perfectly flat surface), the location of the pinned points
 does not matter; the uv values do not drift in that case.
 
+As mentioned before, xyz-based LSCM can be coaxed into producing
+either clockwise or counter-clockwise triangles, depending on
+the constraints. Angle-based LSCM is not so flexible; it will
+produce triangles of only a single orientation.  If there are
+more than two constraints, and the constraints imply triangles
+of the opposite orientation, angle-based LSCM will produce
+bad results.  So it is important that angle-based LSCM
+be implemented with the orientation that matches the expected
+orientation of the constraints.
+
+The paper and the EduceLab implementations of angle-based LSCM
+produce clockwise triangles in uv space.
+
 The current file contains a numpy implementation of angle-based LSCM.
 This implementation was guided, in part, by the C++ header-file-only
 implementation of angle-based LSCM at https://github.com/educelab/OpenABF
+However, the here implementation is modified (as highlighted in the 
+code comments) in order to produce counter-clockwise instead of
+clockwise triangles in uv space.
+
 
 ABF and ABF++ are two angle-based flattening methods.  That is,
 they take as input the angles around the individual triangles,
@@ -85,9 +110,16 @@ efficient formulation of the problem.  I have not programmed either
 of these algorithms.  A C++ header-file-only implementation of ABF++
 is provided at https://github.com/educelab/OpenABF.
 
+ABF++ and LinABF take angles as input, and produce angles
+as output, so they are not concerned with the question of
+whether the triangles are clockwise or counter-clockwise in
+uv space.
+
 Since ABF and ABF++ output angles rather than uv values, the
 uv values must subsequently be computed using an algorithm such
-as angle-based LSCM.
+as angle-based LSCM.  During this computation, the triangle orientation
+(clockwise vs counter-clockwise) is determined.
+
 
 Linearized ABF (often referred to as LinABF) is based on a linearized
 form of the equations developed in the ABF paper.  Like ABF and ABF++,
@@ -200,11 +232,11 @@ class UVMapper:
         if self.trgls is None or self.points is None:
             print("createNeighbors: no triangles specified!")
             return
-        print("Creating neighbors")
+        # print("Creating neighbors")
         self.neighbors = self.findNeighbors(self.trgls)
 
     def createBoundaries(self):
-        print("Creating boundaries")
+        # print("Creating boundaries")
         if self.neighbors is None:
             self.createNeighbors()
         self.boundaries = np.argwhere(self.neighbors[:,:] < 0)
@@ -216,7 +248,12 @@ class UVMapper:
         points = self.points
         trgls = self.trgls
         npt = points.shape[0]
-        is_on_boundary = np.zeros(npt, dtype=np.bool_)
+        # by default, all points are on boundary
+        is_on_boundary = np.full(npt, True, dtype=np.bool_)
+        # but if point belongs to at least one trgl,
+        # then it is not on a boundary
+        is_on_boundary[trgls.flatten()] = False
+        # unless it really is listed as being on a boundary:
         is_on_boundary[trgls[boundaries[:,0], (boundaries[:,1]+1)%3]] = True
         is_on_boundary[trgls[boundaries[:,0], (boundaries[:,1]+2)%3]] = True
         return is_on_boundary
@@ -251,6 +288,7 @@ class UVMapper:
         print("creating angles")
         points = self.points
         trgls = self.trgls
+        print(points.shape, trgls.shape)
         if points is None or len(points) < 3:
             print("Not enough points")
             return None
@@ -282,11 +320,15 @@ class UVMapper:
         # angle in radians is arccos of dot product of normalized vectors
         trglangles = np.arccos(trglndps)
         self.angles = trglangles
+        print(self.angles.shape)
 
     # adjust angles if point is not on a
     # boundary, and sum is < (2 pi - min_deficit).
     # if so, reduce the angles proportionally.
     def adjustedAngles(self, min_deficit):
+        if self.angles is None:
+            print("No angles to adjust")
+            return None
         angles = self.angles.copy()
         if angles is None:
             print("adjustAngles: angles not set!")
@@ -315,6 +357,7 @@ class UVMapper:
 
     def linABF(self):
         timer = Timer()
+        timer.active = False
         if self.angles is None:
             self.createAngles()
             timer.time("angles created")
@@ -322,10 +365,10 @@ class UVMapper:
         points = self.points
         trgls = self.trgls
         if adjusted_angles is None:
-            print("Not enough angles")
+            # print("Not enough angles")
             return None
         if trgls is None or len(trgls) == 0:
-            print("No triangles")
+            # print("No triangles")
             return None
 
         interior_points_bool = np.logical_and(~self.onBoundaryArray(), self.usedInTrglArray())
@@ -334,7 +377,7 @@ class UVMapper:
         nt = trgls.shape[0]
         npt = points.shape[0]
         nipt = interior_points.shape[0]
-        print("nt, npt, nipt", nt, npt, nipt)
+        # print("nt, npt, nipt", nt, npt, nipt)
         pt2ipt = np.full((npt), -1, dtype=np.int64)
         pt2ipt[interior_points] = np.arange(nipt)
 
@@ -407,7 +450,7 @@ class UVMapper:
         timer.time("  created splu")
         x = At@lu.solve(b)
         timer.time("  solved splu")
-        print("x min max", x.min(), x.max())
+        # print("x min max", x.min(), x.max())
 
         flattened_angles = adjusted_angles*(x.reshape(nt, 3) + 1.)
         return flattened_angles
@@ -420,10 +463,14 @@ class UVMapper:
         nt = trgls.shape[0]
         npt = points.shape[0]
         nipt = interior_points.shape[0]
+        if nipt == 0:
+            print("angleQuality: no interior points")
+            return
         pt2ipt = np.full((npt), -1, dtype=np.int64)
         pt2ipt[interior_points] = np.arange(nipt)
 
         pt_angle_sum = np.zeros(npt, dtype=np.float64)
+        # print("pt_angle_sum", pt_angle_sum.shape)
         np.add.at(pt_angle_sum, trgls.flatten(), angles.flatten())
         pt_angle_sum = pt_angle_sum[interior_points_bool]
         pt_angle_sum = 2*np.pi - pt_angle_sum
@@ -446,6 +493,8 @@ class UVMapper:
         np.add.at(wheel_error, np.roll(trgls, -1, axis=1).flatten(), ls.flatten())
         interior_points_bool[np.isnan(wheel_error)] = False
         wheel_error = wheel_error[interior_points_bool]
+        print(pt_angle_sum)
+        print(np.abs(pt_angle_sum))
 
         print("max errors", 
               np.max(np.abs(pt_angle_sum)), 
@@ -466,6 +515,9 @@ class UVMapper:
         nt = trgls.shape[0]
         npt = points.shape[0]
         nipt = interior_points.shape[0]
+        if nipt == 0:
+            print("maxWheelError: no interior points")
+            return None
         sn = np.sin(angles)
         isnegsn = (sn <= 0)
         sn[isnegsn] = 1.
@@ -481,16 +533,23 @@ class UVMapper:
         return np.max(np.abs(wheel_error))
 
     def computeUvsFromABF(self):
+        trgls = self.trgls
+        if trgls is None or len(trgls) == 0:
+            print("No triangles")
+            return None
         self.createAngles()
-        self.angleQuality(self.angles)
+        # self.angleQuality(self.angles)
         for i in range(10):
             abf_angles = self.linABF()
             if abf_angles is None:
                 print("linABF failed!")
-                return
-            self.angleQuality(abf_angles)
+                return None
+            # self.angleQuality(abf_angles)
             self.angles = abf_angles
             mwe = self.maxWheelError(abf_angles)
+            if mwe is None:
+                print("linABF: too few points")
+                return None
             if mwe < 1.e-5:
                 print("wheel error is small enough at iteration", i+1)
                 break
@@ -498,37 +557,42 @@ class UVMapper:
 
     def computeUvsFromAngles(self):
         timer = Timer()
+        timer.active = False
+        trgls = self.trgls
+        if trgls is None or len(trgls) == 0:
+            # print("No triangles")
+            return None
         if self.angles is None:
             self.createAngles()
             timer.time("angles created")
             # self.adjustAngles()
             adjusted = self.adjustedAngles(1.)
             # timer.time("angles adjusted")
+            if adjusted is None:
+                # print("Adjust angles failed")
+                return None
         angles = self.angles
         points = self.points
-        trgls = self.trgls
         constraints = self.constraints
         if angles is None:
-            print("Not enough angles")
-            return None
-        if trgls is None or len(trgls) == 0:
-            print("No triangles")
+            # print("Not enough angles")
             return None
         if constraints is None or len(constraints) < 2:
-            print("Not enough constraints")
+            # print("Not enough constraints")
             return None
 
         nt = trgls.shape[0]
         npt = points.shape[0]
         ncp = constraints.shape[0]
         nfp = npt-ncp
+        # print(nt, npt, ncp)
 
         # find the index of the point with the
         # largest angle
         rindex = np.argmax(np.sin(angles), axis=1)
         # The point with the largest angle should be moved to index 2
         axis1 = np.full(nt, 1, dtype=np.int64)
-        print(angles.shape, rindex.shape, axis1.shape)
+        # print(angles.shape, rindex.shape, axis1.shape)
 
         # roll trgls and angles along axis=1, according
         # to (2 - rindex), which give the per-row value of the shift.
@@ -546,6 +610,10 @@ class UVMapper:
 
         angles = None
         trgls = None
+
+        # TODO: for testing
+        # rangles = rangles[:, (1,0,2)]
+        # rtrgls = rtrgls[:, (1,0,2)]
 
         # numerator
         num = np.sin(rangles[:,1])
@@ -569,8 +637,16 @@ class UVMapper:
         # each vertex of each trgl
         m = np.zeros((nt, 3, 2, 2), dtype=np.float64)
 
-        m[:, 0] = np.array([[cs-1, sn],  [-sn, cs-1]]).transpose(2,0,1)
-        m[:, 1] = np.array([[-cs,  -sn], [sn,  -cs]]).transpose(2,0,1)
+        # Based on ABF++ paper and EduceLab implementation
+        # (assumes clockwise triangles in uv space):
+        # m[:, 0] = np.array([[cs-1, sn],  [-sn, cs-1]]).transpose(2,0,1)
+        # m[:, 1] = np.array([[-cs,  -sn], [sn,  -cs]]).transpose(2,0,1)
+        # Reversed; assumes counter-clockwise triangles in
+        # uv space (when uv coordinates are right-handed)
+        # The only difference is the sign of sn is changed everywhere
+        m[:, 0] = np.array([[cs-1, -sn],  [sn, cs-1]]).transpose(2,0,1)
+        m[:, 1] = np.array([[-cs,  sn], [-sn,  -cs]]).transpose(2,0,1)
+
         m[:, 2] = np.array([[ones, zeros], [zeros, ones]]).transpose(2,0,1)
 
         minds = np.indices(m.shape)
@@ -580,18 +656,28 @@ class UVMapper:
             rtrgls[minds[0].flatten(), minds[1].flatten()]*2+minds[3].flatten(),
             m.flatten()), axis=1)
 
+        # print("m_sparse")
+        # print(m_sparse)
+
         # constraint indices
         # NOTE that cindex is not sorted
         cindex = constraints[:,0].astype(np.int64)
+        # print("cindex")
+        # print(cindex)
         ptindex = np.arange(npt)
 
         # boolean array, length na: whether point is
         # free (True) or constrained (False)
         isfree = np.logical_not(np.isin(ptindex, cindex))
+        # print("isfree")
+        # print(isfree)
 
         # free points in sparse array (m_sparse[:,1] contains
         # point index)
         mf_sparse = m_sparse[np.logical_not(np.isin(m_sparse[:,1]//2, constraints[:,0]))]
+
+        # print("mf_sparse")
+        # print(mf_sparse)
 
         # pt index to mf pt index
         # each element either contains the corresponding mf pt index,
@@ -601,6 +687,7 @@ class UVMapper:
         pt2mf = np.full((2*npt), -1, dtype=np.int64)
         # indexes of free points
         free_ind = np.nonzero(isfree)[0]
+        # print("npt, free_ind, nfp", npt, isfree.sum(), free_ind.shape, nfp)
         pt2mf[2*free_ind] = 2*np.arange(nfp)
         pt2mf[2*free_ind+1] = 2*np.arange(nfp)+1
 
@@ -614,8 +701,11 @@ class UVMapper:
         AJ = mf_sparse[:,1]
         A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(2*nt, 2*nfp))
 
-        # print("A shape", 2*nt, 2*nfp)
+        # print("A sparse shape", 2*nt, 2*nfp)
+        # print(A_sparse)
         # print(AI.min(), AI.max(), AJ.min(), AJ.max())
+        # print(AI)
+        # print(AJ)
 
         # pinned points in sparse array
         mp_sparse = m_sparse[np.isin(m_sparse[:,1]//2, constraints[:,0])]
@@ -639,14 +729,25 @@ class UVMapper:
         mp_full = np.zeros((2*nt, 2*ncp), dtype=np.float64)
         mp_full[mp_sparse[:,0].astype(np.int64), mp_sparse[:,1].astype(np.int64)] = mp_sparse[:, 2]
 
+        # print("mp_full")
+        # print(mp_full)
+        # print(constraints[:,(1,2)])
+
         b = -mp_full @ constraints[:,(1,2)].flatten()
 
         timer.time("  created arrays")
 
         Acsr = A_sparse.tocsr()
         At = Acsr.transpose()
-        lu = sparse.linalg.splu(At@Acsr)
-        x = lu.solve(At@b)
+        # print(At@Acsr)
+        # print(b)
+        # print(At@b)
+        try:
+            lu = sparse.linalg.splu(At@Acsr)
+            x = lu.solve(At@b)
+        except Exception as e:
+            # print("SPLU exception:", e)
+            return None
         uv = np.zeros((npt, 2), dtype=np.float64)
         uv[isfree, :] = x.reshape(nfp, 2)
         uv[cindex, :] = constraints[:,(1,2)]
@@ -654,24 +755,25 @@ class UVMapper:
 
     def computeUvsFromXyzs(self):
         timer = Timer()
+        timer.active = False
         points = self.points
         trgls = self.trgls
         constraints = self.constraints
         if points is None or len(points) < 3:
-            print("Not enough points")
+            # print("Not enough points")
             return None
-        if trgls is None:
-            print("No triangles")
+        if trgls is None or len(trgls) == 0:
+            # print("No triangles")
             return None
         if constraints is None or len(constraints) < 2:
-            print("Not enough constraints")
+            # print("Not enough constraints")
             return None
 
         nt = trgls.shape[0]
         npt = points.shape[0]
         ncp = constraints.shape[0]
         nfp = npt-ncp
-        print("nt, npt, ncp", nt, npt, ncp)
+        # print("nt, npt, ncp", nt, npt, ncp)
 
         trglxyz = points[trgls]
         trgld = np.zeros((trglxyz.shape[0],3,3))
@@ -734,6 +836,8 @@ class UVMapper:
         # boolean array, length npt: whether point is
         # free (True) or constrained (False)
         isfree = np.logical_not(np.isin(ptindex, cindex))
+        # print(isfree)
+        # print(m_sparse)
 
         # free points in sparse array (m_sparse[:,1] contains
         # point index)
@@ -797,8 +901,19 @@ class UVMapper:
 
         Acsr = A_sparse.tocsr()
         At = Acsr.transpose()
-        lu = sparse.linalg.splu(At@Acsr)
-        x = lu.solve(At@b)
+        # print(b)
+        # print(A_coo)
+        # print(At@Acsr)
+        try:
+            lu = sparse.linalg.splu(At@Acsr)
+            # print("splu solved")
+            x = lu.solve(At@b)
+        except Exception as e:
+            # print("SPLU exception:", e)
+            # print(b)
+            # print(A_coo)
+            # print(At@Acsr)
+            return None
         uv = np.zeros((npt, 2), dtype=np.float64)
         # mf2pt = np.arange(npt)[pt2mf >= 0]
         uv[isfree, :] = x.reshape(2, nfp).transpose()
@@ -834,16 +949,24 @@ if __name__ == '__main__':
     # print("pt2, pt3", pt2, pt3)
     # ptmn, ptmx = lscm.getTwoAdjacentBoundaryPoints()
     # print("ptmn, ptmx", ptmn, ptmx)
-    lscm.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.]], dtype=np.float64)
+    # lscm.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.]], dtype=np.float64)
+    lscm.constraints = np.array(
+            [
+            [1., 600., 1500.],
+            [2., 500., 1600.],
+            [3., 400., 1500.],
+            [4., 500., 1400.],
+            ], dtype=np.float64)
     # uvs = lscm.computeUvs()
-    # uvs = lscm.computeUvsFromAngles()
+    uvs = lscm.computeUvsFromAngles()
     # uvs = lscm.computeUvsFromXyzs()
-    uvs = lscm.computeUvsFromABF()
+    # uvs = lscm.computeUvsFromABF()
     timer.time("computed uvs")
     # lscm.angleQuality(lscm.angles)
     uvmin = uvs.min(axis=0)
     uvmax = uvs.max(axis=0)
     # print("uv min max", uvmin, uvmax)
+    print(uvs)
     duv = uvmax-uvmin
     if (duv>0).all():
         uvs -= uvmin
