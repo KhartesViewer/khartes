@@ -905,12 +905,31 @@ class TrglFragmentView(BaseFragmentView):
             all_trgls = Delaunay(all_pts).simplices
         except Exception as err:
             err = str(err).splitlines()[0]
-            print("movePoints triangulation error: %s"%err)
+            print("retriangulateAll triangulation error: %s"%err)
         if all_trgls is not None:
             new_trgls = all_trgls[(all_trgls < len(stp)).all(axis=1), :]
             # new_trgls = all_trgls
             self.fragment.trgls = TrglPointSet.rotateToMin(new_trgls)
             # self.fragment.trgls = new_trgls
+
+    # This depends on self.fragment.trgls being
+    # up to date
+    def adjustStPoints(self, index, half_width, stxy=None):
+        if stxy is None:
+            stxy = self.all_stpoints[index]
+        osts = TrglPointSet(self.all_stpoints, len(self.stpoints), stxy, half_width)
+        retval = osts.adjustSts(self.fragment.gpoints, self.fragment.trgls, index)
+        if retval is None:
+            # print("Adjustment failed")
+            return
+
+        adjusted_inds, adjusted_sts = retval
+        # print(len(adjusted_sts))
+        self.stpoints[adjusted_inds] = adjusted_sts
+        self.all_stpoints[adjusted_inds] = adjusted_sts
+        adj_uvs = self.stxysToUvs(adjusted_sts)
+        self.fragment.gtpoints[adjusted_inds] = adj_uvs
+        # print("Adjustment done")
 
     def movePoint(self, index, new_vijk, update_xyz, update_st):
         # print("mp")
@@ -953,6 +972,7 @@ class TrglFragmentView(BaseFragmentView):
 
             ops = TrglPointSet(self.all_stpoints, len(self.stpoints), new_stxy, half_width)
 
+            '''
             # osts = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, .25*half_width)
             osts = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
             retval = osts.adjustSts(self.fragment.gpoints, self.fragment.trgls, index)
@@ -969,8 +989,19 @@ class TrglFragmentView(BaseFragmentView):
                 uv = self.stxyToUv(new_stxy)
                 self.fragment.gtpoints[index, :] = uv
                 # self.stpoints[index, :] = new_stxy
+            '''
+
+            ''''''
+            self.stpoints[index, :] = new_stxy
+            self.all_stpoints[index, :] = new_stxy
+            uv = self.stxyToUv(new_stxy)
+            self.fragment.gtpoints[index, :] = uv
+            # self.stpoints[index, :] = new_stxy
+            self.adjustStPoints(index, half_width)
+            ''''''
 
             nps = TrglPointSet(self.all_stpoints, len(self.stpoints), new_stxy, half_width)
+            '''
             result = TrglPointSet.trglDiff(ops, nps)
             if result is not None:
                 otrgls, ntrgls = result
@@ -979,16 +1010,28 @@ class TrglFragmentView(BaseFragmentView):
                     # print("un", ntrgls)
                     # self.replaceTrgls(otrgls, ntrgls)
                     self.fragment.trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
+            '''
+            self.applyTrglDiff(ops, nps)
 
         self.fragment.notifyModified()
         return True
+
+    def applyTrglDiff(self, ops, nps):
+        result = TrglPointSet.trglDiff(ops, nps)
+        if result is not None:
+            otrgls, ntrgls = result
+            if len(otrgls) > 0 or len(ntrgls) > 0:
+                # print("uo", otrgls)
+                # print("un", ntrgls)
+                # self.replaceTrgls(otrgls, ntrgls)
+                self.fragment.trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
 
     def pointExists(self, stxy):
         existing = np.nonzero((self.stpoints == stxy).all(axis=1))[0]
         return len(existing)
 
     def addPoint(self, tijk, stxy):
-        print("tf add point", tijk, stxy)
+        # print("tf add point", tijk, stxy)
         if stxy is None:
             print("TrglFragment.addPoint failed because stxy not given")
             return
@@ -1020,9 +1063,14 @@ class TrglFragmentView(BaseFragmentView):
         ops = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
         ops.deletePoint(nstp)
 
+        # Can't do this here; self.fragment.trgls is not
+        # up to date yet (new point hasn't been added)
+        # self.adjustStPoints(nstp, half_width)
+
         nps = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
         # nps.addPointAtEnd(stxy)
 
+        '''
         result = TrglPointSet.trglDiff(ops, nps)
         if result is None:
             print("Add point: result is none")
@@ -1034,9 +1082,17 @@ class TrglFragmentView(BaseFragmentView):
                 trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
                 # trgls[trgls>index] -= 1
                 self.fragment.trgls = trgls
+                # TODO: after doing this, should be
+                # retriangulated?
+                # self.adjustStPoints(nstp, half_width)
             else:
                 print("set local points")
                 self.setLocalPoints(True, False)
+        '''
+        self.applyTrglDiff(ops, nps)
+        self.adjustStPoints(nstp, half_width)
+        nps2 = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
+        self.applyTrglDiff(nps, nps2)
 
         # prevent setScaledTexturePoints from running
         # when setLocalPoints is called
@@ -1059,6 +1115,7 @@ class TrglFragmentView(BaseFragmentView):
         nps = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
         nps.deletePoint(index)
         # Retriangulate before deleting point from self.stpoints etc
+        '''
         result = TrglPointSet.trglDiff(ops, nps)
         if result is not None:
             otrgls, ntrgls = result
@@ -1069,11 +1126,19 @@ class TrglFragmentView(BaseFragmentView):
                 trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
                 trgls[trgls>index] -= 1
                 self.fragment.trgls = trgls
+        '''
+        self.applyTrglDiff(ops, nps)
+        self.fragment.trgls[self.fragment.trgls>index] -= 1
 
         self.fragment.gpoints = np.delete(self.fragment.gpoints, index, 0)
         self.fragment.gtpoints = np.delete(self.fragment.gtpoints, index, 0)
         self.stpoints = np.delete(self.stpoints, index, 0)
         self.all_stpoints = np.delete(self.all_stpoints, index, 0)
+
+        ops = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
+        self.adjustStPoints(-1, half_width, old_stxy)
+        nps = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
+        self.applyTrglDiff(ops, nps)
 
         # prevent setScaledTexturePoints from running
         # when setLocalPoints is called
@@ -1236,6 +1301,8 @@ class TrglPointSet:
         # print("inds", inds)
         # print("xyzpts", xyzpts.shape)
         localxyz = xyzpts[inds]
+        # Don't triangulate here; the local convex
+        # hull would not be desirable!
         # trgls = self.triangulate()
         if trgls is None:
             return
@@ -1245,7 +1312,8 @@ class TrglPointSet:
         mapper = UVMapper(localxyz, trgls)
         bounds_flag = mapper.onBoundaryArray()
         # input point is never used as a constraint
-        bounds_flag[self.reverse_indexes[ptindex]] = False
+        if ptindex >= 0:
+            bounds_flag[self.reverse_indexes[ptindex]] = False
 
         '''
         ptrgls = trgls.copy()
@@ -1264,7 +1332,7 @@ class TrglPointSet:
         adjusted_sts = mapper.computeUvsFromXyzs()
         # adjusted_sts = mapper.computeUvsFromAngles()
         if adjusted_sts is None:
-            # print("adjustSts: no adjustment made")
+            print("adjustSts: no adjustment made")
             # return inds, pts
             return None
         # print("before", pts[~bounds_flag])

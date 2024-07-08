@@ -206,13 +206,76 @@ class GLSurfaceWindow(DataWindow):
         j = cij[1] + dy/zoom
         return (i, j)
 
+    def stxyToOglPixel(self, ij):
+        zoom = self.getZoom()
+        cij = self.volume_view.stxytf
+        if cij is None:
+            return None
+        ci = cij[0]
+        cj = cij[1]
+        ww, wh = self.width(), self.height()
+        wcx, wcy = ww//2, wh//2
+
+        # note that the values are floats:
+        x, y = (wcx+zoom*(ij[0]-ci), wcy+zoom*(ij[1]-cj))
+
+        ratio = self.screen().devicePixelRatio()
+        ix = round(x*ratio)
+        iy = round(y*ratio)
+        return (ix, iy)
+
+    def stxyToTijk(self, ij, return_none_if_outside=False):
+        if return_none_if_outside:
+            outside_value = None
+        else:
+            outside_value = self.volume_view.ijktf
+
+        xyz_arr = self.glw.xyz_arr
+        if xyz_arr is None:
+            # print("xyz_arr is None; returning vv.ijktf")
+            # return None
+            # print("None a")
+            return outside_value
+
+        ixy = self.stxyToOglPixel(ij)
+        if ixy is None:
+            # print("None b")
+            return outside_value
+
+        ix, iy = ixy
+
+        if iy < 0 or iy >= xyz_arr.shape[0] or ix < 0 or ix >= xyz_arr.shape[1]:
+            # print("error", x, y, xyz_arr.shape)
+            # return self.volume_view.ijktf
+            # print("None c")
+            return outside_value
+
+        xyza = xyz_arr[iy, ix]
+        if xyza[3] == 0:
+            # print("None d")
+            return outside_value
+
+        iind = self.iIndex
+        jind = self.jIndex
+        kind = self.kIndex
+
+        i = xyza[iind]
+        j = xyza[jind]
+        k = xyza[kind]
+        return (i,j,k)
+
     # It might seem backwards to have stxyToTijk call
     # xyToTijk, instead of the other way around.  But
     # because the ijk (or xyz) location is stored in
     # the window pixels, it kind of makes sense.
-    def stxyToTijk(self, stxy, return_none_if_outside=False):
+    def stxyToTijkOld(self, stxy, return_none_if_outside=False):
         xy = self.stxyToWindowXy(stxy)
         return self.xyToTijk(xy, return_none_if_outside)
+
+
+    def xyToTijk(self, xy, return_none_if_outside=False):
+        ij = self.xyToT(xy)
+        return self.stxyToTijk(ij, return_none_if_outside)
 
 
     '''
@@ -221,7 +284,7 @@ class GLSurfaceWindow(DataWindow):
     Does this by looking at xyz_arr (generated in drawTrglXyzs()
     via OpenGL calls) at the given mouse position.
     '''
-    def xyToTijk(self, xy, return_none_if_outside=False):
+    def xyToTijkOld(self, xy, return_none_if_outside=False):
         x, y = xy
         iind = self.iIndex
         jind = self.jIndex
