@@ -1044,10 +1044,15 @@ class TrglFragmentView(BaseFragmentView):
         nps2 = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
         self.applyTrglDiff(nps, nps2)
 
-        # prevent setScaledTexturePoints from running
-        # when setLocalPoints is called
-        self.prev_pt_count = len(self.fragment.gpoints)
-        
+        # tcount will be zero if the new point has no triangles,
+        # non-zero otherwise
+        tcount = (self.fragment.trgls==nstp).any(axis=1).sum()
+        # print("tcount", tcount)
+        if tcount > 0:
+            # prevent setScaledTexturePoints from running
+            # when setLocalPoints is called
+            self.prev_pt_count = len(self.fragment.gpoints)
+
         self.setLocalPoints(True, False)
         self.fragment.notifyModified()
 

@@ -148,11 +148,11 @@ class GLDataWindow(DataWindow):
         # print("offset", self.window.getNormalOffsetOnCurrentFragment())
 
     def setCursorPosition(self, tijk):
-        ij = self.tijkToIj(tijk)
-        xy = self.ijToXy(ij)
         d = 10
-        xyl = (xy[0]-d, xy[1]-d)
-        xyg = (xy[0]+d, xy[1]+d)
+        # ij = self.tijkToIj(tijk)
+        # xy = self.ijToXy(ij)
+        # xyl = (xy[0]-d, xy[1]-d)
+        # xyg = (xy[0]+d, xy[1]+d)
 
         # stxyz = self.stxyzInBounds(xyl, xyg, tijk)
         stxyz = self.stxyzInRange(tijk, d)
@@ -171,15 +171,31 @@ class GLDataWindow(DataWindow):
     '''
     def addPoint(self, tijk):
         # print("gldw add point", tijk)
-        d = 100
+        vv = self.volume_view
+        if vv is None:
+            return
+        stxytf = vv.stxytf
+        d = 1000
         stxyz = self.stxyzInRange(tijk, d)
         print("stxyz", stxyz)
+        '''
         maxz = 10
         if stxyz is None:
             stxy = None
         else:
             stxy = stxyz[:2]
             if abs(stxyz[2]) > maxz:
+                stxy = None
+        '''
+        if stxyz is None:
+            stxy = None
+        else:
+            stxy = stxyz[:2]
+            dx = abs(stxy[0]-stxytf[0])
+            dy = abs(stxy[1]-stxytf[1])
+            print(dx, dy)
+            maxd = 500
+            if dx > maxd or dy > maxd:
                 stxy = None
         self.window.addPointToCurrentFragment(tijk, stxy)
 
@@ -188,12 +204,12 @@ class GLDataWindow(DataWindow):
         vv = self.volume_view
         if vv is None:
             return
-        tf = vv.ijktf
-        ij = self.tijkToIj(tf)
-        xy = self.ijToXy(ij)
         d = 10
-        xyl = (xy[0]-d, xy[1]-d)
-        xyg = (xy[0]+d, xy[1]+d)
+        tf = vv.ijktf
+        # ij = self.tijkToIj(tf)
+        # xy = self.ijToXy(ij)
+        # xyl = (xy[0]-d, xy[1]-d)
+        # xyg = (xy[0]+d, xy[1]+d)
 
         # stxy = self.stxyInBounds(xyl, xyg, tf)
         stxy = self.stxyInRange(tf, d)
@@ -252,6 +268,8 @@ class GLDataWindow(DataWindow):
         xy0 = self.ijToXy(ij)
         xymin = (xy0[0]-maxd, xy0[1]-maxd)
         xymax = (xy0[0]+maxd, xy0[1]+maxd)
+        xymin = (max(0, xymin[0]), max(0, xymin[1]))
+        xymax = (min(self.width(), xymax[0]), min(self.height(), xymax[1]))
         # x y fragment_view_id trgl_id
         xyfvs = dw.xyfvs
         # list of fragment views (to go from fragment_view_id
@@ -268,26 +286,68 @@ class GLDataWindow(DataWindow):
             return None
         # indexes of rows where fragment_view matches mfvi
         # matches = (xyfvs[:,2] == mfvi).nonzero()[0]
+
         # need a lot of parentheses because the & operator
         # has higher precedence than comparison operators
         matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
         if len(matches) == 0:
             # print("no matches")
-            return None
+            # return None
+            # dw.cur_frag_pts_xyijk = None
+            # dw.cur_frag_pts_fv = []
+            fvs = np.array(self.cur_frag_pts_fv)
+            # print("fvs", fvs)
+            xys = self.cur_frag_pts_xyijk[:,:2]
+            inds = self.cur_frag_pts_xyijk[:,5].astype(np.int64)
+            # ftrg = mfv.trgls().flatten()
+            has_trgl = np.isin(inds, mfv.trgls().flatten(), kind="table")
+            # trgls = mfv.trgls()
+            # atrgl = []
+            # for ind in inds:
+            #     w = np.nonzero(trgls==ind)[0]
+            # atrgl = np.full(inds.shape[0], -1, dtype=np.int64)
+            # atrgl[has_trgl] = 
+            # print("has trgl", has_trgl)
+            # print("equals mfv", fvs==mfv)
+            # print("fvs", fvs)
+            # print("mfv", mfv)
+            # print("xys", xys)
+            # print("xy range", xymin, xymax)
+            matches = ((fvs == mfv) & (xys >= xymin).all(axis=1) & (xys <= xymax).all(axis=1) & has_trgl).nonzero()[0]
+            if len(matches) == 0:
+                return None
+            # print("matches", matches)
+            mxy = xys[matches]
+            dels = mxy - xy0
+            # d2s = np.inner(dels, dels)
+            d2s = (dels*dels).sum(axis=1)
+            minindex = np.argmin(d2s)
+            # print("d2s", mxyft.shape, xy0, dels.shape, d2s.shape, d2s[minindex])
+            mind = np.sqrt(d2s[minindex])
+            if mind > maxd:
+                return None
+            ptindex = inds[matches[minindex]]
+            tindexes = (mfv.trgls()==ptindex).nonzero()[0]
+            if len(tindexes) == 0:
+                print("tindexes is empty!  This should not happen")
+                return None
+            trgl_index = tindexes[0]
 
-        mxyft = xyfvs[matches]
+        else:
+            mxyft = xyfvs[matches]
 
-        # dels = mxyft[:,:2] - np.array(xy0)[:,np.newaxis]
-        dels = mxyft[:,:2] - xy0
-        # d2s = np.inner(dels, dels)
-        d2s = (dels*dels).sum(axis=1)
-        minindex = np.argmin(d2s)
-        # print("d2s", mxyft.shape, xy0, dels.shape, d2s.shape, d2s[minindex])
-        mind = np.sqrt(d2s[minindex])
-        if mind > maxd:
-            return None
+            # dels = mxyft[:,:2] - np.array(xy0)[:,np.newaxis]
+            dels = mxyft[:,:2] - xy0
+            # d2s = np.inner(dels, dels)
+            d2s = (dels*dels).sum(axis=1)
+            minindex = np.argmin(d2s)
+            # print("d2s", mxyft.shape, xy0, dels.shape, d2s.shape, d2s[minindex])
+            mind = np.sqrt(d2s[minindex])
+            if mind > maxd:
+                return None
 
-        trgl_index = mxyft[minindex, 3]
+            trgl_index = mxyft[minindex, 3]
+
         trgl = mfv.trgls()[trgl_index]
         vpts = mfv.vpoints[trgl][:,:3]
 
@@ -306,6 +366,7 @@ class GLDataWindow(DataWindow):
             return None
         return stxyz[:2]
 
+    '''
     # Note that this only looks for trgls on the
     # main active fragment view
     def stxyzInBounds(self, xymin, xymax, ijk):
@@ -383,6 +444,7 @@ class GLDataWindow(DataWindow):
         if stxyz is None:
             return None
         return stxyz[:2]
+    '''
 
 
 slice_code = {
