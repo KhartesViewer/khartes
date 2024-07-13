@@ -190,6 +190,14 @@ class UVMapper:
         # boundary edges are NOT given in any particular order
         self.boundaries = None
 
+        # should be same size as points; values corresponding
+        # to constrained points will be ignored
+        self.initial_points = None
+        self.ip_weight = 0.
+        # Same size as initial_points.  ip_weight will be
+        # ignored if ip_weights is set
+        self.ip_weights = None
+
     # Copied from base_fragment.py in order
     # to remove dependency
     @staticmethod
@@ -285,15 +293,15 @@ class UVMapper:
         return pt0, pt1
 
     def createAngles(self):
-        print("creating angles")
+        # print("creating angles")
         points = self.points
         trgls = self.trgls
-        print(points.shape, trgls.shape)
+        # print(points.shape, trgls.shape)
         if points is None or len(points) < 3:
-            print("Not enough points")
+            # print("Not enough points")
             return None
         if trgls is None or len(trgls) == 0:
-            print("No triangles")
+            # print("No triangles")
             return None
 
         # shape is nt, 3, 3
@@ -320,23 +328,23 @@ class UVMapper:
         # angle in radians is arccos of dot product of normalized vectors
         trglangles = np.arccos(trglndps)
         self.angles = trglangles
-        print(self.angles.shape)
+        # print(self.angles.shape)
 
     # adjust angles if point is not on a
     # boundary, and sum is < (2 pi - min_deficit).
     # if so, reduce the angles proportionally.
     def adjustedAngles(self, min_deficit):
         if self.angles is None:
-            print("No angles to adjust")
+            # print("No angles to adjust")
             return None
         angles = self.angles.copy()
         if angles is None:
-            print("adjustAngles: angles not set!")
+            # print("adjustAngles: angles not set!")
             return
         points = self.points
         trgls = self.trgls
         sums = np.zeros(len(points), dtype=np.float64)
-        print(trgls.shape, angles.shape)
+        # print(trgls.shape, angles.shape)
         is_on_boundary = self.onBoundaryArray()
 
         # https://stackoverflow.com/questions/60481343/numpy-sum-over-repeated-entries-in-index-array
@@ -516,7 +524,7 @@ class UVMapper:
         npt = points.shape[0]
         nipt = interior_points.shape[0]
         if nipt == 0:
-            print("maxWheelError: no interior points")
+            # print("maxWheelError: no interior points")
             return None
         sn = np.sin(angles)
         isnegsn = (sn <= 0)
@@ -569,16 +577,16 @@ class UVMapper:
             adjusted = self.adjustedAngles(1.)
             # timer.time("angles adjusted")
             if adjusted is None:
-                # print("Adjust angles failed")
+                print("Adjust angles failed")
                 return None
         angles = self.angles
         points = self.points
         constraints = self.constraints
         if angles is None:
-            # print("Not enough angles")
+            print("Not enough angles")
             return None
         if constraints is None or len(constraints) < 2:
-            # print("Not enough constraints")
+            print("Not enough constraints")
             return None
 
         nt = trgls.shape[0]
@@ -701,6 +709,14 @@ class UVMapper:
         AJ = mf_sparse[:,1]
         A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(2*nt, 2*nfp))
 
+        use_weights = False
+        if self.initial_points is not None and (self.ip_weight > 0 or self.ip_weights is not None):
+            use_weights = True
+            if self.ip_weights is None:
+                weights = np.full(points.shape[0], self.ip_weight, np.float64)
+            else:
+                weights = self.ip_weights
+
         # print("A sparse shape", 2*nt, 2*nfp)
         # print(A_sparse)
         # print(AI.min(), AI.max(), AJ.min(), AJ.max())
@@ -746,7 +762,7 @@ class UVMapper:
             lu = sparse.linalg.splu(At@Acsr)
             x = lu.solve(At@b)
         except Exception as e:
-            # print("SPLU exception:", e)
+            print("SPLU exception:", e)
             return None
         uv = np.zeros((npt, 2), dtype=np.float64)
         uv[isfree, :] = x.reshape(nfp, 2)
@@ -760,20 +776,25 @@ class UVMapper:
         trgls = self.trgls
         constraints = self.constraints
         if points is None or len(points) < 3:
-            # print("Not enough points")
+            print("Not enough points")
             return None
         if trgls is None or len(trgls) == 0:
-            # print("No triangles")
+            print("No triangles")
             return None
+        '''
         if constraints is None or len(constraints) < 2:
-            # print("Not enough constraints")
+            print("Not enough constraints")
             return None
+        '''
+        if constraints is None:
+            constraints = np.zeros((0,3))
 
         nt = trgls.shape[0]
         npt = points.shape[0]
         ncp = constraints.shape[0]
         nfp = npt-ncp
         # print("nt, npt, ncp", nt, npt, ncp)
+
 
         trglxyz = points[trgls]
         trgld = np.zeros((trglxyz.shape[0],3,3))
@@ -835,9 +856,11 @@ class UVMapper:
 
         # boolean array, length npt: whether point is
         # free (True) or constrained (False)
-        isfree = np.logical_not(np.isin(ptindex, cindex))
+        # isfree = np.logical_not(np.isin(ptindex, cindex))
         # print(isfree)
         # print(m_sparse)
+        isfree = np.full(points.shape[0], True, dtype=np.bool_)
+        isfree[cindex] = False
 
         # free points in sparse array (m_sparse[:,1] contains
         # point index)
@@ -853,6 +876,32 @@ class UVMapper:
         # the free-point indexing
         mf_sparse[:,1] = pt2mf[mf_sparse[:,1].astype(np.int64)]
 
+        use_weights = False
+        if self.initial_points is not None and (self.ip_weight > 0 or self.ip_weights is not None):
+            use_weights = True
+            if self.ip_weights is None:
+                weights = np.full(points.shape[0], self.ip_weight, np.float64)
+            else:
+                weights = self.ip_weights
+            # wf = self.ip_weights[isfree]
+
+            # wf_sparse = np.stack((pt2mf[isfree], mptind[isfree], wf[:,0], wf[:,1]), axis=1)
+            # wf_sparse = np.stack((pt2mf[isfree], mptind[isfree], wf[:,0], wf[:,1]), axis=1)
+            # diagonal matrix with weights of free points
+            wf_sparse = np.stack((np.ogrid[:nfp], np.ogrid[:nfp], weights[isfree]), axis=1)
+            # wf = sparse.csr_array((weights[isfree], (np.ogrid[:nfp], np.ogrid[:nfp])), shape=(nfp, nfp))
+            wf = sparse.csr_array((wf_sparse[:,2], (wf_sparse[:,0],wf_sparse[:,1])), shape=(nfp, nfp))
+            wf_ul = wf_sparse.copy()
+            wf_ul[:,0] += 2*nt
+            wf_lr = wf_sparse.copy()
+            wf_lr[:,0] += 2*nt+nfp
+            wf_lr[:,1] += nfp
+            # w1fr = wf_sparse[:,(0,1,2)]
+            # w2fr = wf_sparse[:,(0,1,3)]
+            # w1f = sparse.csr_array((wf_sparse[:,2], (wf_sparse[:,0], wf_sparse[:,1])), shape=(nfp, nfp))
+            bw1 = wf @ self.initial_points[isfree,0]
+            bw2 = wf @ self.initial_points[isfree,1]
+
         # pinned points in sparse array
         mp_sparse = m_sparse[np.isin(m_sparse[:,1], constraints[:,0])]
 
@@ -866,19 +915,36 @@ class UVMapper:
         # the pinned-point indexing
         mp_sparse[:,1] = pt2mp[mp_sparse[:,1].astype(np.int64)]
 
+        '''
         # to compute b, need the full (non-sparse) version
         # of mp.  Create this by first creating an
         # array with all zeros, and then filling in
         # the points from mp_sparse
         mp_full = np.zeros((nt, ncp, 2), dtype=np.float64)
         mp_full[mp_sparse[:,0].astype(np.int64), mp_sparse[:,1].astype(np.int64)] = mp_sparse[:, (2,3)]
-        u1p = constraints[:,1]
-        u2p = constraints[:,2]
         m1p = mp_full[:,:,0]
         m2p = mp_full[:,:,1]
+        '''
+        ''''''
+        m1pr = mp_sparse[:,(0,1,2)]
+        m1p = sparse.csr_array((m1pr[:,2], (m1pr[:,0], m1pr[:,1])), shape=(nt, ncp))
+        m2pr = mp_sparse[:,(0,1,3)]
+        m2p = sparse.csr_array((m2pr[:,2], (m2pr[:,0], m2pr[:,1])), shape=(nt, ncp))
+        ''''''
+        u1p = constraints[:,1]
+        u2p = constraints[:,2]
+        bu1 = -m1p@u1p + m2p@u2p
+        bu2 = -m2p@u1p - m1p@u2p
+        if use_weights:
+            b = np.concatenate((bu1, bu2, bw1, bw2))
+        else:
+            b = np.concatenate((bu1, bu2))
+        '''
         b = np.concatenate((
             -m1p@u1p + m2p@u2p,
             -m2p@u1p - m1p@u2p))
+        '''
+        # print("b", b)
 
         m1f = mf_sparse[:,(0,1,2)]
         m2f = mf_sparse[:,(0,1,3)]
@@ -892,14 +958,20 @@ class UVMapper:
         lr[:,0] += nt
         lr[:,1] += nfp
 
-        A_coo = np.concatenate((ul, ur, ll, lr), axis=0)
-        AV = A_coo[:,2]
-        AI = A_coo[:,0]
-        AJ = A_coo[:,1]
-        A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(2*nt, 2*nfp))
+        if use_weights:
+            A_csr_in = np.concatenate((ul, ur, ll, lr, wf_ul, wf_lr), axis=0)
+        else:
+            A_csr_in = np.concatenate((ul, ur, ll, lr), axis=0)
+        AV = A_csr_in[:,2]
+        AI = A_csr_in[:,0]
+        AJ = A_csr_in[:,1]
+        if use_weights:
+            Acsr = sparse.csr_array((AV, (AI, AJ)), shape=(2*nt+2*nfp, 2*nfp))
+        else:
+            Acsr = sparse.csr_array((AV, (AI, AJ)), shape=(2*nt, 2*nfp))
         timer.time("  created sparse array")
 
-        Acsr = A_sparse.tocsr()
+        # Acsr = A_sparse.tocsr()
         At = Acsr.transpose()
         # print(b)
         # print(A_coo)
@@ -909,7 +981,7 @@ class UVMapper:
             # print("splu solved")
             x = lu.solve(At@b)
         except Exception as e:
-            # print("SPLU exception:", e)
+            print("SPLU exception:", e)
             # print(b)
             # print(A_coo)
             # print(At@Acsr)
@@ -925,6 +997,7 @@ if __name__ == '__main__':
     from trgl_fragment import TrglFragment
     points = None
     trgls = None
+    tpoints = None
     timer = Timer()
     out_file = "test_out.obj"
     if len(sys.argv) > 1:
@@ -933,6 +1006,11 @@ if __name__ == '__main__':
         if trgl_frags is not None and len(trgl_frags) > 0:
             trgl_frag = trgl_frags[0]
             points = trgl_frag.gpoints
+            tpoints = trgl_frag.gtpoints
+            if len(tpoints) != len(points):
+                if len(tpoints) != 0:
+                    print("discrepancy between tpoints and points lengths")
+                tpoints = None
             trgls = trgl_frag.trgls
         if len(sys.argv) > 2:
             out_file = sys.argv[2]
@@ -950,6 +1028,7 @@ if __name__ == '__main__':
     # ptmn, ptmx = lscm.getTwoAdjacentBoundaryPoints()
     # print("ptmn, ptmx", ptmn, ptmx)
     # lscm.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.]], dtype=np.float64)
+    '''
     lscm.constraints = np.array(
             [
             [1., 600., 1500.],
@@ -957,6 +1036,14 @@ if __name__ == '__main__':
             [3., 400., 1500.],
             [4., 500., 1400.],
             ], dtype=np.float64)
+    '''
+    if tpoints is not None:
+        lscm.initial_points = tpoints
+        weight = .001
+        # lscm.ip_weight = weight
+        weights = np.full(tpoints.shape[0], weight, dtype=np.float64)
+        # weights[0] = 0.
+        lscm.ip_weights = weights
     # uvs = lscm.computeUvs()
     uvs = lscm.computeUvsFromAngles()
     # uvs = lscm.computeUvsFromXyzs()
@@ -966,6 +1053,7 @@ if __name__ == '__main__':
     uvmin = uvs.min(axis=0)
     uvmax = uvs.max(axis=0)
     # print("uv min max", uvmin, uvmax)
+    np.set_printoptions(precision=3)
     print(uvs)
     duv = uvmax-uvmin
     if (duv>0).all():

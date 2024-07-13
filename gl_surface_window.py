@@ -171,6 +171,8 @@ class GLSurfaceWindow(DataWindow):
         wcx, wcy = ww//2, wh//2
         dx, dy = x-wcx, y-wcy
         cij = self.volume_view.stxytf
+        if cij is None:
+            return None
         # print("tf", tijk)
         zoom = self.getZoom()
         # i = cij[0] + int(dx/zoom)
@@ -202,6 +204,9 @@ class GLSurfaceWindow(DataWindow):
             outside_value = None
         else:
             outside_value = self.volume_view.ijktf
+
+        if ij is None:
+            return None
 
         xyz_arr = self.glw.xyz_arr
         if xyz_arr is None:

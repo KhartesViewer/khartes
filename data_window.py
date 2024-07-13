@@ -653,6 +653,8 @@ class DataWindow(QLabel):
                 if i > 0:
                     stxt += " "
                 stxt += "%s"%(dtxt)
+            stxy = fv.stpoints[self.window.project_view.nearby_node_index]
+            stxt += " (uv %g %g)"%(round(stxy[0],2), round(stxy[1],2))
             stxt += "   "
 
         '''

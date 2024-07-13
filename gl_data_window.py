@@ -176,7 +176,7 @@ class GLDataWindow(DataWindow):
             return
         stxytf = vv.stxytf
         d = 1000
-        stxyz = self.stxyzInRange(tijk, d)
+        stxyz = self.stxyzInRange(tijk, d, True)
         print("stxyz", stxyz)
         '''
         maxz = 10
@@ -191,12 +191,14 @@ class GLDataWindow(DataWindow):
             stxy = None
         else:
             stxy = stxyz[:2]
-            dx = abs(stxy[0]-stxytf[0])
-            dy = abs(stxy[1]-stxytf[1])
-            print(dx, dy)
-            maxd = 500
-            if dx > maxd or dy > maxd:
-                stxy = None
+            if stxytf is not None:
+                dx = abs(stxy[0]-stxytf[0])
+                dy = abs(stxy[1]-stxytf[1])
+                # print(dx, dy)
+                maxd = 500
+                if dx > maxd or dy > maxd:
+                    print("nearest xyz point is too far in uv")
+                    stxy = None
         self.window.addPointToCurrentFragment(tijk, stxy)
 
     def setStxyTfFromIjkTf(self):
@@ -262,12 +264,13 @@ class GLDataWindow(DataWindow):
 
     # Note that this only looks for trgls on the
     # main active fragment view
-    def stxyzInRange(self, ijk, maxd):
+    def stxyzInRange(self, ijk, maxd, try_hard=False):
         dw = self.glw
         ij = self.tijkToIj(ijk)
-        xy0 = self.ijToXy(ij)
-        xymin = (xy0[0]-maxd, xy0[1]-maxd)
-        xymax = (xy0[0]+maxd, xy0[1]+maxd)
+        # xyp means "picked xy", in screen coordinates
+        xyp = self.ijToXy(ij)
+        xymin = (xyp[0]-maxd, xyp[1]-maxd)
+        xymax = (xyp[0]+maxd, xyp[1]+maxd)
         xymin = (max(0, xymin[0]), max(0, xymin[1]))
         xymax = (min(self.width(), xymax[0]), min(self.height(), xymax[1]))
         # x y fragment_view_id trgl_id
@@ -287,47 +290,149 @@ class GLDataWindow(DataWindow):
         # indexes of rows where fragment_view matches mfvi
         # matches = (xyfvs[:,2] == mfvi).nonzero()[0]
 
+        # Look for points making up the fragment cross section lines
+        # and that are within the xymin/xymax window
         # need a lot of parentheses because the & operator
         # has higher precedence than comparison operators
         matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
+        # print("line len(matches)", len(matches))
         if len(matches) == 0:
-            # print("no matches")
-            # return None
-            # dw.cur_frag_pts_xyijk = None
-            # dw.cur_frag_pts_fv = []
+            if not try_hard:
+                return None
+            if len(mfv.stpoints) == 0:
+                return np.zeros(3, dtype=float64)
             fvs = np.array(self.cur_frag_pts_fv)
             # print("fvs", fvs)
             xys = self.cur_frag_pts_xyijk[:,:2]
             inds = self.cur_frag_pts_xyijk[:,5].astype(np.int64)
             # ftrg = mfv.trgls().flatten()
             has_trgl = np.isin(inds, mfv.trgls().flatten(), kind="table")
-            # trgls = mfv.trgls()
-            # atrgl = []
-            # for ind in inds:
-            #     w = np.nonzero(trgls==ind)[0]
-            # atrgl = np.full(inds.shape[0], -1, dtype=np.int64)
-            # atrgl[has_trgl] = 
-            # print("has trgl", has_trgl)
-            # print("equals mfv", fvs==mfv)
-            # print("fvs", fvs)
-            # print("mfv", mfv)
-            # print("xys", xys)
-            # print("xy range", xymin, xymax)
-            matches = ((fvs == mfv) & (xys >= xymin).all(axis=1) & (xys <= xymax).all(axis=1) & has_trgl).nonzero()[0]
+            # matches = ((fvs == mfv) & (xys >= xymin).all(axis=1) & (xys <= xymax).all(axis=1) & has_trgl).nonzero()[0]
+            # Look for fragment vertex points
+            # that are within the xymin/xymax window
+            matches = ((fvs == mfv) & (xys >= xymin).all(axis=1) & (xys <= xymax).all(axis=1)).nonzero()[0]
+            # print("point len(matches)", len(matches))
             if len(matches) == 0:
                 return None
             # print("matches", matches)
+            # array of visible points that are in xymin/xymax window
             mxy = xys[matches]
-            dels = mxy - xy0
+            dels = mxy - xyp
             # d2s = np.inner(dels, dels)
             d2s = (dels*dels).sum(axis=1)
-            minindex = np.argmin(d2s)
-            # print("d2s", mxyft.shape, xy0, dels.shape, d2s.shape, d2s[minindex])
-            mind = np.sqrt(d2s[minindex])
-            if mind > maxd:
+            sortargs = np.argsort(d2s)
+            # minindex = np.argmin(d2s)
+            # index (in matches array) of closest point
+            ind0 = sortargs[0]
+            # print("d2s", mxyft.shape, xyp, dels.shape, d2s.shape, d2s[ind0])
+            mind = np.sqrt(d2s[ind0])
+            # picked point is too far away from nearest point,
+            # or picked point is exactly on nearest point
+            if mind > maxd or mind == 0.:
                 return None
-            ptindex = inds[matches[minindex]]
-            tindexes = (mfv.trgls()==ptindex).nonzero()[0]
+            # index (in list of visible points) of closest point
+            matchind0 = matches[ind0]
+            # index (in fragment's points array) of closest point
+            ptind0 = inds[matchind0]
+            # print(inds)
+            # print(has_trgl, ind0, ptindex)
+
+            # if closest existing point (closest to the
+            # picked point) has no trgl attached:
+            if not has_trgl[matchind0]:
+                print("no trgl", ind0, matchind0, ptind0)
+
+                # stxy and window xy of closest existing point
+                stxy0 = mfv.stpoints[ptind0]
+                xy0 = xys[matchind0]
+
+                ind1 = ind0
+                # if more than one existing point is visible:
+                if len(matches) > 1:
+                    ind1 = sortargs[1]
+
+                matchind1 = matches[ind1]
+                ptind1 = inds[matchind1]
+                # stxy and window xy of second-closest existing point
+                stxy1 = mfv.stpoints[ptind1]
+                xy1 = xys[matchind1]
+
+                xy01 = xy1 - xy0
+                stxy01 = stxy1 - stxy0
+                # can be zero if only one existing point is visible
+                dxy01 = np.sqrt((xy01*xy01).sum())
+
+                # vector, and distance, from nearest existing point
+                # to location where user clicked
+                # we know this is not zero because of test above
+                # on whether mind == 0
+                xy0p = xyp - xy0
+                dxy0p = np.sqrt((xy0p*xy0p).sum())
+
+                nstxy = stxy0.copy()
+                # if only one existing point is visible,
+                # or two points are on top of each other (though
+                # this second case couldn't actually happen):
+                if dxy01 == 0.:
+                    mdel = xy0p[0]
+                    if abs(xy0p[1]) > abs(xy0p[0]):
+                        mdel = xy0p[1]
+    
+                    sgn = 0
+                    if mdel > 0:
+                        sgn = 1
+                    elif mdel < 0:
+                        sgn = -1
+                    else:
+                        print("try_hard: Shouldn't reach here!")
+                        # print(xy0, xy1)
+                        sgn = 1
+
+                    if self.axis == 0:  # z slice
+                        nstxy[1] += sgn*dxy0p
+                    else:
+                        nstxy[0] += sgn*dxy0p
+                    return nstxy
+
+                # normalized vector from nearest to second-nearest point
+                xy01n = xy01 / dxy01
+                # dot product of normalized vector from nearest point to
+                # second-nearest point, and non-normalized vector 
+                # from nearest point to picked point
+                xy01p = (xy01n * xy0p).sum()
+                stxy01 = stxy1 - stxy0
+                # print("try_h", xy01p, stxy0, stxy1, stxy01)
+                # print(xy01n, xy01p)
+                nstxy = stxy0 + xy01p * stxy01 / dxy01
+                return nstxy
+
+
+                '''
+                d2s2 = d2s.copy()
+                d2s2[minindex] = 1.e+30
+                minindex2 = np.argmin(d2s2)
+                xygrad = dels[minindex2]-dels[minindex]
+                ptindex2 = inds[matches[minindex2]]
+                stgrad = mfv.stpoints[ptindex2]-mfv.stpoints[ptindex]
+                print("ptindex2, ptindex", ptindex2, ptindex)
+                print("dels",dels[minindex2], dels[minindex])
+                print("stpts",mfv.stpoints[ptindex2], mfv.stpoints[ptindex])
+
+                ostxy = mfv.stpoints[ptindex]
+                nstxy = ostxy.copy()
+                dxy = dels[minindex]
+                sxy = np.sign(dxy)
+                slope = stgrad * xygrad
+                sxy[slope != 0] *= np.sign(slope[slope != 0])
+                distxy = np.sqrt(d2s[minindex])
+                if self.axis == 0:  # z slice
+                    nstxy[1] += sxy[1]*distxy
+                else:
+                    nstxy[0] += sxy[0]*distxy
+                print("stxy", distxy, ostxy, nstxy)
+                return nstxy
+                '''
+            tindexes = (mfv.trgls()==ptind0).nonzero()[0]
             if len(tindexes) == 0:
                 print("tindexes is empty!  This should not happen")
                 return None
@@ -337,7 +442,7 @@ class GLDataWindow(DataWindow):
             mxyft = xyfvs[matches]
 
             # dels = mxyft[:,:2] - np.array(xy0)[:,np.newaxis]
-            dels = mxyft[:,:2] - xy0
+            dels = mxyft[:,:2] - xyp
             # d2s = np.inner(dels, dels)
             d2s = (dels*dels).sum(axis=1)
             minindex = np.argmin(d2s)
