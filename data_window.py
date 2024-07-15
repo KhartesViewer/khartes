@@ -218,16 +218,43 @@ class DataWindow(QLabel):
 
     def getNearbyNodeIjk(self):
         xyijks = self.cur_frag_pts_xyijk
+        self.updateNearbyNode()
         nearbyNode = self.localNearbyNodeIndex
         if nearbyNode >= 0 and xyijks is not None and xyijks.shape[0] != 0:
             if nearbyNode >= xyijks.shape[0]:
-                print("PROBLEM in getNearbyNodeIjk")
+                # This will happen if the node numbering changes
+                # due to change in number of nodes visible in window
+                ''''''
+                print("PROBLEM in getNearbyNodeIjk:")
+                print("  attempt to get node", nearbyNode)
+                print("  from array of shape", xyijks.shape)
                 print(xyijks.shape, nearbyNode)
+                ''''''
+                # self.drawSlice()
+                # self.repaint()
+                # self.setNearbyNode(-1)
                 return None
             tijk = xyijks[nearbyNode, 2:]
             return self.tijkToLocalIjk(tijk)
         else:
             return None
+
+    def updateNearbyNode(self):
+        old_local_nearby = self.localNearbyNodeIndex
+        pv = self.window.project_view
+        old_global_nearby = pv.nearby_node_index
+        xyijks = self.cur_frag_pts_xyijk
+        xyijks_valid = (xyijks is not None and xyijks.shape[0] != 0)
+        if old_local_nearby >= 0 and xyijks_valid:
+            new_local_nearbys = np.nonzero(xyijks[:,5]==old_global_nearby)[0]
+            if len(new_local_nearbys) == 0:
+                new_local_nearby = -1
+            else:
+                new_local_nearby = new_local_nearbys[0]
+            if new_local_nearby != old_local_nearby:
+                # print("setting", old_local_nearby, new_local_nearby)
+                self.setNearbyNode(new_local_nearby)
+
 
     def setWorkingRegion(self):
         xyijks = self.cur_frag_pts_xyijk
@@ -264,6 +291,26 @@ class DataWindow(QLabel):
                 # wants to continue using the key to move the node even
                 # if the node moves out of "nearby" range
                 self.window.drawSlices()
+                # but need to keep track of current nearest
+                # node in case node numbering in window changes
+                self.updateNearbyNode()
+                '''
+                old_local_nearby = self.localNearbyNodeIndex
+                pv = self.window.project_view
+                old_global_nearby = pv.nearby_node_index
+                xyijks = self.cur_frag_pts_xyijk
+                xyijks_valid = (xyijks is not None and xyijks.shape[0] != 0)
+                if old_local_nearby >= 0 and xyijks_valid:
+                    new_local_nearbys = np.nonzero(xyijks[:,5]==old_global_nearby)[0]
+                    if len(new_local_nearbys) == 0:
+                        new_local_nearby = -1
+                    else:
+                        new_local_nearby = new_local_nearbys[0]
+                    if new_local_nearby != old_local_nearby:
+                        print("setting", old_local_nearby, new_local_nearby)
+                        self.setNearbyNode(new_local_nearby)
+                '''
+
 
     # return True if nearby node changed, False otherwise
     def setNearbyNode(self, nearbyNode):
@@ -286,6 +333,7 @@ class DataWindow(QLabel):
         # So need to compare old vs new local node indices as well
         if old_global_node_index != new_global_node_index or old_global_node_fv != new_global_node_fv or self.localNearbyNodeIndex != nearbyNode:
             # print("snn", self.curNearbyNode(), nearbyNode)
+            # print("snn", old_global_node_index, new_global_node_index, self.localNearbyNodeIndex, nearbyNode)
             if nearbyNode >= 0 and xyijks_valid:
                 pv.nearby_node_fv = new_global_node_fv
                 pv.nearby_node_index = new_global_node_index
@@ -453,6 +501,15 @@ class DataWindow(QLabel):
                     self.setWaitCursor()
                     # self.window.addPointToCurrentFragment(tijk)
                     self.addPoint(tijk)
+                    # Need to redraw slice before calling
+                    # findNearbyNode, because nodes may have
+                    # been renumbered
+                    self.drawSlice()
+                    # Force window to repaint immediately,
+                    # which in the case of OpenGL windows is necessary
+                    # in order to make sure the deleted node is fully purged
+                    # before findNearbyNode is called
+                    self.repaint()
                     nearbyNode = self.findNearbyNode(wxy)
                     if not self.setNearbyNode(nearbyNode):
                         self.window.drawSlices()
@@ -727,8 +784,9 @@ class DataWindow(QLabel):
             nij = list(self.nnStartPoint)
             nij[0] += di
             nij[1] += dj
-            self.setNearbyNodeIjk(nij, True, True)
+            self.window.drawSlices()
             self.setWaitCursor()
+            self.setNearbyNodeIjk(nij, True, True)
             self.window.drawSlices()
         elif self.isMovingTiff:
             if self.ntStartPoint is None:

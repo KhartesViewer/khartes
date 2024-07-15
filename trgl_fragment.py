@@ -1079,7 +1079,7 @@ class TrglFragmentView(BaseFragmentView):
         # non-zero otherwise
         tcount = (self.fragment.trgls==nstp).any(axis=1).sum()
         # tcount = (self.fragment.trgls==nstp).sum()
-        print("TrglFragment addPoint tcount", tcount)
+        # print("TrglFragment addPoint tcount", tcount)
         if tcount > 0:
             # prevent setScaledTexturePoints from running
             # when setLocalPoints is called
@@ -1363,7 +1363,8 @@ class TrglPointSet:
         constraints[:, (1,2)] = pts[bpts]
 
         mapper.constraints = constraints
-        mapper.ip_weights = np.full(pts.shape[0], 1.)
+        weight = .5
+        mapper.ip_weights = np.full(pts.shape[0], weight)
         if ptindex >= 0:
             mapper.ip_weights[self.reverse_indexes[ptindex]] = 0.
         mapper.initial_points = pts
@@ -1382,7 +1383,7 @@ class TrglPointSet:
         # print("after", adjusted_sts[~bounds_flag])
         # print("delta", (adjusted_sts-pts)[~bounds_flag])
         # adjusted_sts[floating] = pts[floating]
-        ''''''
+        '''
         delta = adjusted_sts-pts
         delta = np.sqrt((delta*delta).sum(axis=1))
         delta[bpts] *= -1
@@ -1395,6 +1396,6 @@ class TrglPointSet:
         for bigd in bigds.tolist():
             print("  ", bigd)
             print(trgls[(trgls==bigd).any(axis=1)])
-        ''''''
+        '''
         return inds, adjusted_sts
 

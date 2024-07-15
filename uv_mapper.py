@@ -555,10 +555,12 @@ class UVMapper:
             # self.angleQuality(abf_angles)
             self.angles = abf_angles
             mwe = self.maxWheelError(abf_angles)
+            print("error",mwe)
             if mwe is None:
                 print("linABF: too few points")
                 return None
-            if mwe < 1.e-5:
+            # if mwe < 1.e-5:
+            if mwe < 1.e-7:
                 print("wheel error is small enough at iteration", i+1)
                 break
         return self.computeUvsFromAngles()
@@ -585,9 +587,14 @@ class UVMapper:
         if angles is None:
             print("Not enough angles")
             return None
+        '''
         if constraints is None or len(constraints) < 2:
             print("Not enough constraints")
             return None
+        '''
+
+        if constraints is None:
+            constraints = np.zeros((0,3))
 
         nt = trgls.shape[0]
         npt = points.shape[0]
@@ -660,9 +667,13 @@ class UVMapper:
         minds = np.indices(m.shape)
 
         m_sparse = np.stack((
+            # row: trgl_id*2 + 2x2 row number
             minds[0].flatten()*2+minds[2].flatten(),
+            # column: (pt-in-trgl id)*2 + 2x2 column number
             rtrgls[minds[0].flatten(), minds[1].flatten()]*2+minds[3].flatten(),
-            m.flatten()), axis=1)
+            # m value
+            m.flatten()), 
+            axis=1)
 
         # print("m_sparse")
         # print(m_sparse)
@@ -676,13 +687,20 @@ class UVMapper:
 
         # boolean array, length na: whether point is
         # free (True) or constrained (False)
-        isfree = np.logical_not(np.isin(ptindex, cindex))
+        isfree = np.full(npt, True, dtype=np.bool_)
+        # isfree = np.logical_not(np.isin(ptindex, cindex))
+        isfree[cindex] = False
+        isfree2 = np.full(2*npt, True, dtype=np.bool_)
+        isfree2[2*cindex] = False
+        isfree2[2*cindex+1] = False
         # print("isfree")
         # print(isfree)
 
         # free points in sparse array (m_sparse[:,1] contains
         # point index)
-        mf_sparse = m_sparse[np.logical_not(np.isin(m_sparse[:,1]//2, constraints[:,0]))]
+        # mf_sparse = m_sparse[np.logical_not(np.isin(m_sparse[:,1]//2, constraints[:,0]))]
+        # mf_sparse = m_sparse[isfree2[m_sparse[:,1]]]
+        mf_sparse = m_sparse[isfree[m_sparse[:,1].astype(np.int64)//2]]
 
         # print("mf_sparse")
         # print(mf_sparse)
@@ -704,10 +722,7 @@ class UVMapper:
 
         mf_sparse[:,1] = pt2mf[mf_sparse[:,1].astype(np.int64)]
 
-        AV = mf_sparse[:,2].astype(np.float64)
-        AI = mf_sparse[:,0]
-        AJ = mf_sparse[:,1]
-        A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(2*nt, 2*nfp))
+        # A_sparse = sparse.coo_array((AV, (AI, AJ)), shape=(2*nt, 2*nfp))
 
         use_weights = False
         if self.initial_points is not None and (self.ip_weight > 0 or self.ip_weights is not None):
@@ -716,6 +731,26 @@ class UVMapper:
                 weights = np.full(points.shape[0], self.ip_weight, np.float64)
             else:
                 weights = self.ip_weights
+
+            # TODO: continue here!
+            wf_sparse = np.stack((
+                np.ogrid[:2*nfp], 
+                np.ogrid[:2*nfp], 
+                # weights[isfree][np.ogrid[:npt*2]//2]),
+                weights[isfree][np.ogrid[:nfp*2]//2]),
+                                 axis=1)
+            wf_sparse_shift = wf_sparse.copy()
+            wf_sparse_shift[:, 0] += 2*nt
+            all_sparse = np.concatenate((mf_sparse, wf_sparse_shift), axis=0)
+            AV = all_sparse[:,2].astype(np.float64)
+            AI = all_sparse[:,0]
+            AJ = all_sparse[:,1]
+            A_sparse = sparse.csr_array((AV, (AI, AJ)), shape=(2*nt+2*nfp, 2*nfp))
+        else:
+            AV = mf_sparse[:,2].astype(np.float64)
+            AI = mf_sparse[:,0]
+            AJ = mf_sparse[:,1]
+            A_sparse = sparse.csr_array((AV, (AI, AJ)), shape=(2*nt, 2*nfp))
 
         # print("A sparse shape", 2*nt, 2*nfp)
         # print(A_sparse)
@@ -750,10 +785,19 @@ class UVMapper:
         # print(constraints[:,(1,2)])
 
         b = -mp_full @ constraints[:,(1,2)].flatten()
+        if use_weights:
+            AV = wf_sparse[:,2].astype(np.float64)
+            AI = wf_sparse[:,0]
+            AJ = wf_sparse[:,1]
+            wf_csr = sparse.csr_array((AV, (AI, AJ)), shape=(2*nfp, 2*nfp))
+            bw = wf_csr @ self.initial_points[isfree].flatten()
+            # print("bw", bw)
+        b = np.concatenate((b, bw))
 
         timer.time("  created arrays")
 
-        Acsr = A_sparse.tocsr()
+        # Acsr = A_sparse.tocsr()
+        Acsr = A_sparse
         At = Acsr.transpose()
         # print(At@Acsr)
         # print(b)
@@ -1027,7 +1071,7 @@ if __name__ == '__main__':
     # print("pt2, pt3", pt2, pt3)
     # ptmn, ptmx = lscm.getTwoAdjacentBoundaryPoints()
     # print("ptmn, ptmx", ptmn, ptmx)
-    # lscm.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.]], dtype=np.float64)
+    lscm.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.]], dtype=np.float64)
     '''
     lscm.constraints = np.array(
             [
@@ -1039,15 +1083,16 @@ if __name__ == '__main__':
     '''
     if tpoints is not None:
         lscm.initial_points = tpoints
-        weight = .001
+        weight = .000001
+        # weight = 0.
         # lscm.ip_weight = weight
         weights = np.full(tpoints.shape[0], weight, dtype=np.float64)
         # weights[0] = 0.
         lscm.ip_weights = weights
     # uvs = lscm.computeUvs()
-    uvs = lscm.computeUvsFromAngles()
+    # uvs = lscm.computeUvsFromAngles()
     # uvs = lscm.computeUvsFromXyzs()
-    # uvs = lscm.computeUvsFromABF()
+    uvs = lscm.computeUvsFromABF()
     timer.time("computed uvs")
     # lscm.angleQuality(lscm.angles)
     uvmin = uvs.min(axis=0)

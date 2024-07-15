@@ -175,9 +175,9 @@ class GLDataWindow(DataWindow):
         if vv is None:
             return
         stxytf = vv.stxytf
-        d = 1000
-        stxyz = self.stxyzInRange(tijk, d, True)
-        print("stxyz", stxyz)
+        d = 300
+        stxyz = self.stxyzInRange(tijk, d, True, stxytf)
+        # print("stxyz", stxyz)
         '''
         maxz = 10
         if stxyz is None:
@@ -262,9 +262,87 @@ class GLDataWindow(DataWindow):
         h = np.inner(cr, v3-v0)
         return h
 
+    def showsSingleDetachedPoint(self, ijk, maxd):
+        dw = self.glw
+        ij = self.tijkToIj(ijk)
+        # xyp means "picked xy", in screen coordinates
+        xyp = self.ijToXy(ij)
+        xymin = (xyp[0]-maxd, xyp[1]-maxd)
+        xymax = (xyp[0]+maxd, xyp[1]+maxd)
+        xymin = (max(0, xymin[0]), max(0, xymin[1]))
+        xymax = (min(self.width(), xymax[0]), min(self.height(), xymax[1]))
+        # x y fragment_view_id trgl_id
+        xyfvs = dw.xyfvs
+        # list of fragment views (to go from fragment_view_id
+        # to fragment_view)
+        indexed_fvs = dw.indexed_fvs
+        pv = self.window.project_view
+        mfvi = -1
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            return False
+        if mfv is not None and dw.indexed_fvs is not None and mfv in indexed_fvs:
+            mfvi = indexed_fvs.index(mfv)
+        if mfvi < 0:
+            return False
+        # indexes of rows where fragment_view matches mfvi
+        # matches = (xyfvs[:,2] == mfvi).nonzero()[0]
+
+        # Look for points making up the fragment cross section lines
+        # and that are within the xymin/xymax window
+        # need a lot of parentheses because the & operator
+        # has higher precedence than comparison operators
+        matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
+        # print("line len(matches)", len(matches))
+        if len(matches) > 0:
+            return False
+        if len(mfv.stpoints) == 0:
+            return False
+        fvs = np.array(self.cur_frag_pts_fv)
+        # print("fvs", fvs)
+        xys = self.cur_frag_pts_xyijk[:,:2]
+        inds = self.cur_frag_pts_xyijk[:,5].astype(np.int64)
+        # ftrg = mfv.trgls().flatten()
+        has_trgl = np.isin(inds, mfv.trgls().flatten(), kind="table")
+        # matches = ((fvs == mfv) & (xys >= xymin).all(axis=1) & (xys <= xymax).all(axis=1) & has_trgl).nonzero()[0]
+        # Look for fragment vertex points
+        # that are within the xymin/xymax window
+        matches = ((fvs == mfv) & (xys >= xymin).all(axis=1) & (xys <= xymax).all(axis=1)).nonzero()[0]
+        # print("point len(matches)", len(matches))
+        if len(matches) == 0:
+            return False
+        # print("matches", matches)
+        # array of visible points that are in xymin/xymax window
+        mxy = xys[matches]
+        dels = mxy - xyp
+        # d2s = np.inner(dels, dels)
+        d2s = (dels*dels).sum(axis=1)
+        sortargs = np.argsort(d2s)
+        # minindex = np.argmin(d2s)
+        # index (in matches array) of closest point
+        ind0 = sortargs[0]
+        # print("d2s", mxyft.shape, xyp, dels.shape, d2s.shape, d2s[ind0])
+        mind = np.sqrt(d2s[ind0])
+        # picked point is too far away from nearest point,
+        # or picked point is exactly on nearest point
+        if mind > maxd or mind == 0.:
+            return False
+        # index (in list of visible points) of closest point
+        matchind0 = matches[ind0]
+        # index (in fragment's points array) of closest point
+        ptind0 = inds[matchind0]
+        # print(inds)
+        # print(has_trgl, ind0, ptindex)
+
+        # if closest existing point (closest to the
+        # picked point) has no trgl attached:
+        if not has_trgl[matchind0]:
+            return True
+        return False
+
     # Note that this only looks for trgls on the
     # main active fragment view
-    def stxyzInRange(self, ijk, maxd, try_hard=False):
+    def stxyzInRange(self, ijk, maxd, try_hard=False, stxy_center = None, check_for_single_detached_point=False):
         dw = self.glw
         ij = self.tijkToIj(ijk)
         # xyp means "picked xy", in screen coordinates
@@ -296,11 +374,23 @@ class GLDataWindow(DataWindow):
         # has higher precedence than comparison operators
         matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
         # print("line len(matches)", len(matches))
+        if stxy_center is not None:
+            # print(stxy_center)
+            trgl_indexes = xyfvs[matches, 3]
+            # print(trgl_indexes)
+            trgls = mfv.trgls()[trgl_indexes]
+            sts = np.abs(mfv.stpoints[trgls]-stxy_center)
+            inrange = np.nonzero((sts<maxd).any(axis=1))[0]
+            # print(matches)
+            # print(inrange)
+            matches = matches[inrange]
         if len(matches) == 0:
             if not try_hard:
                 return None
             if len(mfv.stpoints) == 0:
-                return np.zeros(3, dtype=float64)
+                # TODO: is this return value used?
+                # return np.zeros(3, dtype=float64)
+                return None
             fvs = np.array(self.cur_frag_pts_fv)
             # print("fvs", fvs)
             xys = self.cur_frag_pts_xyijk[:,:2]
@@ -340,7 +430,9 @@ class GLDataWindow(DataWindow):
             # if closest existing point (closest to the
             # picked point) has no trgl attached:
             if not has_trgl[matchind0]:
-                print("no trgl", ind0, matchind0, ptind0)
+                if check_for_single_detached_point:
+                    return True
+                # print("no trgl", ind0, matchind0, ptind0)
 
                 # stxy and window xy of closest existing point
                 stxy0 = mfv.stpoints[ptind0]
@@ -388,10 +480,16 @@ class GLDataWindow(DataWindow):
                         # print(xy0, xy1)
                         sgn = 1
 
-                    if self.axis == 0:  # z slice
-                        nstxy[1] += sgn*dxy0p
+                    # print("axis", self.axis)
+                    if self.axis == 1:  # z slice
+                        # nstxy[1] += sgn*dxy0p
+                        # for z slice, ignore sgn; assume
+                        # that user is picking in clockwise
+                        # direction, which corresponds to
+                        # an increase in stxy[0]
+                        nstxy[0] += dxy0p
                     else:
-                        nstxy[0] += sgn*dxy0p
+                        nstxy[1] += sgn*dxy0p
                     return nstxy
 
                 # normalized vector from nearest to second-nearest point
@@ -453,6 +551,8 @@ class GLDataWindow(DataWindow):
 
             trgl_index = mxyft[minindex, 3]
 
+        if check_for_single_detached_point:
+            return False
         trgl = mfv.trgls()[trgl_index]
         vpts = mfv.vpoints[trgl][:,:3]
 
