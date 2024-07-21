@@ -387,10 +387,10 @@ class GLDataWindow(DataWindow):
         if len(matches) == 0:
             if not try_hard:
                 return None
-            if len(mfv.stpoints) == 0:
-                # TODO: is this return value used?
-                # return np.zeros(3, dtype=float64)
-                return None
+            if mfv.stpoints is None or len(mfv.stpoints) == 0:
+                # if there are no current points at all,
+                # create one
+                return np.zeros(3, dtype=np.float64)
             fvs = np.array(self.cur_frag_pts_fv)
             # print("fvs", fvs)
             xys = self.cur_frag_pts_xyijk[:,:2]
@@ -1567,7 +1567,7 @@ class GLDataWindowChild(QOpenGLWidget):
 
             ijs = dw.tijksToIjs(pts)
             xys = dw.ijsToXys(ijs)
-            # print(pts.shape, xys.shape)
+            # print(pts.shape, ijs.shape, xys.shape)
             xypts = np.concatenate((xys, pts), axis=1)
             xyptslist.append(xypts)
             dw.cur_frag_pts_fv.extend([fv]*len(pts))

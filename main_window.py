@@ -345,6 +345,30 @@ class CopyActiveFragmentButton(QPushButton):
     def onButtonClicked(self, s):
         self.main_window.copyActiveFragment()
 
+class ReparameterizeActiveFragmentButton(QPushButton):
+    def __init__(self, main_window, parent=None):
+        super(ReparameterizeActiveFragmentButton, self).__init__("Reparam", parent)
+        self.main_window = main_window
+        self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
+        self.setEnabled(False)
+        self.setToolTip("Recalculate uv of the currently active fragment")
+        self.clicked.connect(self.onButtonClicked)
+
+    def onButtonClicked(self, s):
+        self.main_window.reparameterizeActiveFragment()
+
+class RetriangulateActiveFragmentButton(QPushButton):
+    def __init__(self, main_window, parent=None):
+        super(RetriangulateActiveFragmentButton, self).__init__("Retriang", parent)
+        self.main_window = main_window
+        self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
+        self.setEnabled(False)
+        self.setToolTip("Retriangulate the currently active fragment")
+        self.clicked.connect(self.onButtonClicked)
+
+    def onButtonClicked(self, s):
+        self.main_window.retriangulateActiveFragment()
+
 class MoveActiveFragmentAlongZButton(QPushButton):
     def __init__(self, main_window, text, step, parent=None):
         super(MoveActiveFragmentAlongZButton, self).__init__(text, parent)
@@ -1178,7 +1202,7 @@ class MainWindow(QMainWindow):
         hlayout = QHBoxLayout()
         label = QLabel("Hover mouse over column headings for more information")
         label.setAlignment(Qt.AlignCenter)
-        hlayout.addWidget(label)
+        # hlayout.addWidget(label)
         create_frag = CreateFragmentButton(self)
         # print("dark mode", self.isDarkMode())
         create_frag.setStyleSheet("QPushButton { %s; padding: 5; }"%self.highlightedBackgroundStyle())
@@ -1191,9 +1215,14 @@ class MainWindow(QMainWindow):
         # af_layout = QHBoxLayout()
         # active_frame.setLayout(af_layout)
 
+        self.retriang_frag = RetriangulateActiveFragmentButton(self)
+        hlayout.addWidget(self.retriang_frag)
+        self.reparam_frag = ReparameterizeActiveFragmentButton(self)
+        hlayout.addWidget(self.reparam_frag)
         self.copy_frag = CopyActiveFragmentButton(self)
         hlayout.addWidget(self.copy_frag)
 
+        '''
         self.move_frag_up = MoveActiveFragmentAlongZButton(self, "Z ↑", -1)
         hlayout.addWidget(self.move_frag_up)
 
@@ -1205,7 +1234,7 @@ class MainWindow(QMainWindow):
 
         self.move_frag_down_along_normals = MoveActiveFragmentAlongNormalsButton(self, "N ↓", 1)
         hlayout.addWidget(self.move_frag_down_along_normals)
-
+        '''
 
         # af_layout.addWidget(self.copy_frag)
         # hlayout.addWidget(active_frame)
@@ -1605,8 +1634,12 @@ class MainWindow(QMainWindow):
         self.project_view.notifyModified()
         self.drawSlices()
 
+    '''
+    TODO:
+    is this needed?
     def onNewFragmentButtonClick(self, s):
         self.createFragment()
+    '''
 
     def uniqueFragmentName(self, start):
         pv = self.project_view
@@ -1640,10 +1673,14 @@ class MainWindow(QMainWindow):
             active = (pv.mainActiveFragmentView(unaligned_ok=True) is not None)
         self.export_mesh_action.setEnabled(active)
         self.copy_frag.setEnabled(active)
+        self.reparam_frag.setEnabled(active)
+        self.retriang_frag.setEnabled(active)
+        '''
         self.move_frag_up.setEnabled(active)
         self.move_frag_down.setEnabled(active)
         self.move_frag_up_along_normals.setEnabled(active)
         self.move_frag_down_along_normals.setEnabled(active)
+        '''
 
     def moveActiveFragmentAlongZ(self, step):
         pv = self.project_view
@@ -1750,7 +1787,8 @@ class MainWindow(QMainWindow):
             print("Can't create unique fragment name from stem", stem)
             return
         # print("color",color)
-        frag = Fragment(name, vv.direction)
+        # frag = Fragment(name, vv.direction)
+        frag = TrglFragment(name)
         frag.setColor(Utils.getNextColor(), no_notify=True)
         frag.valid = True
         print("created fragment %s"%frag.name)
@@ -1773,6 +1811,36 @@ class MainWindow(QMainWindow):
         self.app.processEvents()
         index = pv.project.fragments.index(frag)
         self.fragments_table.model().scrollToRow(index)
+
+    def reparameterizeActiveFragment(self):
+        pv = self.project_view
+        if pv is None:
+            print("Warning, cannot reparameterize fragment without project")
+            return
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            # this should never be reached; button should be
+            # inactive in this case
+            print("No currently active fragment")
+            return
+        # mf = mfv.fragment
+        mfv.reparameterize()
+        self.drawSlices()
+
+    def retriangulateActiveFragment(self):
+        pv = self.project_view
+        if pv is None:
+            print("Warning, cannot reparameterize fragment without project")
+            return
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            # this should never be reached; button should be
+            # inactive in this case
+            print("No currently active fragment")
+            return
+        # mf = mfv.fragment
+        mfv.rebuildStPoints()
+        self.drawSlices()
 
     def renameFragment(self, frag, name):
         if frag.name == name:

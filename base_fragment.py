@@ -300,6 +300,12 @@ class BaseFragmentView:
             return False
         return self.aligned()
 
+    def rebuildStPoints(self):
+        return
+
+    def reparameterize(self):
+        return
+
     # direction is not used here, but this notifies fragment view
     # to recompute things
     def setVolumeViewDirection(self, direction):

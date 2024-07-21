@@ -1376,7 +1376,10 @@ class FragmentMapVao:
         self.stxy_vbo.create()
         self.stxy_vbo.bind()
 
-        stxys = np.ascontiguousarray(fv.stpoints, dtype=np.float32)
+        if fv.stpoints is None:
+            stxys = np.zeros((0,2))
+        else:
+            stxys = np.ascontiguousarray(fv.stpoints, dtype=np.float32)
         self.stxys_size = stxys.size
 
         nbytes = stxys.size*stxys.itemsize

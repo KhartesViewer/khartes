@@ -293,7 +293,7 @@ class UVMapper:
         return pt0, pt1
 
     def createAngles(self):
-        # print("creating angles")
+        # print("*** creating angles")
         points = self.points
         trgls = self.trgls
         # print(points.shape, trgls.shape)
@@ -327,12 +327,19 @@ class UVMapper:
         trglndps = (-trglnvecs*np.roll(trglnvecs, -1, axis=1)).sum(axis=2)
         # angle in radians is arccos of dot product of normalized vectors
         trglangles = np.arccos(trglndps)
+
+        bad_angle = (np.sin(trglangles)<=0).any(axis=1)
+        if bad_angle.sum() > 0:
+            print("ca bad_angles", np.nonzero(bad_angle)[0])
+            print(trglangles[bad_angle])
+            print(trglndps[bad_angle])
+
         self.angles = trglangles
         # print(self.angles.shape)
 
     # adjust angles if point is not on a
     # boundary, and sum is < (2 pi - min_deficit).
-    # if so, reduce the angles proportionally.
+    # if so, increase the angles proportionately.
     def adjustedAngles(self, min_deficit):
         if self.angles is None:
             # print("No angles to adjust")
@@ -353,12 +360,26 @@ class UVMapper:
         has_deficit = np.logical_and(np.logical_and(~is_on_boundary, sums < (2*np.pi-min_deficit)), sums > 0)
         factors[has_deficit] = (2*np.pi)/sums[has_deficit]
         # print("adjusted", (factors > 1).sum())
-        angles *= factors[trgls]
+        out_angles = angles*factors[trgls]
+        bad_angle = (np.sin(out_angles)<=0).any(axis=1)
+        if bad_angle.sum() > 0:
+            print("aa bad_angles", np.nonzero(bad_angle)[0])
+            # print(out_angles[bad_angle])
+            # print(angles[bad_angle])
+            # print(np.argwhere(np.sin(angles)<=0))
+            bads = np.nonzero(np.sin(angles)<=0)
+            # print(bads)
+            ptids = trgls[bads[0], bads[1]]
+            # print("ptids", ptids)
+            # print(points[ptids])
+        # if any angle of the triangle is bad (sine is <= 0),
+        # use the original angles instead
+        out_angles[bad_angle] = angles[bad_angle]
         # Try to prevent case where angle = 0
         tol = .001
-        angles[angles < tol] = tol
+        out_angles[out_angles < tol] = tol
         # print("adjusted", (angles[:,:] != self.angles[:,:]).sum())
-        return angles
+        return out_angles
 
     def computeUvs(self):
         return self.computeUvsFromXyzs()
@@ -369,6 +390,7 @@ class UVMapper:
         if self.angles is None:
             self.createAngles()
             timer.time("angles created")
+            print("created angles")
         adjusted_angles = self.adjustedAngles(1.)
         points = self.points
         trgls = self.trgls
@@ -421,23 +443,42 @@ class UVMapper:
         # Wheel consistency (internal points only):
         # cotangent of angles
         ct = 1./np.tan(adjusted_angles)
+        sines = np.sin(adjusted_angles)
+        badsines = np.nonzero(sines <= 0.)
+        '''
+        if len(badsines[0]) > 0:
+            print("bad angles", badsines, adjusted_angles[badsines])
+            # ct[badsines,:] = 0.
+            # sines[badsines,:] = 1.
+            badpts = trgls[badsines[0], badsines[1]]
+        '''
+        badpts = trgls[badsines[0], badsines[1]]
+        badanglepts = 3*badsines[0]+badsines[1]
+        badtrgls = badsines[0]
+        # sines[badsines[0],badsines[1]] = 1.
+        # ct[badsines[0],badsines[1]] = 0.
+        sines[badsines[0]] = 1.
+        # ct[badsines[0]] = 0.
+
 
         A3left = np.stack((np.roll(trgls, 1, axis=1).flatten(), tptid.flatten(), ct.flatten()), axis=1)
         # notice the minus sign before ct
         A3right = np.stack((np.roll(trgls, -1, axis=1).flatten(), tptid.flatten(), -ct.flatten()), axis=1)
         A3triplet = np.concatenate((A3left, A3right), axis=0)
+        # A3triplet[np.isin(A3triplet[:,1]//3, badtrgls),2] = 0.
         A3triplet[:,0] = pt2ipt[A3triplet[:,0].astype(np.int64)]
         A3triplet = A3triplet[A3triplet[:,0] >= 0]
 
         A3triplet[:,0] += nt + nipt
 
         # log of sine of angles
-        ls = np.log(np.sin(adjusted_angles))
+        ls = np.log(sines)
         # difference between the two angles opposite a point
         b3 = np.zeros(npt, dtype=np.float64)
         # notice the minus sign before ls
         np.add.at(b3, np.roll(trgls, 1, axis=1).flatten(), -ls.flatten())
         np.add.at(b3, np.roll(trgls, -1, axis=1).flatten(), ls.flatten())
+        # b3[badpts] = 0.
         b3 = b3[interior_points_bool]
 
         Atriplet = np.concatenate((A1triplet, A2triplet, A3triplet), axis=0)
@@ -454,11 +495,16 @@ class UVMapper:
         At = Acsc.transpose()
         timer.time("  created Acsc, At")
         AAt = Acsc@At
-        lu = sparse.linalg.splu(AAt)
-        timer.time("  created splu")
-        x = At@lu.solve(b)
-        timer.time("  solved splu")
+
+        try:
+            lu = sparse.linalg.splu(AAt)
+            timer.time("  created splu")
+            x = At@lu.solve(b)
+            timer.time("  solved splu")
         # print("x min max", x.min(), x.max())
+        except Exception as e:
+            print("SPLU exception:", e)
+            return None
 
         flattened_angles = adjusted_angles*(x.reshape(nt, 3) + 1.)
         return flattened_angles
@@ -538,6 +584,9 @@ class UVMapper:
         np.add.at(wheel_error, np.roll(trgls, -1, axis=1).flatten(), ls.flatten())
         interior_points_bool[np.isnan(wheel_error)] = False
         wheel_error = wheel_error[interior_points_bool]
+        if len(wheel_error) == 0:
+            print("wheel_error length is zero!")
+            return 0.
         return np.max(np.abs(wheel_error))
 
     def computeUvsFromABF(self):
@@ -546,8 +595,9 @@ class UVMapper:
             print("No triangles")
             return None
         self.createAngles()
+        # print("cufa created angles")
         # self.angleQuality(self.angles)
-        for i in range(10):
+        for i in range(20):
             abf_angles = self.linABF()
             if abf_angles is None:
                 print("linABF failed!")
