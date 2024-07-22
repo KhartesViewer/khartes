@@ -339,6 +339,29 @@ class GLSurfaceWindow(DataWindow):
         dx,dy = hw/zoom, hh/zoom
         return ((stxy[0]-dx,stxy[1]-dy),(stxy[0]+dx,stxy[1]+dy))
 
+    # overrides version in DataWindow
+    def setMapImage(self, fv):
+        print("GLSW setMapImage")
+        if fv is None:
+            return
+        fv.map_image = None
+        fv.map_corners = None
+        if fv != self.glw.active_fragment:
+            return
+        if self.volume_view.stxytf is None:
+            return
+        fbo = self.glw.data_fbo
+        if fbo is None:
+            return
+        # This is a QImage
+        image = fbo.toImage()
+        imarr = self.glw.npArrayFromQImage(image)
+        # cv2.imwrite("test.png", imarr)
+        fv.map_image = imarr
+
+        fv.map_corners = self.stxyWindowBounds()
+        # print("corners", fv.map_corners)
+
     def drawSlice(self):
         # print("gsw drawSlice")
         # the MainWindow.edit widget overlays the
@@ -941,6 +964,14 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         for block in blocks:
             bset.add(tuple(block))
         return bset
+
+    def getDrawnData(self):
+        f = self.gl
+        fbo = self.data_fbo
+        fbo.bind()
+        w = fbo.width()
+
+
 
     def getBlocks(self, fbo):
         timera = Utils.Timer()

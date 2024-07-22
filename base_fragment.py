@@ -222,6 +222,8 @@ class BaseFragmentView:
         self.visible = True
         self.active = False
         self.mesh_visible = True
+        self.map_image = None
+        self.map_corners = None
         self.modified = Utils.timestamp()
         self.local_points_modified = Utils.timestamp()
         self.normal_offset = 0.

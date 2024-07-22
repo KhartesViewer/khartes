@@ -2462,6 +2462,7 @@ class MainWindow(QMainWindow):
                 frags.append(frag)
                 if frag.meshExportNeedsInfill():
                     needs_infill = True
+                self.surface.setMapImage(fv)
                 fvs.append(fv)
         if len(frags) == 0:
             print("No active fragment")

@@ -1691,6 +1691,12 @@ into and out of the viewing plane.
             cv2.line(canvas, (cx,cy-r), (cx,cy+r), white, thickness+2)
             cv2.line(canvas, (cx,cy-r), (cx,cy+r), color, thickness)
 
+    # overridden in GLSurfaceWindow
+    def setMapImage(self, fv):
+        if fv is not None:
+            fv.map_image = None
+            fv.map_corners = None
+
     def drawSlice(self):
         timera = Utils.Timer(False)
         volume = self.volume_view

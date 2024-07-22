@@ -171,6 +171,7 @@ class TrglFragment(BaseFragment):
     def save(self, fpath, ppm=None, fv=None):
         obj_path = fpath.with_suffix(".obj")
         name = fpath.name
+        stem = fpath.stem
         print("TF save", obj_path)
         of = obj_path.open("w")
         # print("hello", file=of)
@@ -189,11 +190,30 @@ class TrglFragment(BaseFragment):
                 print("vn %f %f %f"%(n[0], n[1], n[2]), file=of)
         print("# Color and texture information", file=of)
         # print("mtllib %s.mtl"%self.name, file=of)
-        print("mtllib %s.mtl"%name, file=of)
+        print("mtllib %s.mtl"%stem, file=of)
         print("usemtl default", file=of)
+        image_file = ""
         has_texture = (len(self.gtpoints) == len(self.gpoints))
         if has_texture:
-            for i, pt in enumerate(self.gtpoints):
+            tpts = self.gtpoints
+            if fv is not None and fv.stpoints is not None and fv.map_corners is not None:
+                image_ext = ".png"
+                image_file = "%s%s"%(stem, image_ext)
+                image_path = fpath.with_suffix(image_ext)
+                cv2.imwrite(str(image_path), fv.map_image)
+                c = fv.map_corners
+                tpts = fv.stpoints.copy()
+                st0 = np.array(c[0])
+                st1 = np.array(c[1])
+                # st0 = st0[::-1]
+                dst = st1-st0
+                # print(st0, st1, dst)
+                if dst[0] != 0. and dst[1] != 0.:
+                    # print("converting tpts")
+                    tpts = (tpts-st0)/dst
+                    tpts[:,1] = 1.-tpts[:,1]
+
+            for i, pt in enumerate(tpts):
                 print("vt %f %f"%(pt[0], pt[1]), file=of)
         print("# Faces: %d"%len(self.trgls), file=of)
         for trgl in self.trgls:
@@ -219,13 +239,15 @@ class TrglFragment(BaseFragment):
         print("Ks 0.0 0.0 0.0", file=of)
 
         # TODO: testing only!
-        print("map_Kd asdf.tif", file=of)
+        # print("map_Kd asdf.tif", file=of)
+        if image_file != "":
+            print("map_Kd", image_file, file=of)
 
         print("illum 2", file=of)
         print("d 1.0", file=of)
         # TODO: print this only if TIFF file exists
         # if has_texture:
-        #     print("map_Kd %s.tif"%name, file=of)
+        #     print("map_Kd %s.tif"%stem, file=of)
 
         if fv is not None:
             jfilename = fpath.with_suffix(".json")
