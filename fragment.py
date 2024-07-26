@@ -1,6 +1,8 @@
 import json
 import time
 import math
+from queue import LifoQueue
+
 import numpy as np
 import cv2
 import rectpack
@@ -258,6 +260,9 @@ class Fragment(BaseFragment):
         self.params = {}
         # fragment points in global coordinates
         self.gpoints = np.zeros((0,3), dtype=np.float32)
+
+        # History of gpoints, for undo functionality
+        self.gpoints_history : LifoQueue = LifoQueue()
 
     def createView(self, project_view):
         return FragmentView(project_view, self)
@@ -1718,6 +1723,7 @@ class FragmentView(BaseFragmentView):
             return
         # create new point
         gijk = self.cur_volume_view.transposedIjkToGlobalPosition(tijk)
+        self.storeGpoints(self.fragment.gpoints)
         self.fragment.gpoints = np.append(self.fragment.gpoints, np.reshape(gijk, (1,3)), axis=0)
         # print(self.lpoints)
         self.setLocalPoints(True, False)
@@ -1725,6 +1731,7 @@ class FragmentView(BaseFragmentView):
 
     def deletePointByIndex(self, index):
         if index >= 0 and index < len(self.fragment.gpoints):
+            self.storeGpoints(self.fragment.gpoints)
             self.fragment.gpoints = np.delete(self.fragment.gpoints, index, 0)
         self.fragment.notifyModified()
         self.setLocalPoints(True, False)
@@ -1760,8 +1767,22 @@ class FragmentView(BaseFragmentView):
         new_gijk = self.cur_volume_view.transposedIjkToGlobalPosition(new_vijk)
         # print(self.fragment.gpoints)
         # print(match, new_gijk)
+        self.storeGpoints(self.fragment.gpoints)
         self.fragment.gpoints[index, :] = new_gijk
         # print(self.fragment.gpoints)
         self.fragment.notifyModified()
         self.setLocalPoints(True, False)
         return True
+
+    def storeGpoints(self, pts):
+        """Push the current list of gpoints onto the stack in preparation for changing gpoints."""
+        gpoints_copy = np.copy(self.fragment.gpoints)
+        self.fragment.gpoints_history.put(gpoints_copy)
+
+    def popGpoints(self):
+        """Replace current gpoints with top of the stack, and update."""
+        hist_size=  self.fragment.gpoints_history.qsize()
+        if hist_size > 0:
+            self.fragment.gpoints = self.fragment.gpoints_history.get()
+            self.fragment.notifyModified()
+            self.setLocalPoints(True, False)
