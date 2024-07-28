@@ -212,6 +212,9 @@ class TrglFragment(BaseFragment):
                     # print("converting tpts")
                     tpts = (tpts-st0)/dst
                     tpts[:,1] = 1.-tpts[:,1]
+                    tpts[tpts>1.] = -1.e+3
+                    tpts[tpts<0.] = -1.e+3
+                    tpts[(tpts<0).any(axis=1), :] = -1.e+3
 
             for i, pt in enumerate(tpts):
                 print("vt %f %f"%(pt[0], pt[1]), file=of)
@@ -523,7 +526,6 @@ class TrglFragmentView(BaseFragmentView):
             print("length mismatch", len(f.gtpoints), len(f.gpoints))
             return
 
-
         self.deleteDisconnectedComponents()
         # self.deleteFreePoints()
         timer = Utils.Timer()
@@ -728,9 +730,9 @@ class TrglFragmentView(BaseFragmentView):
         # print("gt min max", gtp.min(axis=0), gtp.max(axis=0))
         gu = gtp[:,0]
         gv = gtp[:,1]
+        '''
         sgu = np.sort(gu)
         sgv = np.sort(gv)
-        '''
         ng = len(gtp)
         if ng > 10:
             print("median gtp", sgu[ng//2], sgv[ng//2])
@@ -1015,13 +1017,14 @@ class TrglFragmentView(BaseFragmentView):
             # self.fragment.trgls = new_trgls
 
     def rebuildStPoints(self):
+        # self.setLocalPoints(True, False)
         self.stpoints = None
         print("rsp set stpoints to None")
-        # self.setLocalPoints(True, False)
         self.setScaledTexturePoints()
         self.fragment.notifyModified()
 
     def reparameterize(self):
+        self.disconnectColocatedPoints()
         self.deleteDisconnectedComponents()
         self.deleteFreePoints()
         xyzs = self.vpoints[:,0:3]
@@ -1225,6 +1228,42 @@ class TrglFragmentView(BaseFragmentView):
         self.setLocalPoints(True, False)
         print("a after", self.maxEdgeLengthAll())
         self.fragment.notifyModified()
+
+    # If two points are colocated in xyz, disconnect
+    # one of them from all the trgls, replacing it by
+    # the other.
+    # The disconnected point can be deleted in
+    # another function
+    def disconnectColocatedPoints(self):
+        if self.stpoints is None:
+            return
+        trgls = self.fragment.trgls
+        if len(trgls) == 0:
+            return
+        pts = self.fragment.gpoints
+        npt = pts.shape[0]
+        # print("npt", npt)
+        # print("min edge length", TrglPointSet.minEdgeLength(pts,trgls))
+        lind = np.lexsort((pts[:,1], pts[:,0]))
+        rlind = np.zeros(npt, dtype=np.int64)
+        rlind[lind] = np.ogrid[:npt]
+        sarr = pts[lind]
+        value,inds,counts = np.unique(sarr, return_index=True, return_counts=True, axis=0)
+        tinds = np.repeat(inds, counts)
+        ndup = np.sum(counts-1)
+        if ndup > 0:
+            print("found",ndup,"colocated point(s)")
+        dedup = lind[tinds[rlind]]
+        # print("a", len(trgls))
+        trgls = dedup[trgls]
+        # print("b", len(trgls))
+        trgls = trgls[trgls[:,0] != trgls[:,1]]
+        # print("c", len(trgls))
+        trgls = trgls[trgls[:,1] != trgls[:,2]]
+        # print("d", len(trgls))
+        trgls = trgls[trgls[:,2] != trgls[:,0]]
+        # print("e", len(trgls))
+        self.fragment.trgls = trgls
 
     # This will create free points by deleting the
     # triangles that hold them
@@ -1484,6 +1523,16 @@ class TrglPointSet:
         dsq = (dtpts*dtpts).sum(axis=2)
         maxdsq = np.max(dsq)
         return np.sqrt(maxdsq)
+
+    @staticmethod
+    def minEdgeLength(pts, trgls):
+        if trgls is None or len(trgls) == 0:
+            return 0.
+        tpts = pts[trgls]
+        dtpts = tpts - np.roll(tpts, 1, axis=1)
+        dsq = (dtpts*dtpts).sum(axis=2)
+        mindsq = np.min(dsq)
+        return np.sqrt(mindsq)
 
     def triangulate(self):
         trgls = None

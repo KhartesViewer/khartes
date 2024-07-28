@@ -1825,12 +1825,15 @@ class MainWindow(QMainWindow):
             return
         # mf = mfv.fragment
         mfv.reparameterize()
+        cvv = self.project_view.cur_volume_view
+        # Force recalculation of stxytf in GLDataWindow
+        cvv.stxytf = None
         self.drawSlices()
 
     def retriangulateActiveFragment(self):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot reparameterize fragment without project")
+            print("Warning, cannot retriangulate fragment without project")
             return
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
@@ -1840,6 +1843,9 @@ class MainWindow(QMainWindow):
             return
         # mf = mfv.fragment
         mfv.rebuildStPoints()
+        cvv = self.project_view.cur_volume_view
+        # Force recalculation of stxytf in GLDataWindow
+        cvv.stxytf = None
         self.drawSlices()
 
     def renameFragment(self, frag, name):

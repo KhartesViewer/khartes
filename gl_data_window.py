@@ -85,6 +85,12 @@ class GLDataWindow(DataWindow):
                 self.main_active_fragment_view = mfv
                 self.volume_view.setStxyTf(None)
             if self.volume_view.stxytf is None:
+                # Force window to actually repaint,
+                # so that stxy info in window is up to
+                # date when referred to by setStxyTfFromIjkTf
+                self.glw.repaint()
+                self.glw.repaint()
+                # print("draw slice setting stxy")
                 self.setStxyTfFromIjkTf()
 
     # Overrides DataWindow.fvsInBounds
@@ -216,6 +222,7 @@ class GLDataWindow(DataWindow):
         # stxy = self.stxyInBounds(xyl, xyg, tf)
         stxy = self.stxyInRange(tf, d)
         # print("tf, xy, stxy", tf, xy, stxy)
+        # print("tf, stxy", tf, stxy)
         # if stxy is not None:
         #     self.volume_view.setStxyTf(stxy)
         self.volume_view.setStxyTf(stxy)
@@ -552,7 +559,10 @@ class GLDataWindow(DataWindow):
             trgl_index = mxyft[minindex, 3]
 
         if check_for_single_detached_point:
-            return False
+            return None
+        if trgl_index >= len(mfv.trgls()):
+            print("Error: stxyzInRange trgl index",trgl_index,">=",len(mfv.trgls()))
+            return None
         trgl = mfv.trgls()[trgl_index]
         vpts = mfv.vpoints[trgl][:,:3]
 

@@ -370,8 +370,8 @@ class UVMapper:
             bads = np.nonzero(np.sin(angles)<=0)
             # print(bads)
             ptids = trgls[bads[0], bads[1]]
-            # print("ptids", ptids)
-            # print(points[ptids])
+            print("ptids", ptids)
+            print("points", points[ptids])
         # if any angle of the triangle is bad (sine is <= 0),
         # use the original angles instead
         out_angles[bad_angle] = angles[bad_angle]
