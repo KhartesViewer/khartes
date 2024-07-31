@@ -337,10 +337,24 @@ class UVMapper:
         self.angles = trglangles
         # print(self.angles.shape)
 
+    def sumAnglesAroundPoints(self):
+        angles = self.angles
+        if angles is None:
+            # print("adjustAngles: angles not set!")
+            return
+        points = self.points
+        trgls = self.trgls
+        sums = np.zeros(len(points), dtype=np.float64)
+
+        # https://stackoverflow.com/questions/60481343/numpy-sum-over-repeated-entries-in-index-array
+        np.add.at(sums, trgls.flatten(), angles.flatten())
+        return sums
+
     # adjust angles if point is not on a
     # boundary, and sum is < (2 pi - min_deficit).
     # if so, increase the angles proportionately.
     def adjustedAngles(self, min_deficit):
+        '''
         if self.angles is None:
             # print("No angles to adjust")
             return None
@@ -352,10 +366,17 @@ class UVMapper:
         trgls = self.trgls
         sums = np.zeros(len(points), dtype=np.float64)
         # print(trgls.shape, angles.shape)
-        is_on_boundary = self.onBoundaryArray()
 
         # https://stackoverflow.com/questions/60481343/numpy-sum-over-repeated-entries-in-index-array
         np.add.at(sums, trgls.flatten(), angles.flatten())
+        '''
+        sums = self.sumAnglesAroundPoints()
+        if sums is None:
+            return None
+        angles = self.angles.copy()
+        points = self.points
+        trgls = self.trgls
+        is_on_boundary = self.onBoundaryArray()
         factors = np.full(len(points), 1., dtype=np.float64)
         has_deficit = np.logical_and(np.logical_and(~is_on_boundary, sums < (2*np.pi-min_deficit)), sums > 0)
         factors[has_deficit] = (2*np.pi)/sums[has_deficit]

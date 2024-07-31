@@ -4,6 +4,7 @@ import numpy as np
 
 from pathlib import Path
 from collections import deque
+import traceback
 from scipy.spatial import Delaunay
 import scipy
 import cv2
@@ -123,6 +124,10 @@ class TrglFragment(BaseFragment):
         trgl_frag.neighbors = BaseFragment.findNeighbors(trgl_frag.trgls)
         print(trgl_frag.name, trgl_frag.color.name(), trgl_frag.gpoints.shape, trgl_frag.gtpoints.shape, trgl_frag.trgls.shape)
         # print("tindexes", BaseFragment.trglsAroundPoint(100, trgl_frag.trgls))
+        if len(trgl_frag.gtpoints) > 0:
+            tmp_fv = trgl_frag.createView(None)
+            tmp_fv.setScaledTexturePoints(similar=False)
+            trgl_frag.gtpoints = tmp_fv.stpoints
 
         return [trgl_frag]
 
@@ -511,7 +516,9 @@ class TrglFragmentView(BaseFragmentView):
     
     '''
 
-    def setScaledTexturePoints(self):
+    def setScaledTexturePoints(self, similar=True):
+        # similar=False
+        # traceback.print_stack()
         f = self.fragment
         # print("sstp")
         # if self.stpoints is not None and len(self.trgls()) >= 10 and len(f.gpoints) == self.prev_pt_count:
@@ -533,10 +540,15 @@ class TrglFragmentView(BaseFragmentView):
         # print("t, v",self.trgls().shape, self.vpoints.shape)
 
         # original xyzs
-        oxyzs = self.vpoints[:,0:3].astype(np.float64)
+        # TODO: should use gpoints instead of vpoints??
+        # oxyzs = self.vpoints[:,0:3].astype(np.float64)
+        oxyzs = self.fragment.gpoints.astype(np.float64)
         # oxyzs = f.gpoints[:]
         # txyzs is array[trgl #][trgl pt (0, 1, or 2)][pt xyz]
         txyzs = oxyzs[self.trgls()].astype(np.float64)
+
+        gtps = self.fragment.gtpoints.astype(np.float64)
+        # print("gtp range", gtps.min(axis=0), gtps.max(axis=0))
 
         # print(txyzs[0], txyzs[-1])
 
@@ -569,8 +581,8 @@ class TrglFragmentView(BaseFragmentView):
         # and is perpendicular to the z axis
         # NOTE that in the local transposed coordinate
         # system, the global z axis is in the local y direction.
-        fxyaxis = np.cross(tnorm, (0.,1.,0))
-        # fxyaxis = np.cross(tnorm, (0.,0.,1))
+        # fxyaxis = np.cross(tnorm, (0.,1.,0))
+        fxyaxis = np.cross(tnorm, (0.,0.,1))
         # print("ijk axis", self.iIndex, self.jIndex, self.kIndex)
 
         # For each triangle, calculate a weight based on the
@@ -650,7 +662,7 @@ class TrglFragmentView(BaseFragmentView):
         # vertex of each triangle.  Each row in tuvs
         # represents a single triangle, analogous to
         # txyzs at the top of this function
-        tuvs = self.fragment.gtpoints[self.trgls()].astype(np.float64)
+        tuvs = gtps[self.trgls()].astype(np.float64)
         # print("tuvs", tuvs.shape)
         # TODO: testing!
         # tuvs = tuvs[:,:,(1,0)]
@@ -664,6 +676,7 @@ class TrglFragmentView(BaseFragmentView):
         tfuv = tuvs-cuvs
         # print(tfxyz.shape, tfuv.shape)
 
+        tfxynw = tfxy.copy()
         # apply the weights to the xy and uv coordinates
         tfxy *= weights
         tfxy = tfxy.reshape(-1,2)
@@ -684,7 +697,6 @@ class TrglFragmentView(BaseFragmentView):
 
         # n = len(u)
 
-
         # Solve a least-squares problem.  The idea is to
         # find 4 numbers, (a,b,c,d), that minimize the error
         # in these two equations:
@@ -703,33 +715,87 @@ class TrglFragmentView(BaseFragmentView):
         vy = (v*y).sum()
 
         # mden = uu+vv-2*uv
-
-        # denominator of the inverse of A.t()@A
         mden = uu*vv - uv*uv
+        mden2 = uu+vv
+
         # sn = n
         # print("mden", mden/len(u))
         # print("uu vv uv", uu/sn, uv/sn, vv/sn)
         # print("uxy vxy", ux/sn, uy/sn, vx/sn, vy/sn)
-        if mden == 0:
+        if mden == 0 or mden2 == 0:
             print("mden = 0")
             print("oxyzs,txyzs")
             print(oxyzs)
             print(txyzs)
             return
 
-        a = ( vv*ux - uv*vx)/mden
-        b = (-uv*ux + uu*vx)/mden
-        c = ( vv*uy - uv*vy)/mden
-        d = (-uv*uy + uu*vy)/mden
-        # print("abcd", a,b,c,d)
+        # print("gt min max", gtp.min(axis=0), gtp.max(axis=0))
+        gu = gtps[:,0]
+        gv = gtps[:,1]
+        stp = np.zeros_like(gtps)
+
+        if similar:
+            # print("similar")
+            abcds = []
+
+            a = (ux - vy)/mden2
+            b = (vx + uy)/mden2
+            c = b
+            d = -a
+            abcds.append((a,b,c,d))
+
+            a = (ux + vy)/mden2
+            b = (vx - uy)/mden2
+            c = -b
+            d = a
+            abcds.append((a,b,c,d))
+
+            # TODO: for testing only
+            a = ( vv*ux - uv*vx)/mden
+            b = (-uv*ux + uu*vx)/mden
+            c = ( vv*uy - uv*vy)/mden
+            d = (-uv*uy + uu*vy)/mden
+            abcds.append((a,b,c,d))
+
+            errors = []
+            for a,b,c,d in abcds:
+                stp[:,0] = a*gu + b*gv
+                stp[:,1] = c*gu + d*gv
+                tuvs = stp[self.trgls()].astype(np.float64)
+    
+                # Calculate the center of each triangle in uv coordinates.
+                cuvs = tuvs.sum(axis=1)/3
+                cuvs = cuvs[:,np.newaxis,:]
+                # Shift each trgl in tuvs so that the center of the triangle
+                # in uv space lies at the origin of the uv coordinate system.
+                tfuv = tuvs-cuvs
+
+                dd = tfxynw.flatten() - tfuv.flatten()
+                error = np.sqrt((dd*dd).sum())/len(dd)
+                errors.append(error)
+                # print("abcd", a,b,c,d)
+                # print("st error", error)
+                # print(tfuv[0])
+                # print(tfxynw[0:3])
+
+            # print("st errors", errors)
+            if errors[0] < errors[1]:
+                a,b,c,d = abcds[0]
+            else:
+                a,b,c,d = abcds[1]
+
+        else:
+            # print("affine")
+            # denominator of the inverse of A.t()@A
+            a = ( vv*ux - uv*vx)/mden
+            b = (-uv*ux + uu*vx)/mden
+            c = ( vv*uy - uv*vy)/mden
+            d = (-uv*uy + uu*vy)/mden
+            # print("abcd", a,b,c,d)
 
         # Now apply the coordinate transform defined
         # by a,b,c,d to the original uv points, to get
         # scaled transformed points
-        gtp = self.fragment.gtpoints.astype(np.float64)
-        # print("gt min max", gtp.min(axis=0), gtp.max(axis=0))
-        gu = gtp[:,0]
-        gv = gtp[:,1]
         '''
         sgu = np.sort(gu)
         sgv = np.sort(gv)
@@ -744,7 +810,7 @@ class TrglFragmentView(BaseFragmentView):
         # TODO: testing!
         # gu = gtp[:,1]
         # gv = gtp[:,0]
-        stp = np.zeros_like(gtp)
+
         stp[:,0] = a*gu + b*gv
         stp[:,1] = c*gu + d*gv
         # stp[:,0] -= stp[:,0].min()
@@ -788,7 +854,8 @@ class TrglFragmentView(BaseFragmentView):
         starea = (stsize*stsize).sum()
         ptarea = starea / len(self.stpoints)
         self.avg_st_len = math.sqrt(ptarea)
-        print(self.stmin, self.stmax, starea, ptarea, self.avg_st_len)
+        # print(self.stmin, self.stmax, starea, ptarea, self.avg_st_len)
+        print(self.stmin, self.stmax, self.avg_st_len)
         self.outside_stpoints = self.outsidePoints(self.avg_st_len)
         # print("stp", stp.shape, "outside", self.outside_stpoints.shape)
         self.all_stpoints = np.concatenate((stp, self.outside_stpoints), axis=0)
@@ -829,6 +896,7 @@ class TrglFragmentView(BaseFragmentView):
     def stxysToUvs(self, stxys):
         stxys = stxys.copy() - self.st_shift
         a,b,c,d = self.st_abcd
+        print("stu", a,b,c,d)
         det = a*d-b*c
         uvs = np.zeros((stxys.shape[0], 2), dtype=np.float64)
         uvs[:,0] = (d*stxys[:,0] - b*stxys[:,1])/det
@@ -1024,6 +1092,12 @@ class TrglFragmentView(BaseFragmentView):
         self.fragment.notifyModified()
 
     def reparameterize(self):
+        self.stpoints = None
+        print("rpm set stpoints to None")
+        self.setScaledTexturePoints()
+        xyzs = self.vpoints[:,0:3]
+        trgls = self.trgls()
+        TrglPointSet.findSpikes(xyzs, trgls)
         self.disconnectColocatedPoints()
         self.deleteDisconnectedComponents()
         self.deleteFreePoints()
@@ -1444,6 +1518,7 @@ class TrglPointSet:
         # number of normal (not outside) points in self.indexes
         self.nipoints = (self.indexes < nstpoints).sum()
 
+
     def cutBoundaryPoints(self, trgls):
         ritrgls = self.reverse_indexes[trgls]
         ctrgls = ritrgls[((ritrgls<0).sum(axis=1)+1)//2 == 1]
@@ -1514,6 +1589,7 @@ class TrglPointSet:
             trgls = np.concatenate((trgls, un), axis=0)
         return trgls
 
+    # pts should be xyz points, not uv points
     @staticmethod
     def maxEdgeLength(pts, trgls):
         if trgls is None or len(trgls) == 0:
@@ -1524,6 +1600,7 @@ class TrglPointSet:
         maxdsq = np.max(dsq)
         return np.sqrt(maxdsq)
 
+    # pts should be xyz points, not uv points
     @staticmethod
     def minEdgeLength(pts, trgls):
         if trgls is None or len(trgls) == 0:
@@ -1533,6 +1610,64 @@ class TrglPointSet:
         dsq = (dtpts*dtpts).sum(axis=2)
         mindsq = np.min(dsq)
         return np.sqrt(mindsq)
+
+    '''
+    # pts should be xyz points, not uv points
+    # returns ntrgl*3 array of the 3 angles around each trgl
+    @staticmethod
+    def computeAngles(self, pts, trgls):
+        if pts is None or len(pts) < 3:
+            return None
+        if trgls is None or len(trgls) == 0:
+            return None
+        tpts = pts[trgls]
+        # d02, d10, d21
+        # i.e. vector from pt 0 to pt 2, etc
+        tvecs = np.roll(tpts, 1, axis=1) - tpts
+        tlens = np.sqrt((tvecs*tvecs).sum(axis=2))
+        tlens[tlens[:,:]==0] = 1.
+
+        # normalized vecs
+        tnvecs = tvecs/tlens[:,:,np.newaxis]
+
+        # dot products of normalized vectors
+        tndps = (-tnvecs*np.roll(tnvecs, -1, axis=1)).sum(axis=2)
+        angles = np.arccos(tndps)
+        return angles
+
+    @staticmethod
+    def boundaryPoints(self, trgls):
+
+    @staticmethod
+    def computeAngleDeficits(self, pts, trgls):
+        if pts is None or len(pts) < 3:
+            return None
+        if trgls is None or len(trgls) == 0:
+            return None
+        angles = self.computeAngles(pts, trgls)
+        if angles is None:
+            return None
+        sums = np.zeros(len(points), dtpye=np.float64)
+        is_on_boundary = self.onBoundaryArray()
+    '''
+
+    # pts should be xyz points, not uv points
+    @staticmethod
+    def findSpikes(pts, trgls):
+        mapper = UVMapper(pts, trgls)
+        mapper.createAngles()
+        sums = mapper.sumAnglesAroundPoints()
+        on_boundary = mapper.onBoundaryArray()
+        sums[on_boundary] = 100.
+        inds = np.argsort(sums)
+        minangle = 3.14
+        dinds = inds[sums[inds] < minangle]
+        if len(dinds) > 0:
+            print("Spikes")
+            print(dinds)
+            print(sums[dinds])
+            print(pts[dinds])
+
 
     def triangulate(self):
         trgls = None
