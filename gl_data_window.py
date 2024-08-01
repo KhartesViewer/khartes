@@ -154,7 +154,7 @@ class GLDataWindow(DataWindow):
         # print("offset", self.window.getNormalOffsetOnCurrentFragment())
 
     def setCursorPosition(self, tijk):
-        d = 10
+        d = 40
         # ij = self.tijkToIj(tijk)
         # xy = self.ijToXy(ij)
         # xyl = (xy[0]-d, xy[1]-d)
@@ -212,7 +212,7 @@ class GLDataWindow(DataWindow):
         vv = self.volume_view
         if vv is None:
             return
-        d = 10
+        d = 40
         tf = vv.ijktf
         # ij = self.tijkToIj(tf)
         # xy = self.ijToXy(ij)

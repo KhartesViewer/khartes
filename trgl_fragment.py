@@ -850,10 +850,14 @@ class TrglFragmentView(BaseFragmentView):
         # self.xyzmin = xyzmin
         # self.xyzmax = xyzmax
 
-        stsize = self.stmax-self.stmin
-        starea = (stsize*stsize).sum()
-        ptarea = starea / len(self.stpoints)
-        self.avg_st_len = math.sqrt(ptarea)
+        # stsize = self.stmax-self.stmin
+        # starea = (stsize*stsize).sum()
+        # ptarea = starea / len(self.stpoints)
+        # self.avg_st_len = math.sqrt(ptarea)
+        lens = TrglPointSet.edgeLengths(self.stpoints, self.trgls())
+        self.avg_st_len = 0.
+        if len(lens) > 0:
+            self.avg_st_len = lens.sum()/len(lens)
         # print(self.stmin, self.stmax, starea, ptarea, self.avg_st_len)
         print(self.stmin, self.stmax, self.avg_st_len)
         self.outside_stpoints = self.outsidePoints(self.avg_st_len)
@@ -1071,6 +1075,7 @@ class TrglFragmentView(BaseFragmentView):
         if stp is None or len(stp) == 0:
             return
         all_pts = self.all_stpoints
+        # print("ra", len(stp), len(all_pts), len(self.trgls()))
 
         all_trgls = None
         try:
@@ -1078,11 +1083,14 @@ class TrglFragmentView(BaseFragmentView):
         except Exception as err:
             err = str(err).splitlines()[0]
             print("retriangulateAll triangulation error: %s"%err)
+        # print("allt", len(all_trgls))
         if all_trgls is not None:
             new_trgls = all_trgls[(all_trgls < len(stp)).all(axis=1), :]
+            # print("newt", len(new_trgls))
             # new_trgls = all_trgls
             self.fragment.trgls = TrglPointSet.rotateToMin(new_trgls)
             # self.fragment.trgls = new_trgls
+        # print("ra2", len(stp), len(all_pts), len(self.trgls()))
 
     def rebuildStPoints(self):
         # self.setLocalPoints(True, False)
@@ -1129,7 +1137,11 @@ class TrglFragmentView(BaseFragmentView):
         # constraints[:, (1,2)] = pts[bpts]
 
         # mapper = UVMapper(self.fragment.gtpoints, self.trgls())
-        pt0, pt1 = mapper.getTwoAdjacentBoundaryPoints()
+        ta = mapper.getTwoAdjacentBoundaryPoints()
+        if ta is None:
+            print("reparameterize: could not find boundary points!")
+            return
+        pt0, pt1 = ta
         mapper.constraints = np.array([[pt0, 0., 0.], [pt1, 1., 0.]], dtype=np.float64)
         weight = .000001
         mapper.ip_weights = np.full(self.stpoints.shape[0], weight)
@@ -1386,6 +1398,7 @@ class TrglFragmentView(BaseFragmentView):
         # print(neighbors[1774:1780])
         '''
         nt = trgls.shape[0]
+        # print("t n", trgls.shape, neighbors.shape)
         # each triangle also has itself as a neighbor
         # (this is so that triangles with no neighbors will still
         # show up in the connectivity graph)
@@ -1612,9 +1625,19 @@ class TrglPointSet:
             trgls = np.concatenate((trgls, un), axis=0)
         return trgls
 
+    @staticmethod
+    def edgeLengths(pts, trgls):
+        if trgls is None or len(trgls) == 0:
+            return np.zeros((0,3), dtype=np.float64)
+        tpts = pts[trgls]
+        dtpts = tpts - np.roll(tpts, 1, axis=1)
+        dsq = (dtpts*dtpts).sum(axis=2)
+        return np.sqrt(dsq)
+
     # pts should be xyz points, not uv points
     @staticmethod
     def maxEdgeLength(pts, trgls):
+        '''
         if trgls is None or len(trgls) == 0:
             return 0.
         tpts = pts[trgls]
@@ -1622,10 +1645,16 @@ class TrglPointSet:
         dsq = (dtpts*dtpts).sum(axis=2)
         maxdsq = np.max(dsq)
         return np.sqrt(maxdsq)
+        '''
+        lens = TrglPointSet.edgeLengths(pts, trgls)
+        if len(lens) == 0:
+            return 0.
+        return np.max(lens)
 
     # pts should be xyz points, not uv points
     @staticmethod
     def minEdgeLength(pts, trgls):
+        '''
         if trgls is None or len(trgls) == 0:
             return 0.
         tpts = pts[trgls]
@@ -1633,6 +1662,11 @@ class TrglPointSet:
         dsq = (dtpts*dtpts).sum(axis=2)
         mindsq = np.min(dsq)
         return np.sqrt(mindsq)
+        '''
+        lens = TrglPointSet.edgeLengths(pts, trgls)
+        if len(lens) == 0:
+            return 0.
+        return np.min(lens)
 
     '''
     # pts should be xyz points, not uv points
