@@ -785,7 +785,7 @@ class TrglFragmentView(BaseFragmentView):
                 a,b,c,d = abcds[1]
 
         else:
-            # print("affine")
+            print("affine")
             # denominator of the inverse of A.t()@A
             a = ( vv*ux - uv*vx)/mden
             b = (-uv*ux + uu*vx)/mden
@@ -1097,14 +1097,28 @@ class TrglFragmentView(BaseFragmentView):
         self.setScaledTexturePoints()
         xyzs = self.vpoints[:,0:3]
         trgls = self.trgls()
-        TrglPointSet.findSpikes(xyzs, trgls)
+        # print("rt before")
+        # print(self.trgls()[(self.trgls()==181).any(axis=1)])
+        TrglPointSet.findSpikes(xyzs, trgls, "before reparameterize")
+        # print("rt after findSpikes")
+        # print(self.trgls()[(self.trgls()==181).any(axis=1)])
         self.disconnectColocatedPoints()
+        # print("rt after coloc")
+        # print(self.trgls()[(self.trgls()==181).any(axis=1)])
         self.deleteDisconnectedComponents()
+        # print("rt after disconn")
+        # print(self.trgls()[(self.trgls()==181).any(axis=1)])
         self.deleteFreePoints()
+        # print("rt after free points")
+        # print(self.trgls()[(self.trgls()==181).any(axis=1)])
         xyzs = self.vpoints[:,0:3]
         # txyzs is array[trgl #][trgl pt (0, 1, or 2)][pt xyz]
         trgls = self.trgls()
+        # print("rt before mapper")
+        # print(self.trgls()[(self.trgls()==181).any(axis=1)])
         mapper = UVMapper(xyzs, trgls)
+        # print("rt after mapper")
+        # print(self.trgls()[(self.trgls()==181).any(axis=1)])
 
         # set the floating points, and the window-boundary points,
         # as constraints (the floating points need to be constrained,
@@ -1127,8 +1141,10 @@ class TrglFragmentView(BaseFragmentView):
         self.fragment.gtpoints = adjusted_sts
         # print(adjusted_sts)
         self.stpoints = None
-        print("reparameterize set stpoints to None")
+        # TrglPointSet.findSpikes(xyzs, trgls, "after reparam")
+        # print("reparameterize set stpoints to None")
         self.setScaledTexturePoints()
+        TrglPointSet.findSpikes(xyzs, trgls, "after reparameterize")
         # print(self.stpoints)
         self.fragment.notifyModified()
 
@@ -1318,7 +1334,9 @@ class TrglFragmentView(BaseFragmentView):
         npt = pts.shape[0]
         # print("npt", npt)
         # print("min edge length", TrglPointSet.minEdgeLength(pts,trgls))
-        lind = np.lexsort((pts[:,1], pts[:,0]))
+        # This is wrong, and caused annoying pyramids:
+        # lind = np.lexsort((pts[:,1], pts[:,0]))
+        lind = np.lexsort((pts[:,2], pts[:,1], pts[:,0]))
         rlind = np.zeros(npt, dtype=np.int64)
         rlind[lind] = np.ogrid[:npt]
         sarr = pts[lind]
@@ -1329,14 +1347,19 @@ class TrglFragmentView(BaseFragmentView):
             print("found",ndup,"colocated point(s)")
         dedup = lind[tinds[rlind]]
         # print("a", len(trgls))
+        # print(trgls[(trgls==181).any(axis=1)])
         trgls = dedup[trgls]
         # print("b", len(trgls))
+        # print(trgls[(trgls==181).any(axis=1)])
         trgls = trgls[trgls[:,0] != trgls[:,1]]
         # print("c", len(trgls))
+        # print(trgls[(trgls==181).any(axis=1)])
         trgls = trgls[trgls[:,1] != trgls[:,2]]
         # print("d", len(trgls))
+        # print(trgls[(trgls==181).any(axis=1)])
         trgls = trgls[trgls[:,2] != trgls[:,0]]
         # print("e", len(trgls))
+        # print(trgls[(trgls==181).any(axis=1)])
         self.fragment.trgls = trgls
 
     # This will create free points by deleting the
@@ -1653,7 +1676,7 @@ class TrglPointSet:
 
     # pts should be xyz points, not uv points
     @staticmethod
-    def findSpikes(pts, trgls):
+    def findSpikes(pts, trgls, txt=""):
         mapper = UVMapper(pts, trgls)
         mapper.createAngles()
         sums = mapper.sumAnglesAroundPoints()
@@ -1663,7 +1686,7 @@ class TrglPointSet:
         minangle = 3.14
         dinds = inds[sums[inds] < minangle]
         if len(dinds) > 0:
-            print("Spikes")
+            print("Spikes",txt)
             print(dinds)
             print(sums[dinds])
             print(pts[dinds])

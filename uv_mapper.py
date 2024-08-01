@@ -379,6 +379,8 @@ class UVMapper:
         is_on_boundary = self.onBoundaryArray()
         factors = np.full(len(points), 1., dtype=np.float64)
         has_deficit = np.logical_and(np.logical_and(~is_on_boundary, sums < (2*np.pi-min_deficit)), sums > 0)
+        # print("  has deficit", np.nonzero(has_deficit)[0])
+        # print("  sums", sums[has_deficit])
         factors[has_deficit] = (2*np.pi)/sums[has_deficit]
         # print("adjusted", (factors > 1).sum())
         out_angles = angles*factors[trgls]
@@ -432,6 +434,19 @@ class UVMapper:
         pt2ipt = np.full((npt), -1, dtype=np.int64)
         pt2ipt[interior_points] = np.arange(nipt)
 
+        '''
+        pinds = [181, 2296]
+        ipinds = []
+        for ind in pinds:
+            print(" ",ind, points[ind], pt2ipt[ind])
+            ipinds.append(pt2ipt[ind])
+        nz = np.nonzero(trgls == 181)
+        print(nz)
+        print(trgls[nz[0]])
+        print(np.degrees(self.angles[nz[0], nz[1]]))
+        print(np.degrees(self.angles[nz[0]]))
+        '''
+
         # Matrix A has nt+2*nipt rows and 3*nt columns
         # Vector b has 3*nt elements
         # Triplets consist of row index, column index, value
@@ -452,6 +467,11 @@ class UVMapper:
         pt_angle_sum = np.zeros(npt, dtype=np.float64)
         np.add.at(pt_angle_sum, trgls.flatten(), adjusted_angles.flatten())
         pt_angle_sum = pt_angle_sum[interior_points_bool]
+        # smalls = np.nonzero(pt_angle_sum < 3.14)[0]
+        # print("  ", smalls)
+        # print("  ", points[smalls])
+        # print("  ", pt_angle_sum[pinds])
+
         pt_angle_sum = 2*np.pi - pt_angle_sum
         b1 = pt_angle_sum
 
@@ -616,7 +636,7 @@ class UVMapper:
             print("No triangles")
             return None
         self.createAngles()
-        # print("cufa created angles")
+        print("cufa created angles")
         # self.angleQuality(self.angles)
         for i in range(20):
             abf_angles = self.linABF()
@@ -634,6 +654,8 @@ class UVMapper:
             if mwe < 1.e-7:
                 print("wheel error is small enough at iteration", i+1)
                 break
+            # TODO for testing:
+            # break
         return self.computeUvsFromAngles()
 
     def computeUvsFromAngles(self):
