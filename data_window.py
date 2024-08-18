@@ -2032,8 +2032,8 @@ class SurfaceWindow(DataWindow):
                         cv2.polylines(original, vrts, True, color, 2*fragNodeSize)
                 timer.time("draw points")
 
-                if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0 and fragNodeSize > 0:
-                    nni = pv.nearby_node_index
+                nni = pv.nearby_node_index
+                if frag == pv.nearby_node_fv and 0 <= nni < wvflags.size and fragNodeSize > 0:
                     if wvflags[nni]:
                         pt = allpts[nni]
                         xy = self.ijToXy(pt)
