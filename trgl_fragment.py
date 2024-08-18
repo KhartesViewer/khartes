@@ -398,6 +398,12 @@ class TrglFragmentView(BaseFragmentView):
         self.setWorkingRegion(-1, 0.)
         super(TrglFragmentView, self).setVolumeView(vol_view)
 
+    def pushFragmentState(self):
+        pass
+
+    def popFragmentState(self):
+        pass
+
     def setWorkingRegion(self, index, max_angle):
         if index < 0:
             # self.working_trgls = np.zeros((0, 3), dtype=np.int32)

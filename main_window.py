@@ -2659,7 +2659,7 @@ class MainWindow(QMainWindow):
         afvs = self.project_view.activeFragmentViews(unaligned_ok=True)
         for fragment_view in afvs:
             if fragment_view.active:
-                fragment_view.popGpoints()
+                fragment_view.popFragmentState()
         self.drawSlices()
 
     def setFragmentVisibility(self, fragment, visible):
