@@ -2753,6 +2753,12 @@ class MainWindow(QMainWindow):
         self.fragments_table.model().endResetModel()
         self.drawSlices()
 
+    def fragmentUndo(self):
+        afvs = self.project_view.activeFragmentViews(unaligned_ok=True)
+        for fragment_view in afvs:
+            if fragment_view.active:
+                fragment_view.popFragmentState()
+        self.drawSlices()
 
     def setFragmentVisibility(self, fragment, visible):
         fragment_view = self.project_view.fragments[fragment]
@@ -2893,6 +2899,9 @@ class MainWindow(QMainWindow):
             method = getattr(w, "dwKeyPressEvent", None)
             if w != self and method is not None:
                 w.dwKeyPressEvent(e)
+        elif e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_Z:
+            # Undo lasted node added, if possible
+            self.fragmentUndo()
         else:
             w = QApplication.widgetAt(QCursor.pos())
             method = getattr(w, "dwKeyPressEvent", None)
