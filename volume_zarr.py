@@ -174,7 +174,7 @@ class TransposedDataView():
         result = self.data[alls[0],alls[1],alls[2]]
         if self.original_dtype == np.uint8 and result.dtype == np.uint8:
             result = result.astype(np.uint16)
-            result = result * 257  # Scale up to full 16-bit range
+            result = result * 256 + 128  # Scale up to full 16-bit range
         
         if len(result.shape) == 1:
             # Fancy-indexing collapses the shape, so we don't need to transpose
@@ -372,6 +372,7 @@ class ZarrLevel():
         if path != "":
             self.data = self.data[path]
         self.scale = scale
+        # don't know if self.from_vc_render will ever be used
         self.from_vc_render = from_vc_render
         self.original_dtype = original_dtype
         self.trdatas = []
@@ -644,8 +645,8 @@ class CachedZarrVolume():
 
         volume.valid = True
         volume.trdatas = []
-        volume.trdatas.append(TransposedDataView(volume.data, 0, from_vc_render))
-        volume.trdatas.append(TransposedDataView(volume.data, 1, from_vc_render))
+        volume.trdatas.append(TransposedDataView(volume.data, 0, from_vc_render, volume.data.dtype))
+        volume.trdatas.append(TransposedDataView(volume.data, 1, from_vc_render, volume.data.dtype))
         volume.sizes = [int(size) for size in volume.data.shape]
         # volume.sizes is in ijk order, volume.data.shape is in kji order 
         volume.sizes.reverse()
@@ -656,11 +657,7 @@ class CachedZarrVolume():
 
     def setLevelFromArray(self, array, max_mem_gb):
         self.original_dtype = array.dtype
-        if self.original_dtype == np.uint8:
-            # Convert 8-bit data to 16-bit
-            array = array.astype(np.uint16)
-            array = array * 257  # Scale up to full 16-bit range (multiply by 257 instead of 256 to reach 65535)
-        level = ZarrLevel(array, "", 1., 0, max_mem_gb, self.from_vc_render)
+        level = ZarrLevel(array, "", 1., 0, max_mem_gb, self.from_vc_render, self.original_dtype)
         self.levels.append(level)
 
     def parseMetadata(self, hier):
@@ -728,6 +725,7 @@ class CachedZarrVolume():
         return (path, scale)
 
     def setLevelsFromHierarchy(self, hier, max_mem_gb):
+        # divide metadata into parts, one per level
         metadata = self.parseMetadata(hier)
         if metadata is None:
             print("Problem parsing metadata")
@@ -735,16 +733,19 @@ class CachedZarrVolume():
         expected_scale = 1.
         expected_path_int = 0
         max_gb = .5*max_mem_gb
+        # create this solely for the purpose of getting the chunk size
         level0 = ZarrLevel(hier, '0', 1., 0, 0, self.from_vc_render)
         chunk = level0.data.chunks
         min_max_gb = 3*16*2*chunk[0]*chunk[1]*chunk[2]/(2**30)
 
         for i, lmd in enumerate(metadata):
+            # for each array in hierarchy, parse level metadata
             info = self.parseLevelMetadata(lmd)
             if info is None:
                 print(f"Problem parsing level {i} metadata")
                 return
             path, scale = info
+            # make sure scale and path are as expected
             try:
                 path_int = int(path)
             except:
@@ -756,6 +757,7 @@ class CachedZarrVolume():
             if scale != expected_scale:
                 print(f"Level {i} expected scale {expected_scale}, got {scale}")
                 return
+            # calculate local max_mem_gb
             max_gb = max(max_gb, min_max_gb)
 
             # Get the dtype of the zarr array without loading it into memory
