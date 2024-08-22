@@ -23,6 +23,7 @@ class TrglFragment(BaseFragment):
         self.gtpoints = np.zeros((0,2), dtype=np.float32)
         self.trgls = np.zeros((0,3), dtype=np.int32)
         self.direction = 0
+        self.params = {}
 
     # class function
     # expected to return a list of fragments, but always

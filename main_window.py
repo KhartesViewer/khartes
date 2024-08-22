@@ -2770,11 +2770,29 @@ class MainWindow(QMainWindow):
             loading = self.showLoading()
 
         self.volumes_table.model().beginResetModel()
+        old_vv = pv.cur_volume_view
+        if old_vv is not None and volume is not None and old_vv != volume:
+            # Force GLSurfaceWindow to let go of old volume's data,
+            # so that the memory can be reclaimed
+            vv = None
+            self.depth.setVolumeView(vv);
+            self.xline.setVolumeView(vv);
+            self.inline.setVolumeView(vv);
+            self.surface.setVolumeView(vv);
+            self.drawSlices()
+            self.app.processEvents()
         pv.setCurrentVolume(volume, no_notify)
         self.volumes_table.model().endResetModel()
         vv = None
         if volume is not None:
             vv = pv.cur_volume_view
+            if old_vv is not None and old_vv.zoom != 0 and old_vv.direction == vv.direction:
+                old_v = old_vv.volume
+                if volume.gijk_starts == old_v.gijk_starts and volume.gijk_steps == old_v.gijk_steps and volume.sizes == old_v.sizes:
+                    vv.zoom = old_vv.zoom
+                    vv.ijktf = old_vv.ijktf
+                    vv.stxytf = None
+
             zarr_max_width = self.draw_settings["zarr"]["max_window_width"]
             if vv.zoom == 0.:
                 print("setting volume default parameters", volume.name)
