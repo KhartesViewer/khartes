@@ -2696,6 +2696,16 @@ class MainWindow(QMainWindow):
 
         self.volumes_table.model().beginResetModel()
         old_vv = pv.cur_volume_view
+        if old_vv is not None and volume is not None and old_vv != volume:
+            # Force GLSurfaceWindow to let go of old volume's data,
+            # so that the memory can be reclaimed
+            vv = None
+            self.depth.setVolumeView(vv);
+            self.xline.setVolumeView(vv);
+            self.inline.setVolumeView(vv);
+            self.surface.setVolumeView(vv);
+            self.drawSlices()
+            self.app.processEvents()
         pv.setCurrentVolume(volume, no_notify)
         self.volumes_table.model().endResetModel()
         vv = None

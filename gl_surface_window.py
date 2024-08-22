@@ -667,6 +667,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             self.volume_view_direction = -1
             self.active_fragment = None
             # self.atlas = None
+            self.atlas.setVolumeView(None)
             return
         pv = dw.window.project_view
         mfv = None
@@ -1966,6 +1967,14 @@ class Atlas:
 
         self.volume_view = volume_view
 
+        if volume_view is None:
+            # Need to clear out self.datas as soon as possible
+            # when a volume's data is released, in order to make
+            # sure the data's memory is released.
+            self.datas = None
+            # print("Atlas.setVolumeView: self.datas set to None")
+            return
+
         vol = volume_view.volume
         vdir = volume_view.direction
         is_zarr = vol.is_zarr
@@ -1984,9 +1993,6 @@ class Atlas:
             # print("data shape", data.shape)
             shape = data.shape
             dsz.append(tuple(shape[::-1]))
-        # TODO: Need to clear out self.datas as soon as possible
-        # when a volume's data is released, in order to make
-        # sure the data's memory is released.
         self.datas = datas
         self.dsz = dsz
         # number of data chunks in each direction
