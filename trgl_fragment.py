@@ -725,10 +725,13 @@ class TrglFragmentView(BaseFragmentView):
         # print("uu vv uv", uu/sn, uv/sn, vv/sn)
         # print("uxy vxy", ux/sn, uy/sn, vx/sn, vy/sn)
         if mden == 0 or mden2 == 0:
+            '''
             print("mden = 0")
             print("oxyzs,txyzs")
             print(oxyzs)
             print(txyzs)
+            '''
+            print("mden, mden2", mden, mden2)
             return
 
         # print("gt min max", gtp.min(axis=0), gtp.max(axis=0))
@@ -1758,6 +1761,9 @@ class TrglPointSet:
 
     def triangulate(self):
         trgls = None
+        if len(self.pts) < 4:
+            print("triangulate: fewer than 4 points")
+            return None
         try:
             trgls = Delaunay(self.pts).simplices
         except Exception as err:
