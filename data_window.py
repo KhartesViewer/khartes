@@ -245,12 +245,22 @@ class DataWindow(QLabel):
         old_global_nearby = pv.nearby_node_index
         xyijks = self.cur_frag_pts_xyijk
         xyijks_valid = (xyijks is not None and xyijks.shape[0] != 0)
+        # print("oln", old_local_nearby, "ogn", old_global_nearby, "valid", xyijks_valid)
         if old_local_nearby >= 0 and xyijks_valid:
+            # print("xyijks")
+            # print(xyijks)
             new_local_nearbys = np.nonzero(xyijks[:,5]==old_global_nearby)[0]
+            # print("new_local_nearbys", new_local_nearbys)
             if len(new_local_nearbys) == 0:
                 new_local_nearby = -1
             else:
-                new_local_nearby = new_local_nearbys[0]
+                # new_local_nearby = new_local_nearbys[0]
+                new_local_nearby = -1
+                for nln in new_local_nearbys:
+                    if self.cur_frag_pts_fv[nln] == pv.nearby_node_fv:
+                        new_local_nearby = nln
+                        break
+            # print("nln", new_local_nearby)
             if new_local_nearby != old_local_nearby:
                 # print("setting", old_local_nearby, new_local_nearby)
                 self.setNearbyNode(new_local_nearby)
@@ -1071,6 +1081,7 @@ class DataWindow(QLabel):
         elif not self.isMovingNode and key == Qt.Key_X:
             # print("key X")
             ijk = self.getNearbyNodeIjk()
+            # print("ijk", ijk)
             if ijk is None:
                 pt = self.mapFromGlobal(QCursor.pos())
                 mxy = (pt.x(), pt.y())
