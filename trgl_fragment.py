@@ -602,7 +602,7 @@ class TrglFragmentView(BaseFragmentView):
             min_weight = weights[wsort[0]]
             max_weight = weights[wsort[-1]]
             weight90 = weights[wsort[(9*nw)//10]]
-            print("weight range", min_weight, median_weight, weight90, max_weight)
+            # print("weight range", min_weight, median_weight, weight90, max_weight)
             max_allowed_weight = 4*median_weight
             weights[weights > max_allowed_weight] = max_allowed_weight
 
@@ -1109,7 +1109,7 @@ class TrglFragmentView(BaseFragmentView):
 
     def reparameterize(self):
         self.stpoints = None
-        print("rpm set stpoints to None")
+        # print("rpm set stpoints to None")
         self.setScaledTexturePoints()
         xyzs = self.vpoints[:,0:3]
         trgls = self.trgls()

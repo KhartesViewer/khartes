@@ -636,7 +636,7 @@ class UVMapper:
             print("No triangles")
             return None
         self.createAngles()
-        print("cufa created angles")
+        # print("cufa created angles")
         # self.angleQuality(self.angles)
         for i in range(20):
             abf_angles = self.linABF()
