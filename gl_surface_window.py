@@ -746,7 +746,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             self.volume_view_direction = -1
             self.active_fragment = None
             # self.atlas = None
-            self.atlas.setVolumeView(None)
+            if self.atlas is not None:
+                self.atlas.setVolumeView(None)
             return
         pv = dw.window.project_view
         mfv = None
