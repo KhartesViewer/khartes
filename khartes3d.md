@@ -106,6 +106,40 @@ dozen points.
 Out of habit, I always save the project just before I press the 
 `Reparameterize` button.
 
+### Big-triangle molasses
+
+Sometimes, when your surface has an embayment, 
+the embayment is filled by a large triangle.
+(Need a picture of this).
+
+As you add points on the data slices, 
+in an attempt to fill in
+the triangle, you might see something strange:  Intead of going
+all the way across the triangle, the points seem, in
+the map view, to get bogged
+down inside of the triangle.
+(Need a picture to illustrate this).
+
+The fundamental problem is that in areas where the
+surface has high curvature, large triangles create
+serious distortions in the parameterization.  This
+distortion in turn causes new points to be placed incorrectly
+in the map view.
+
+One way to fix this (not sure if it always works):
+
+1) Delete the bogged-down points (hopefully there are only 2-3 of these).
+
+2) In the **map view**, add a new point at the outside edge of the triangle.
+
+3) Move the cursor on top of the new point, and type `x` on the keyboard
+to recenter it.
+
+4) In one of the data-slice windows, move the point to its correct
+location.
+
+(Need to provide more pictures)
+
 ## Algorithm (optional reading)
 
 This section describes the algorithm that is used to create 
