@@ -13,7 +13,8 @@ in a certain way.
 <img src="images/3d_first_3_points.jpg" width="400">
 
 1) The first 3 points should be placed in the upper-left
-window (the "IMG" window), in clockwise order around the
+window (the `IMG` window, with a green frame), 
+in clockwise order around the
 center of the scroll.  Khartes draws these points in a larger
 size, to emphasize that they are the starting points.
 
@@ -24,7 +25,7 @@ hit the `x` key.  This will center point 2 in all 3 windows.
 
 <img src="images/3d_first_5_points.jpg" width="800">
 
-3) In either the X window or the Y window (whichever seems to
+3) In either the `X` window or the `Y` window (whichever seems to
 provide a clearer view) place the final 2 points (points 4 and 5)
 on opposite sides of point 2.
 The order does not matter.  Note that the surface now appears in
@@ -57,5 +58,5 @@ this criterion).
 ### Advanced tips
 
 Once you have placed a hundred or so points, there are some
-advanced things to keep in mind.
+advanced things to keep in mind.  (To be written!)
 
