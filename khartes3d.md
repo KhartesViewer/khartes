@@ -43,12 +43,24 @@ avoid long skinny triangles.
 
 ## Beginner tips
 
-1) Save regularly!
+1) In the current version, when khartes starts, the windows will
+all be a shade of dark red.  Once a project is loaded (or a new
+project is created), the windows will have their customary
+black background.
 
-2) Turn on the tracking cursor (press the `t` key to 
+2) In the data-slice views, make sure that the
+segment line (the line that represents the cross section
+of the segment) is close to the cross hairs.  If you move
+the segment line too far from the cross hairs, 
+**the map view goes blank!**  If this happens, just move
+the segment line back close to the cross hairs.
+
+3) Save regularly!
+
+4) Turn on the tracking cursor (press the `t` key to 
 toggle the tracking cursor on and off).
 
-3) In the map view, look at the 3 axes (green, red, blue)
+5) In the map view, look at the 3 axes (green, red, blue)
 to decide which data slice to add points to.  I tend to
 add points in the green window (the IMG window) and in
 the window corresponding to whichever axis is most perpendicular
