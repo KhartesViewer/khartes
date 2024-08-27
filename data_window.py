@@ -695,7 +695,11 @@ class DataWindow(QLabel):
             stxt += "   "
 
 
+        # oldNearbyNode = self.localNearbyNodeIndex
+        self.updateNearbyNode()
         nearbyNode = self.localNearbyNodeIndex
+        # if oldNearbyNode != nearbyNode:
+        #     print("node change", oldNearbyNode, nearbyNode)
         # check nearbyNode < len to try and prevent intermittent crash
         # that sometimes occurs when creating active region and
         # then moving mouse quickly to another data slice
