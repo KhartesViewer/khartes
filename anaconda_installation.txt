@@ -46,6 +46,8 @@ conda install tifffile
 conda install zarr
 conda install scipy
 conda install pyopengl
+conda install requests
+conda install aiohttp
 conda install -c conda-forge pynrrd
 conda install -c conda-forge rectpack
 

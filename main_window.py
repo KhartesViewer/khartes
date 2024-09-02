@@ -969,6 +969,10 @@ class MainWindow(QMainWindow):
         self.addSettingsPanel()
         self.addDevToolsPanel()
         self.addVolumeAnnotationPanel()
+        # open Fragment panel
+        # TODO: should remember which panel was last opened
+        # by user
+        self.tab_panel.setCurrentIndex(1)
 
         widget = QWidget()
         widget.setLayout(grid)
@@ -2468,7 +2472,7 @@ class MainWindow(QMainWindow):
                 frags.append(frag)
                 if frag.meshExportNeedsInfill():
                     needs_infill = True
-                self.surface.setMapImage(fv)
+                # self.surface.setMapImage(fv)
                 fvs.append(fv)
         if len(frags) == 0:
             print("No active fragment")
@@ -2514,7 +2518,11 @@ class MainWindow(QMainWindow):
             ppm_loading = None
 
         loading = self.showLoading("Saving obj file...")
+        for fv in fvs:
+            self.surface.setMapImage(fv)
         err = BaseFragment.saveListAsObjMesh(fvs, pname, infill, ppm)
+        for fv in fvs:
+            self.surface.unsetMapImage(fv)
 
         if err != "":
             msg = QMessageBox()
@@ -2524,7 +2532,6 @@ class MainWindow(QMainWindow):
             msg.exec()
 
         self.settingsSaveDirectory(str(pname.parent), "mesh_")
-
 
     def onImportTiffsButtonClick(self, s):
         self.tiff_loader.show()

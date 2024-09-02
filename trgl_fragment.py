@@ -199,6 +199,7 @@ class TrglFragment(BaseFragment):
         print("mtllib %s.mtl"%stem, file=of)
         print("usemtl default", file=of)
         image_file = ""
+        rgb = self.color.getRgbF()
         has_texture = (len(self.gtpoints) == len(self.gpoints))
         if has_texture:
             tpts = self.gtpoints
@@ -206,6 +207,66 @@ class TrglFragment(BaseFragment):
                 image_ext = ".png"
                 image_file = "%s%s"%(stem, image_ext)
                 image_path = fpath.with_suffix(image_ext)
+                map_image = fv.map_image
+                # image corners, in uv coordinates
+                ic = fv.map_corners
+                ms = map_image.shape
+                # print("ms", ms)
+                # image size, in uv coordinates
+                dc = (ic[1][0]-ic[0][0], ic[1][1]-ic[0][1])
+                tpts = fv.stpoints.copy()
+                # corners of entire surface, in uv coords
+                a0 = tpts.min(axis=0)
+                a1 = tpts.max(axis=0)
+                ac = (a0, a1)
+                dac = (a1[0]-a0[0], a1[1]-a0[1])
+                if dc[0] > 0 and dc[1] > 0 and ms[0] > 0 and ms[1] > 0 and dac[0] > 0 and dac[1] > 0:
+                    # when zoomed in, pxsz is small
+                    # pxsz[0] should be almost the same as pxsz[1]
+                    # size of image pixel, in uv coordinates
+                    pxsz = (dc[0]/ms[1], dc[1]/ms[0])
+                    # print("pxsz", pxsz)
+                    # print(ic, ms, pxsz)
+                    # image corners, in pixel coordinates
+                    ipc = [[int((ic[j][i]-ac[0][i])/pxsz[i]) for i in range(2)] for j in range(2)]
+                    # corners of entire surface, in pixel coordinates
+                    apc = ((0,0), [int((ac[1][i]-ac[0][i])/pxsz[i]) for i in range(2)])
+                    # windowed image corners, in pixel coordinates
+                    rpc = Utils.rectIntersection(apc, ipc)
+                    # windowed image corners, in image-pixel coordinates
+                    ric = [[rpc[j][i]-ipc[0][i] for i in range(2)] for j in range(2)]
+                    # print("ipc", ipc)
+                    # print("apc", apc)
+                    # print("rpc", rpc)
+                    # print("ric", ric)
+                    # map_image is RGBA, so img must be as well
+                    # TODO: img is actually BGRA, not RGBA, though
+                    # the difference is not visible with gray-scale images
+                    img = np.full((apc[1][1], apc[1][0], 4), 65536//2, dtype=map_image.dtype)
+                    # reversed because cv2 uses BGRA not RGBA
+                    img[:,:,2] = 65535*rgb[0]
+                    img[:,:,1] = 65535*rgb[1]
+                    img[:,:,0] = 65535*rgb[2]
+                    img[rpc[0][1]:rpc[1][1], rpc[0][0]:rpc[1][0]] = map_image[ric[0][1]:ric[1][1], ric[0][0]:ric[1][0]]
+                    cv2.imwrite(str(image_path), img)
+                    rgb = (1.,1.,1.)
+
+                    # rst = ((st0[0], st0[1]), (st1[0], st1[1]))
+                    # print(rst)
+                    # ri = Utils.rectIntersection(mc, rst)
+                    # print(ri)
+                    # p0 = [int((mc[0][i]+ri[0][i])/pxsz[i]) for i in range(2)]
+                    # p1 = [int((mc[1][i]+ri[1][i])/pxsz[i]) for i in range(2)]
+                    # print(p0, p1)
+
+                # tpts = fv.stpoints.copy()
+                if dac[0] != 0. and dac[1] != 0.:
+                    tpts = (tpts-ac[0])/dac
+                    tpts[:,1] = 1.-tpts[:,1]
+
+                '''
+                # c = fv.map_corners
+                # full_image = np.zeros((c[1][1], c[1][0]))
                 cv2.imwrite(str(image_path), fv.map_image)
                 c = fv.map_corners
                 tpts = fv.stpoints.copy()
@@ -221,6 +282,7 @@ class TrglFragment(BaseFragment):
                     tpts[tpts>1.] = -1.e+3
                     tpts[tpts<0.] = -1.e+3
                     tpts[(tpts<0).any(axis=1), :] = -1.e+3
+                '''
 
             for i, pt in enumerate(tpts):
                 print("vt %f %f"%(pt[0], pt[1]), file=of)
@@ -242,7 +304,6 @@ class TrglFragment(BaseFragment):
             return
             
         print("newmtl default", file=of)
-        rgb = self.color.getRgbF()
         print("Ka %f %f %f"%(rgb[0],rgb[1],rgb[2]), file=of)
         print("Kd %f %f %f"%(rgb[0],rgb[1],rgb[2]), file=of)
         print("Ks 0.0 0.0 0.0", file=of)
