@@ -106,39 +106,167 @@ dozen points.
 Out of habit, I always save the project just before I press the 
 `Reparameterize` button.
 
-### Big-triangle molasses
+### Big-triangle trouble
+
+<img src="images/big_trgl_a.png" width="600">
 
 Sometimes, when your surface has an embayment, 
-the embayment is filled by a large triangle.
-(Need a picture of this).
+the embayment is filled by a large triangle,
+as in the screenshot above.
+
+The Fragment View (on the right) shows the big triangle
+in map view.  On the two Data Slices on
+the left (I've omitted the third
+Data Slice,
+since it doesn't add anything)
+I've indicated the cross section lines created by
+this large triangle.
+
+This triangle really should not exist at
+all.  However, reliably removing this sort of 
+triangle, without accidently removing legitimate
+triangles, is a technical challenge, so pending
+further improvements, these triangles will be
+present for now.
+
+<img src="images/big_trgl_b.png" width="600">
 
 As you add points on the data slices, 
 in an attempt to fill in
 the triangle, you might see something strange:  Intead of going
 all the way across the triangle, the points seem, in
-the map view, to get bogged
+the Fragment View, to get bogged
 down inside of the triangle.
-(Need a picture to illustrate this).
+
+This "bogging down" tends to happen in regions where
+the segment curves sharply.
+
+In the screenshot above, the user has added two points (`1` and `2`) 
+by clicking in
+the red-framed Data Slice, as indicated by the large numbers.
+I've indicated the same points in the Fragment View, but in
+a smaller font, to emphasize that although the points are visible
+in the Fragment View, that is not where the user worked when
+adding them.
+
+Notice, in the lower Data Slice, how the cross section of the
+residual triangle heads off at a sharp angle.
+
+If you compare the Fragment View in the screenshot above, with
+the Fragment View in the screenshot above that, you can see how
+the unlabelled point in the bottom middle has actually 
+contracted inwards; this is the most obvious sign of
+distortion that has occurred because of the addition of the new points.
 
 The fundamental problem is that in areas where the
 surface has high curvature, large triangles create
 serious distortions in the parameterization.  This
 distortion in turn causes new points to be placed incorrectly
-in the map view.
+in the map view, and as these points are added, existing points 
+shift in a way that
+creates distortions in the image.
 
-One way to fix this (not sure if it always works):
+<img src="images/big_trgl_c.png" width="600">
 
-1) Delete the bogged-down points (hopefully there are only 2-3 of these).
+Sometimes, if you just keep going, adding more points to the
+Data Slice, the problem corrects itself.
 
-2) In the **map view**, add a new point at the outside edge of the triangle.
+Sometimes it doesn't.
 
-3) Move the cursor on top of the new point, and type `x` on the keyboard
-to recenter it.
+The screenshot above shows
+an alternative way to deal with persistent large triangles.
 
-4) In one of the data-slice windows, move the point to its correct
-location.
+The main idea: instead of adding yet another point to
+one of the Data Slices, add a point (point `3` in
+this case) to the edge of the big
+triangle, in the **Fragment View**.
 
-(Need to provide more pictures)
+The advantage to this approach: It breaks up the big triangle.
+
+The disadvantage: The new point you create is not on the
+segment, you need to move it into place.
+
+The screenshots below illustrate this process.
+
+<img src="images/big_trgl_d.png" width="600">
+
+The screenshot above shows the result of adding point `3`
+to the edge of the big triangle.
+
+Although it isn't required, I like to move the new point
+onto one of the colored crosshairs (red in this case), so
+that it will be visible in one of the current Data Slices.
+
+The white arrow indicates that I plan to move point `3` to
+the left, in the Fragment View, so that it is on the red crosshair.
+
+<img src="images/big_trgl_e.png" width="600">
+
+The screenshot above shows the results of moving point `3`
+onto the red crosshair.  This movement makes the point visible
+in the red-framed Data Slice.  Point `3` is still far from
+the correct location; the white arrow shows the direction in which it
+should be moved.
+
+<img src="images/big_trgl_f.png" width="600">
+
+And at last, this screenshot shows the final result of
+moving point `3` onto the segment.
+The process was a bit complicated, but it gave a good result.
+
+Notice, by the way, that there are still some large triangles
+to the left, which the green crosshair passes through.
+Will simply adding points to the segment in the green-framed
+Data Slice be sufficient?  Or will we need to click on
+the outside edge of the largest triangle?  We won't know until
+we try...
+
+### Viewing the segment in 3D
+
+One easy way to see what your segment looks like in 3D
+is to export it as a `.obj` file and load it into 
+the program `MeshLab`.
+
+It has long been possible to export such a file from khartes,
+using the `File / Export fragment as mesh...` command.
+However, in khartes3d, this command exports not only the shape
+of the segment, but the data on the segment as well.
+
+<img src="images/to_mesh_a.png" width="600">
+
+For instance, this screenshot shows a typical segment in khartes3d.
+
+<img src="images/to_mesh_b.png" width="400">
+
+And this screenshot shows the result of exporting this mesh
+and viewing it in MeshLab.
+
+The thing to be aware of is that the pixel data that is projected
+onto the mesh is not the highest possible resolution (unlike, say,
+`vc_render`, which exports high-resolution pixels).
+Instead, the pixel resolution is exactly the same as 
+that of the image you see
+in the Fragment View in khartes.
+
+<img src="images/to_mesh_c.png" width="400">
+
+When you zoom into the surface in MeshLab, the low resolution becomes obvious.
+
+<img src="images/to_mesh_d.png" width="600">
+
+If you want to see the data in 3D at a higher resolution,
+you need to zoom into the segment, as above, before
+exporting the mesh.
+
+<img src="images/to_mesh_e.png" width="400">
+
+However, as before, the only data shown on the surface in MeshLab
+is the data that is visible in the Fragment View.
+
+This is a significant limitation, but exporting a full high-resolution
+image would take much longer, because of the additional computations
+that would be required
+and the additional data that would need to be loaded.
 
 ## Algorithm (optional reading)
 
@@ -274,4 +402,115 @@ the parameterization process), and how to perform incremental updates
 minutes).
 
 Anyway, that is the general description of the algorithm.
+
+
+## Adding points to a multi-wrap segment (optional reading)
+
+When the user clicks on a Data Slice to add a point to a segment,
+and the segment has multiple wraps,
+khartes must decide which wrap to add the point to.
+
+This is an informal discussion of how khartes does that; I wrote it
+to explain the process to a user.
+
+Most people will not be interested in this niche topic,
+but if you are, keep reading!
+
+<img src="images/multiwrap.png">
+
+Khartes does not keep track of wraps; it doesn't even have the
+concept.  But I'll tell you some of what is happening behind the
+scenes in khartes, since you may be interested.
+
+So imagine you have a data slice where several wraps are visible.  You
+want to add a point off the end of one of the wraps, so you click at a
+location on the data slice.  How does khartes know where to attach the
+new point that is created at that location? 
+
+First of all, khartes at this stage is not thinking about
+"attachment", it is trying to solve a different problem: your click
+has specified a point location in xyz space (scroll data coordinates);
+what are the uv coordinates (map/fragment view coordinates) of that
+newly created point?  (Once it has figured out the uv coordinates, it
+can add the point to the map view and retriangulate, thus "attaching"
+the point to the surface, but we haven't reached that stage yet). 
+
+To figure out the new uv location, khartes looks at the information
+that is visible in the data slice where you clicked.  Specifically, it
+looks at the cross-section lines that are visible.  Or more precisely,
+it looks at all the colored pixels (the pixels that are colored
+because they compose the cross-section line).  Each colored pixel
+carries
+certain information: the surface triangle that generated the pixel, 
+the pixel's xyz location, and the pixel's uv location.
+
+So at this point khartes has the xyz location of the new point you
+created, and it has a list of the xyz locations of all the colored
+pixels (the surface cross section).
+
+The next step (which I will describe in much greater detail in a
+minute, because it is more complicated than it first appears) is to
+find the nearest colored pixel to the new point that the user has
+created.  Given the information carried by that nearby colored pixel,
+it is possible to compute an approximate uv location for the
+newly-created point, which is the problem we set out to solve.
+Hooray!
+
+But...
+
+If multiple wraps are visible on the data slice, how to choose the
+"correct" one, that is, the one that the user intended?  In many
+cases, the pixels of one of the other wraps may be closer, in xyz
+space, to the new point, that is, closer than the pixels of the wrap
+that the user actually has in mind.
+
+Bear in mind that at this point, khartes does not know anything about
+wraps; at this point khartes only has a list of colored pixels, with
+each pixel carrying only triangle id, xyz, and uv.
+
+So to choose the closest pixel, khartes actually has to go through a
+two-step process.  First, eliminate the pixels on the wrong wrap
+(except, khartes doesn't know about wraps!), and second, choose the
+closest pixel of the ones that weren't eliminated in the first step.
+
+Khartes doesn't know anything about wraps, but it does have a couple
+of handy pieces of information.  One: it knows the uv location of each
+pixel.  Second: it knows the uv location of where the user is working.
+This second piece of information is given by the uv location of the
+cross hairs in map view.  The assumption is that the user is most
+interested in the area near the cross hairs.
+
+So in the first step of the two-step process above, the
+eliminate-the-wrong-wrap process, khartes looks at the uv location of
+each colored pixel, and decides if it is "close enough" to the work
+area (the map-view crosshairs).  If it is close enough, the pixel is
+kept, otherwise it is not.  And as mentioned above, only the pixels
+that survive this screening are passed on to the "closest pixel in xyz
+to the new point" test.
+
+And here's the problem.  My test for "close enough" in uv space is a
+simple number.  Is the uv distance less than this number?  Pass.
+Otherwise fail.
+
+**[Note: the rest of this write-up describes a bug I
+intend to fix soon]**
+
+The pass/fail number is something I arbitrarily chose because it
+worked on my test segment, which is one of the large multi-wrap
+segments from the GP region or beyond.  A distance that works on a
+wrap with a large circumference is not likely to work on a
+small-circumference multi-wrap surface in the title area; points from
+several wraps can all satisfy the uv distance criterion.
+
+So in the case of small-circumference wraps, the first stage of the
+two-stage "nearest pixel" process does nothing useful, it lets all the
+pixels pass, no matter which wrap they are on!
+
+The end result: when you create a new point on such a surface, the
+point will be assigned uv coordinates based on the nearest colored
+pixel, even if that pixel is not on the wrap that you intended!
+
+Obviously, I need to fix this.  In the meantime, you can reduce the
+chances of confusion by zooming in so that only the correct wrap is
+visible in the data slice.  
 

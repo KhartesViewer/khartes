@@ -391,7 +391,9 @@ class DataWindow(QLabel):
             return None
         xys = xyijks[:,0:2]
         curfv = self.currentFragmentView()
-        if not curfv.allowAutoInterpolation():
+        # under some circumstances (I'm not sure what),
+        # curfv can be None
+        if curfv is None or not curfv.allowAutoInterpolation():
             return None
 
         d = 3
