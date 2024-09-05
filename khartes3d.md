@@ -488,29 +488,12 @@ kept, otherwise it is not.  And as mentioned above, only the pixels
 that survive this screening are passed on to the "closest pixel in xyz
 to the new point" test.
 
-And here's the problem.  My test for "close enough" in uv space is a
-simple number.  Is the uv distance less than this number?  Pass.
-Otherwise fail.
+The test for "close enough" in uv space is
+based on the size of the Data Slice window and the 
+zoom factor.  If you are zoomed out so far that you
+see the entire loop around the center, it is possible
+that this algorithm will not do a good job.
 
-**[Note: the rest of this write-up describes a bug I
-intend to fix soon]**
-
-The pass/fail number is something I arbitrarily chose because it
-worked on my test segment, which is one of the large multi-wrap
-segments from the GP region or beyond.  A distance that works on a
-wrap with a large circumference is not likely to work on a
-small-circumference multi-wrap surface in the title area; points from
-several wraps can all satisfy the uv distance criterion.
-
-So in the case of small-circumference wraps, the first stage of the
-two-stage "nearest pixel" process does nothing useful, it lets all the
-pixels pass, no matter which wrap they are on!
-
-The end result: when you create a new point on such a surface, the
-point will be assigned uv coordinates based on the nearest colored
-pixel, even if that pixel is not on the wrap that you intended!
-
-Obviously, I need to fix this.  In the meantime, you can reduce the
-chances of confusion by zooming in so that only the correct wrap is
-visible in the data slice.  
-
+In other words, the more zoomed-in your view in the Data Slice
+window, the more likely that khartes will select the correct
+wrap.

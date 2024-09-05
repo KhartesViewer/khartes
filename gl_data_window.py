@@ -197,6 +197,7 @@ class GLDataWindow(DataWindow):
             stxy = None
         else:
             stxy = stxyz[:2]
+            ''' No longer needed; taken care of by stxyzInRange
             if stxytf is not None:
                 dx = abs(stxy[0]-stxytf[0])
                 dy = abs(stxy[1]-stxytf[1])
@@ -205,6 +206,7 @@ class GLDataWindow(DataWindow):
                 if dx > maxd or dy > maxd:
                     print("nearest xyz point is too far in uv")
                     stxy = None
+            '''
         self.window.addPointToCurrentFragment(tijk, stxy)
 
     def setStxyTfFromIjkTf(self):
@@ -382,15 +384,23 @@ class GLDataWindow(DataWindow):
         matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
         # print("line len(matches)", len(matches))
         if stxy_center is not None:
+            # for each pixel, find the pixel's triangle
             # print(stxy_center)
             trgl_indexes = xyfvs[matches, 3]
             # print(trgl_indexes)
             trgls = mfv.trgls()[trgl_indexes]
             sts = np.abs(mfv.stpoints[trgls]-stxy_center)
-            inrange = np.nonzero((sts<maxd).any(axis=1))[0]
+            zoom = self.getZoom()
+            mwh = max(self.width(), self.height())/zoom
+            # only keep the pixel if it is true that at least one
+            # vertex of the pixel's triangle is within range
+            inrange = np.nonzero((sts<.5*mwh).all(axis=2).any(axis=1))[0]
+            # print("mwh", mwh, xyfvs.shape, sts.shape, trgl_indexes.shape, inrange.shape)
             # print(matches)
             # print(inrange)
+            # print("before", matches.shape)
             matches = matches[inrange]
+            # print("after", matches.shape)
         if len(matches) == 0:
             if not try_hard:
                 return None

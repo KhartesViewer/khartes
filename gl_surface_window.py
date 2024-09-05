@@ -1229,7 +1229,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             self.trgl_pts_program.setUniformValue(nniloc, int(nearby_node_id))
                 
             f.glPointSize(node_thickness)
-            f.glDrawArrays(pygl.GL_POINTS, 0, fvao.stxys_size)
+            # print("fvao count", fvao.stxys_count)
+            f.glDrawArrays(pygl.GL_POINTS, 0, fvao.stxys_count)
             self.trgl_pts_program.release()
 
         QOpenGLFramebufferObject.bindDefault()
@@ -1414,6 +1415,7 @@ class FragmentMapVao:
         else:
             stxys = np.ascontiguousarray(fv.stpoints, dtype=np.float32)
         self.stxys_size = stxys.size
+        self.stxys_count = stxys.shape[0]
 
         nbytes = stxys.size*stxys.itemsize
         self.stxy_vbo.allocate(stxys, nbytes)

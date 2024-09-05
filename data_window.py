@@ -729,10 +729,11 @@ class DataWindow(QLabel):
             globalNearbyNode = self.window.project_view.nearby_node_index
             # Trying to track down an intermittent crash that would
             # occur while deleting nodes
-            if index != globalNearbyNode:
-                print("node index discrepancy:", index, globalNearbyNode)
-            stxy = fv.stpoints[index]
-            stxt += " (uv %g %g)"%(round(stxy[0],2), round(stxy[1],2))
+            if index != globalNearbyNode or index >= len(fv.stpoints):
+                print("node index discrepancy:", index, globalNearbyNode, len(fv.stpoints))
+            if index < len(fv.stpoints):
+                stxy = fv.stpoints[index]
+                stxt += " (uv %g %g)"%(round(stxy[0],2), round(stxy[1],2))
             stxt += "   "
 
         '''
