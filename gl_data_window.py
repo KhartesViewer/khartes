@@ -1614,7 +1614,7 @@ class GLDataWindowChild(QOpenGLWidget):
         if len(xyptslist) > 0:
             dw.cur_frag_pts_xyijk = np.concatenate(xyptslist, axis=0)
         else:
-            dw.cur_frag_pts_xyijk = np.zeros((0,5), dtype=np.float32)
+            dw.cur_frag_pts_xyijk = np.zeros((0,6), dtype=np.float32)
         # print("pts", len(dw.cur_frag_pts_xyijk))
 
         timera.time(axstr+"draw points")

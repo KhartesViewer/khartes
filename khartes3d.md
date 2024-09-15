@@ -221,6 +221,11 @@ Data Slice be sufficient?  Or will we need to click on
 the outside edge of the largest triangle?  We won't know until
 we try...
 
+**And a reminder once again:** when the surface begins behaving
+strangely, you can often fix the problem
+by pressing the `Reparam` button
+(after saving first)
+
 ### Viewing the segment in 3D
 
 One easy way to see what your segment looks like in 3D

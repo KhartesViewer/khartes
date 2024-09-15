@@ -158,8 +158,10 @@ class BaseFragment:
         return np.array((stxaxis, styaxis, normal)).T
 
 
-    # class function
+    @staticmethod
     def calculateSqCm(pts, trgls, voxel_size_um):
+        if trgls is None or len(trgls) == 0:
+            return 0.
         v0 = trgls[:,0]
         v1 = trgls[:,1]
         v2 = trgls[:,2]

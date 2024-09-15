@@ -478,6 +478,17 @@ class TrglFragmentView(BaseFragmentView):
     def allowAutoInterpolation(self):
         return False
 
+    def setLocalPoint(self, index):
+        self.local_points_modified = Utils.timestamp()
+        self.vpoints[index, :3] = self.cur_volume_view.globalPositionToTransposedIjk(self.fragment.gpoints[index])
+        self.vpoints[index, 3] = index
+        self.fpoints[index] = self.vpoints[index, :3]
+
+    def addLocalPoint(self, index):
+        self.vpoints = np.insert(self.vpoints, index, [0.]*4, axis=0)
+        self.fpoints = np.insert(self.fpoints, index, [0.]*3, axis=0)
+        self.setLocalPoint(index)
+
     # TODO: if cur_volume_view changed, unset working region
     # NOTE that Fragment.setLocalPoints sets stpoints,
     # but TrglFragment.setLocalPoints does not.
@@ -506,6 +517,7 @@ class TrglFragmentView(BaseFragmentView):
         # print(self.vpoints.shape, indices.shape)
         self.vpoints = np.concatenate((self.vpoints, indices), axis=1)
         self.calculateSqCm()
+        # print("sqcm", self.sqcm)
         vv = self.cur_volume_view
         if vv.stxytf is not None:
             uvxytf = self.stxyToUv(vv.stxytf)
@@ -1051,11 +1063,15 @@ class TrglFragmentView(BaseFragmentView):
     def workingTrgls(self):
         return self.working_trgls
 
-    def calculateSqCm(self):
+    def calculateSqCmOfTrgls(self, trgls):
         pts = self.fragment.gpoints
-        simps = self.fragment.trgls
         voxel_size_um = self.project_view.project.voxel_size_um
-        sqcm = BaseFragment.calculateSqCm(pts, simps, voxel_size_um)
+        sqcm = BaseFragment.calculateSqCm(pts, trgls, voxel_size_um)
+        return sqcm
+
+    def calculateSqCm(self):
+        simps = self.fragment.trgls
+        sqcm = self.calculateSqCmOfTrgls(simps)
         self.sqcm = sqcm
 
     def calculateStArea(self):
@@ -1285,25 +1301,24 @@ class TrglFragmentView(BaseFragmentView):
 
         timer.time("startup")
 
+        if update_st:
+            mel = self.maxStEdgeLengthAroundPoint(index)
+            half_width = self.half_width_multiplier*self.avg_st_len
+            # print(mel, half_width)
+            half_width = max(half_width, 2.*mel)
+            ops = TrglPointSet(self.all_stpoints, len(self.stpoints), new_stxy, half_width)
+            # measure osqcm before gpoints is modified (below)
+            osqcm = self.calculateSqCmOfTrgls(ops.triangulate())
+
         if update_xyz:
             self.fragment.gpoints[index, :] = new_gijk
             # print("c")
-            self.setLocalPoints(True, False)
+            # self.setLocalPoints(True, False)
+            self.setLocalPoint(index)
             # print("d")
             timer.time("update xyz")
 
         if update_st:
-            # call instead of setting self.stpoints
-            # self.retriangulateAndMove(index, new_stxy)
-
-            half_width = self.half_width_multiplier*self.avg_st_len
-            # print("hw", half_width, self.avg_st_len)
-
-            # TODO: testing only!
-            # half_width *= .5
-
-            ops = TrglPointSet(self.all_stpoints, len(self.stpoints), new_stxy, half_width)
-
             self.stpoints[index, :] = new_stxy
             self.all_stpoints[index, :] = new_stxy
             uv = self.stxyToUv(new_stxy)
@@ -1314,6 +1329,11 @@ class TrglFragmentView(BaseFragmentView):
             timer.time("adjust st points")
 
             nps = TrglPointSet(self.all_stpoints, len(self.stpoints), new_stxy, half_width)
+            nsqcm = self.calculateSqCmOfTrgls(nps.triangulate())
+            dsqcm = nsqcm-osqcm
+            # print("dsqcm", self.sqcm+dsqcm, dsqcm)
+            self.sqcm += dsqcm
+            # print(self.sqcm, self.calculateSqCmOfTrgls(self.trgls()))
             self.applyTrglDiff(ops, nps)
             timer.time("apply diff")
             if not constrained:
@@ -1329,13 +1349,26 @@ class TrglFragmentView(BaseFragmentView):
         result = TrglPointSet.trglDiff(ops, nps)
         if result is not None:
             otrgls, ntrgls = result
+            # osqcm = self.calculateSqCmOfTrgls(otrgls)
+            # nsqcm = self.calculateSqCmOfTrgls(ntrgls)
+            # dsqcm = nsqcm-osqcm
+            # print("o,n sqcm", osqcm, nsqcm)
+            # print("d sqcm", dsqcm)
+            # print(" ", self.sqcm+dsqcm)
             # print("otrgls", len(otrgls), self.maxEdgeLengthTrgls(otrgls))
             # print("ntrgls", len(ntrgls), self.maxEdgeLengthTrgls(ntrgls))
             if len(otrgls) > 0 or len(ntrgls) > 0:
                 # print("uo", otrgls)
                 # print("un", ntrgls)
                 # self.replaceTrgls(otrgls, ntrgls)
-                self.fragment.trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
+                # self.fragment.trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
+                trgls = TrglPointSet.replaceTrgls(self.fragment.trgls, otrgls, ntrgls)
+                if trgls is not None:
+                    self.fragment.trgls = trgls
+                else:
+                    print("applyTrglDiff: retriangulating")
+                    self.retriangulateAll()
+
 
     def pointExists(self, stxy):
         existing = np.nonzero((self.stpoints == stxy).all(axis=1))[0]
@@ -1350,6 +1383,31 @@ class TrglFragmentView(BaseFragmentView):
 
     def maxEdgeLengthAll(self):
         return TrglPointSet.maxEdgeLength(self.fragment.gpoints, self.fragment.trgls)
+
+    def maxStEdgeLengthAroundPoint(self, index):
+        sft = self.fragment.trgls
+        trgls = sft[(sft==index).any(axis=1)]
+        if len(trgls) == 0:
+            return 0.
+        return TrglPointSet.maxEdgeLength(self.stpoints, trgls)
+
+    def maxStEdgeLengthNearPoint(self, stxy):
+        hw = 2*self.avg_st_len
+        if len(self.all_stpoints) == 0:
+            return 0.
+        while True:
+           tps = TrglPointSet(self.stpoints, len(self.stpoints), stxy, hw)
+           # print("hw", hw, len(tps.indexes))
+           if len(tps.indexes) > 0:
+               stpt = self.stpoints[tps.indexes]
+               dpt = stpt - stxy
+               d = (dpt*dpt).sum(axis=1)
+               a = np.argmax(d)
+               index = tps.indexes[a]
+               # print("a,in", a, index)
+               break
+           hw *= 2.
+        return self.maxStEdgeLengthAroundPoint(index)
 
     def addPoint(self, tijk, stxy):
         # print("tf add point", tijk, stxy)
@@ -1374,6 +1432,14 @@ class TrglFragmentView(BaseFragmentView):
             print("Point already exists at stxy", stxy)
             return
 
+        astxy = np.array(stxy)
+        # agijk = np.array(gijk)
+        # Need to compute this before point is added to gpoints
+        mel = self.maxStEdgeLengthNearPoint(astxy)
+        # print("mel", mel)
+        half_width = self.half_width_multiplier*self.avg_st_len
+        half_width = max(half_width, 2*mel)
+
         self.fragment.gpoints = np.append(self.fragment.gpoints, [gijk], axis=0)
         uv = self.stxyToUv(stxy)
         nstp = len(self.stpoints)
@@ -1382,11 +1448,9 @@ class TrglFragmentView(BaseFragmentView):
         self.all_stpoints = np.insert(self.all_stpoints, nstp, stxy, axis=0)
         timer.time("setup")
 
-        astxy = np.array(stxy)
-        # agijk = np.array(gijk)
-        half_width = self.half_width_multiplier*self.avg_st_len
         ops = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
         ops.deletePoint(nstp)
+        osqcm = self.calculateSqCmOfTrgls(ops.triangulate())
         # print("a ops", self.maxEdgeLength(ops))
         timer.time("ops")
 
@@ -1395,6 +1459,14 @@ class TrglFragmentView(BaseFragmentView):
         # constrained = self.adjustStPoints(nstp, half_width)
 
         nps = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
+
+        '''
+        nsqcm = self.calculateSqCmOfTrgls(nps.triangulate())
+        dsqcm = nsqcm-osqcm
+        self.sqcm += dsqcm
+        print(self.sqcm, self.calculateSqCmOfTrgls(self.trgls()))
+        '''
+
         # print("a nps", self.maxEdgeLength(nps))
         # nps.addPointAtEnd(stxy)
         timer.time("nps")
@@ -1404,6 +1476,15 @@ class TrglFragmentView(BaseFragmentView):
         constrained = self.adjustStPoints(nstp, half_width)
         timer.time("adj")
         nps2 = TrglPointSet(self.all_stpoints, len(self.stpoints), astxy, half_width)
+        nsqcm = self.calculateSqCmOfTrgls(nps2.triangulate())
+        dsqcm = nsqcm-osqcm
+        self.sqcm += dsqcm
+        # print(self.sqcm, self.calculateSqCmOfTrgls(self.trgls()))
+
+        # TODO: will this crash if lens are not equal?
+        nps2match = len(nps.indexes) == len(nps2.indexes) and (nps.indexes == nps2.indexes).all()
+        # if not nps2match:
+        #     print("nps, nps2 index mismatch")
         # print("a nps2", self.maxEdgeLength(nps2))
         timer.time("nps2")
         self.applyTrglDiff(nps, nps2)
@@ -1414,6 +1495,7 @@ class TrglFragmentView(BaseFragmentView):
         tcount = (self.fragment.trgls==nstp).any(axis=1).sum()
         # tcount = (self.fragment.trgls==nstp).sum()
         # print("TrglFragment addPoint tcount", tcount)
+        '''
         if tcount > 0 and constrained:
             # prevent setScaledTexturePoints from running
             # when setLocalPoints is called
@@ -1422,6 +1504,13 @@ class TrglFragmentView(BaseFragmentView):
 
         self.setLocalPoints(True, False)
         timer.time("set local")
+        '''
+        if tcount > 0 and constrained and nps2match:
+            self.addLocalPoint(nstp)
+        else:
+            if not nps2match:
+                print("addPoint: set local points", tcount, constrained, nps2match)
+            self.setLocalPoints(True, False)
         # print("a after", self.maxEdgeLengthAll())
         self.fragment.notifyModified()
 
@@ -1550,10 +1639,14 @@ class TrglFragmentView(BaseFragmentView):
             return
         if self.stpoints is None or index >= len(self.stpoints):
             return
+        # half_width = self.half_width_multiplier*self.avg_st_len
+        mel = self.maxStEdgeLengthAroundPoint(index)
         half_width = self.half_width_multiplier*self.avg_st_len
+        half_width = max(half_width, 2.*mel)
 
         old_stxy = self.all_stpoints[index]
         ops = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
+        osqcm = self.calculateSqCmOfTrgls(ops.triangulate())
         nps = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
         nps.deletePoint(index)
         # Retriangulate before deleting point from self.stpoints etc
@@ -1562,20 +1655,34 @@ class TrglFragmentView(BaseFragmentView):
 
         self.fragment.gpoints = np.delete(self.fragment.gpoints, index, 0)
         self.fragment.gtpoints = np.delete(self.fragment.gtpoints, index, 0)
+        self.fpoints = np.delete(self.fpoints, index, 0)
+        self.vpoints = np.delete(self.vpoints, index, 0)
+        self.vpoints[:,3] = np.arange(len(self.vpoints))
         self.stpoints = np.delete(self.stpoints, index, 0)
         self.all_stpoints = np.delete(self.all_stpoints, index, 0)
 
-        ops = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
+        ops2 = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
         constrained = self.adjustStPoints(-1, half_width, old_stxy)
-        nps = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
-        self.applyTrglDiff(ops, nps)
+        nps2 = TrglPointSet(self.all_stpoints, len(self.stpoints), old_stxy, half_width)
+        self.applyTrglDiff(ops2, nps2)
+        nsqcm = self.calculateSqCmOfTrgls(nps2.triangulate())
+        dsqcm = nsqcm-osqcm
+        self.sqcm += dsqcm
+        # print(self.sqcm, self.calculateSqCmOfTrgls(self.trgls()))
+        # nps2match = len(nps.indexes) == len(nps2.indexes) and (nps.indexes == nps2.indexes).all()
+        nps2match = len(ops2.indexes) == len(nps2.indexes) and (ops2.indexes == nps2.indexes).all()
 
         # prevent setScaledTexturePoints from running
         # when setLocalPoints is called
-        if constrained:
-            self.prev_pt_count = len(self.fragment.gpoints)
-        
-        self.setLocalPoints(True, False)
+        if constrained and nps2match:
+            # No need to do anything; self.vpoints and self.fpoints
+            # have already been updated
+            pass
+            # self.prev_pt_count = len(self.fragment.gpoints)
+        else:
+            if not nps2match:
+                print("deletePointByIndex: set local points", constrained, nps2match)
+            self.setLocalPoints(True, False)
         self.fragment.notifyModified()
 
     # returns list of trgl indexes
@@ -1667,12 +1774,24 @@ class TrglPointSet:
         # print("after", self.indexes)
         self.pts = np.delete(self.pts, row, 0)
 
+    ''' Won't work; points are st points not xyz points
+    def calculateSqCm(self, trgls, voxel_size_um):
+        if trgls is None or len(trgls) == 0.:
+            return 0.
+        sqcm = BaseFragment.calculateSqCm(self.pts, trgls, voxel_size_um)
+    '''
+
     @staticmethod
     def trglDiff(oldps, newps):
         # print("doing old trgls")
         old_trgls = oldps.triangulate()
         # print("doing new trgls")
         new_trgls = newps.triangulate()
+        # print(-1 if old_trgls is None else len(old_trgls), 
+        #       -1 if new_trgls is None else len(new_trgls))
+
+        if old_trgls is not None:
+            lo = len(old_trgls)
         # print("None", old_trgls is None, new_trgls is None)
 
         # if old_trgls is None or new_trgls is None:
@@ -1708,8 +1827,12 @@ class TrglPointSet:
             for o in uo:
                 row = (trgls == o).all(axis=1).nonzero()[0]
                 # print("row", row, len(row))
+                if len(row) != 1:
+                    print("replaceTrgls unexpected row len", len(row))
+                    return None
                 if len(row) == 0:
-                    continue
+                    # continue
+                    return None
                 orows.append(row[0])
             # print("before", len(trgls))
             # print("orows", orows)
@@ -1829,7 +1952,7 @@ class TrglPointSet:
             trgls = Delaunay(self.pts).simplices
         except Exception as err:
             err = str(err).splitlines()[0]
-            print("trglDiff triangulation error: %s"%err)
+            print("triangulate: triangulation error: %s"%err)
             return None
 
         nst = self.nstpoints
