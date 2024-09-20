@@ -479,6 +479,7 @@ class CachedZarrVolume():
         self.trdatas = None
         self.is_zarr = True
         self.data_header = None
+        self.uses_overlay_colormap = False
         self.original_dtype = None
         self.valid = False
         self.error = "no error message set"

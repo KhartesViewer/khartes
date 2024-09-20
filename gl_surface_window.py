@@ -394,6 +394,7 @@ slice_code = {
       uniform sampler2D underlay_sampler;
       uniform sampler2D overlay_sampler;
       uniform sampler2D trgls_sampler;
+      uniform int uses_overlay_colormap = 0;
       in vec2 ftxt;
       out vec4 fColor;
 
@@ -401,6 +402,27 @@ slice_code = {
       {
         float alpha;
         fColor = texture(base_sampler, ftxt);
+        if (uses_overlay_colormap > 0) {
+            float fr = fColor[0];
+            uint ir = uint(fr*65535.);
+            if ((ir & 32768) == 0) {
+                // fColor *= 2.;
+                float gray = fColor[0]*2.;
+                fColor = vec4(gray, gray, gray, 1.);
+            } else {
+                uint ob = ir & uint(31);
+                ob = ir & 31;
+                ir >>= 5;
+                uint og = ir & 31;
+                ir >>= 5;
+                uint or = ir & 31;
+                fColor[0] = float(or) / 31.;
+                fColor[1] = float(og) / 31.;
+                fColor[2] = float(ob) / 31.;
+                fColor[3] = 1.;
+            }
+
+        }
 
         vec4 uColor = texture(underlay_sampler, ftxt);
         alpha = uColor.a;
@@ -908,6 +930,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f.glActiveTexture(pygl.GL_TEXTURE0+bunit)
         f.glBindTexture(pygl.GL_TEXTURE_2D, base_tex)
         self.slice_program.setUniformValue(bloc, bunit)
+
+        uoc = 0
+        if volume_view.volume.uses_overlay_colormap:
+            uoc = 1
+        self.slice_program.setUniformValue("uses_overlay_colormap", uoc)
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
@@ -1667,7 +1694,34 @@ class Chunk:
         # effect is that the line buf[...] = adata[...] below will block
         # until the data required by adata has been loaded from disk.
         thread.immediate_data_mode = True
-        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+        # The reshape at the end is needed because under some
+        # circumstances (when a fragment goes off the end of the
+        # data array) the indexing causes a dimension to be lost.
+        # For instance, shape (128, 1, 128) is auto-flattened
+        # to shape (128, 128).  For some reason, this dimension loss 
+        # occurs with adata but not buf.
+        # The reshape restores the lost dimension.
+        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]].reshape([int_dr[1][i]-int_dr[0][i] for i in reversed(range(3))])
+        '''
+        # Trying to figure out the dropped-dimension problem...
+        try:
+            # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]].reshape([int_dr[1][i]-int_dr[0][i] for i in reversed(range(3))])
+        except:
+            print("shape problem", buf.shape, adata.shape)
+            print("c0, c1", c0, c1)
+            print("dc", [c1[i]-c0[i] for i in range(3)])
+            print("int_dr", int_dr)
+            print("d int_dr", [int_dr[1][i]-int_dr[0][i] for i in range(3)])
+            z1 = buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] 
+            z2 = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+            print("z1, z2", z1.shape, z2.shape)
+            y1 = buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] 
+            # y2 = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+            # y2 = adata[range(int_dr[0][2],int_dr[1][2]), range(int_dr[0][1],int_dr[1][1]), range(int_dr[0][0],int_dr[1][0])]
+            y2 = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]].reshape([int_dr[1][i]-int_dr[0][i] for i in range(3)])
+            print("y1, y2", y1.shape, y2.shape)
+        '''
         # print("from disk", self.dk, self.dl, "*")
         misses = 0
 
@@ -2009,15 +2063,20 @@ class Atlas:
         loc = gl.glGetUniformBlockIndex(pid, "ChartIds")
         self.chart_id_ubo.bindToShader(pid, loc)
 
+        uoc = volume_view.volume.uses_overlay_colormap
+
         # allocate 3D texture 
         tex3d = QOpenGLTexture(QOpenGLTexture.Target3D)
         tex3d.setWrapMode(QOpenGLTexture.ClampToBorder)
         # Useful for debugging:
         # tex3d.setBorderColor(QColor(100,100,200,255))
         tex3d.setAutoMipMapGenerationEnabled(False)
-        tex3d.setMagnificationFilter(QOpenGLTexture.Linear)
-        # tex3d.setMagnificationFilter(QOpenGLTexture.Nearest)
-        tex3d.setMinificationFilter(QOpenGLTexture.Linear)
+        if uoc:
+            tex3d.setMagnificationFilter(QOpenGLTexture.Nearest)
+            tex3d.setMinificationFilter(QOpenGLTexture.Nearest)
+        else:
+            tex3d.setMagnificationFilter(QOpenGLTexture.Linear)
+            tex3d.setMinificationFilter(QOpenGLTexture.Linear)
         # width, height, depth
         tex3d.setSize(*self.asz)
         # see https://stackoverflow.com/questions/23533749/difference-between-gl-r16-and-gl-r16ui

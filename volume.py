@@ -532,6 +532,7 @@ class Volume():
         self.error = "no error message set"
         self.active_project_views = set()
         self.from_vc_render = False
+        self.uses_overlay_colormap = False
 
     @property
     def shape(self):
@@ -741,6 +742,7 @@ class Volume():
                 "khartes_created": timestamp,
                 "khartes_modified": timestamp,
                 "khartes_from_vc_render": from_vc_render,
+                "khartes_uses_overlay_colormap": False,
                 # turns off the default gzip compression (scroll images
                 # don't compress well, so compression only slows down
                 # the I/O speed)
@@ -853,6 +855,12 @@ class Volume():
             from_vc_render = False
             if from_vc_render_str == "True":
                 from_vc_render = True
+
+            uses_overlay_colormap_str = data_header.get("khartes_uses_overlay_colormap", "False")
+            uses_overlay_colormap = False
+            if uses_overlay_colormap_str == "True":
+                uses_overlay_colormap = True
+
         except Exception as e:
             err = "Failed to read nrrd file %s: %s"%(filename,e)
             print(err)
@@ -865,6 +873,7 @@ class Volume():
         volume.created = created
         volume.modified = modified
         volume.from_vc_render = from_vc_render
+        volume.uses_overlay_colormap = uses_overlay_colormap
         volume.valid = True
         volume.path = filename
         volume.name = filename.stem
@@ -1046,7 +1055,10 @@ class Volume():
             # print(slc.shape)
             # resize windowed data slice to its size in drawing
             # window coordinates
-            zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+            if self.uses_overlay_colormap:
+                zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_NEAREST)
+            else:
+                zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
             # paste resized data slice into the intersection window
             # in the drawing window
             out[y1:y2, x1:x2] = zslc

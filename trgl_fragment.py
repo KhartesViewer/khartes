@@ -605,7 +605,14 @@ class TrglFragmentView(BaseFragmentView):
         # print("sstp set stpoints to None")
         self.prev_pt_count = len(f.gpoints)
         if len(f.gtpoints) != len(f.gpoints):
-            print("length mismatch", len(f.gtpoints), len(f.gpoints))
+            print("length mismatch", len(f.gtpoints), len(f.gpoints), "in volume",self.fragment.name)
+            print('''*******************************************************
+* Warning!  This segment does not have the same number
+* of uv points as xyz points.  There is probably
+* something wrong with the input obj file.
+* Khartes will probably crash soon.
+*******************************************************
+                  ''')
             return
 
         self.deleteDisconnectedComponents()
@@ -1395,7 +1402,8 @@ class TrglFragmentView(BaseFragmentView):
         hw = 2*self.avg_st_len
         if len(self.all_stpoints) == 0:
             return 0.
-        while True:
+        index = -1
+        for i in range(3):
            tps = TrglPointSet(self.stpoints, len(self.stpoints), stxy, hw)
            # print("hw", hw, len(tps.indexes))
            if len(tps.indexes) > 0:
@@ -1407,7 +1415,10 @@ class TrglFragmentView(BaseFragmentView):
                # print("a,in", a, index)
                break
            hw *= 2.
-        return self.maxStEdgeLengthAroundPoint(index)
+        if index >= 0:
+            return self.maxStEdgeLengthAroundPoint(index)
+        else:
+            return 0.
 
     def addPoint(self, tijk, stxy):
         # print("tf add point", tijk, stxy)

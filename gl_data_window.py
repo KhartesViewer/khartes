@@ -18,6 +18,7 @@ from PyQt5.QtGui import (
         QOpenGLDebugMessage,
         QOpenGLFramebufferObject,
         QOpenGLFramebufferObjectFormat,
+        QOpenGLPixelTransferOptions,
         QOpenGLShader,
         QOpenGLShaderProgram,
         QOpenGLTexture,
@@ -577,6 +578,8 @@ class GLDataWindow(DataWindow):
         vpts = mfv.vpoints[trgl][:,:3]
 
         bs = self.ptToBary(ijk, vpts)
+        if mfv.stpoints is None or (len(mfv.stpoints) < trgl).any():
+            print("*** stpoint problem", trgl, mfv.stpoints)
         sts = mfv.stpoints[trgl]
         # print(sts)
         # print(bs)
@@ -695,6 +698,7 @@ slice_code = {
       uniform sampler2D overlay_sampler;
       uniform sampler2D fragments_sampler;
       // uniform float frag_opacity = 1.;
+      uniform int uses_overlay_colormap = 0;
       in vec2 ftxt;
       out vec4 fColor;
 
@@ -702,6 +706,27 @@ slice_code = {
       {
         float alpha;
         fColor = texture(base_sampler, ftxt);
+        if (uses_overlay_colormap > 0) {
+            float fr = fColor[0];
+            uint ir = uint(fr*65535.);
+            if ((ir & 32768) == 0) {
+                // fColor *= 2.;
+                float gray = fColor[0]*2.;
+                fColor = vec4(gray, gray, gray, 1.);
+            } else {
+                uint ob = ir & uint(31);
+                ob = ir & 31;
+                ir >>= 5;
+                uint og = ir & 31;
+                ir >>= 5;
+                uint or = ir & 31;
+                fColor[0] = float(or) / 31.;
+                fColor[1] = float(og) / 31.;
+                fColor[2] = float(ob) / 31.;
+                fColor[3] = 1.;
+            }
+
+        }
 
         vec4 uColor = texture(underlay_sampler, ftxt);
         alpha = uColor.a;
@@ -1602,7 +1627,7 @@ class GLDataWindowChild(QOpenGLWidget):
             vao.bind()
 
             # print("drawing", node_thickness, fvao.pts_size)
-            f.glDrawArrays(pygl.GL_POINTS, 0, fvao.pts_size)
+            f.glDrawArrays(pygl.GL_POINTS, 0, fvao.pts_count)
             vao.release()
 
         self.fragment_pts_program.release()
@@ -1694,14 +1719,36 @@ class GLDataWindowChild(QOpenGLWidget):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
         img = QImage(data, data.shape[1], data.shape[0],
                      bytesperline, qiformat)
-        # mirror image vertically because of different y direction conventions
-        tex = QOpenGLTexture(img.mirrored(), 
+        # Special case for uint16 image: QOpenGLTexture
+        # by default (on Qt5) converts the QImage to
+        # a uint8 RGBA texture.  We want to preserve
+        # the full 16 bits, so need to go through a
+        # series of explicit steps
+        if qiformat == QImage.Format_Grayscale16:
+            tex = QOpenGLTexture(QOpenGLTexture.Target2D)
+            tex.setFormat(QOpenGLTexture.R16_UNorm)
+            tex.setSize(img.width(), img.height())
+            tex.setMipLevels(1)
+            tex.allocateStorage(QOpenGLTexture.Red, QOpenGLTexture.UInt16)
+            uploadOptions = QOpenGLPixelTransferOptions()
+            uploadOptions.setAlignment(2)
+            tex.setData(0, QOpenGLTexture.Red, QOpenGLTexture.UInt16, img.mirrored().constBits(), uploadOptions)
+            # tex.setData(0, QOpenGLTexture.R16_UNorm, QOpenGLTexture.UInt16, img.constBits())
+        else:
+            # mirror image vertically because of different y direction conventions
+            tex = QOpenGLTexture(img.mirrored(), 
                              QOpenGLTexture.DontGenerateMipMaps)
+        '''
+        tex = QOpenGLTexture(img.mirrored(), 
+                         QOpenGLTexture.DontGenerateMipMaps)
+        '''
+        # print("formats %d %x"%(qiformat, tex.format()))
         tex.setWrapMode(QOpenGLTexture.DirectionS, 
                         QOpenGLTexture.ClampToBorder)
         tex.setWrapMode(QOpenGLTexture.DirectionT, 
                         QOpenGLTexture.ClampToBorder)
         tex.setMagnificationFilter(QOpenGLTexture.Nearest)
+        tex.setMinificationFilter(QOpenGLTexture.Nearest)
         return tex
 
     def drawUnderlays(self, data):
@@ -1826,6 +1873,11 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glActiveTexture(pygl.GL_TEXTURE0+bunit)
         base_tex.bind()
         self.slice_program.setUniformValue(bloc, bunit)
+
+        uoc = 0
+        if volume_view.volume.uses_overlay_colormap:
+            uoc = 1
+        self.slice_program.setUniformValue("uses_overlay_colormap", uoc)
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
@@ -2056,6 +2108,7 @@ class FragmentVao:
         pts3d = np.ascontiguousarray(fv.vpoints[:,:3], dtype=np.float32)
         # print("pts3d", pts3d.shape, pts3d.dtype)
         self.pts_size = pts3d.size
+        self.pts_count = pts3d.shape[0]
 
         nbytes = pts3d.size*pts3d.itemsize
         self.vbo.allocate(pts3d, nbytes)
