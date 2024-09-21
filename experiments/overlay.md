@@ -11,8 +11,18 @@ inside of khartes.
 
 ## Overview
 
-The process of creating a file with overlays has several
-steps:
+At the bottom of this file, I describe the data format,
+in case you want to write a script to convert your own
+data plus overlay into a form that can be viewed in khartes.
+
+However, if you already have scroll data and indicator data
+in a particular format (3D TIFF files), you can use the scripts
+that I describe in the next section instead of writing your own.
+
+## Creating an overlay file using existing scripts
+
+The process of creating a file with overlays, using
+the existing scripts, has several steps:
 
 0) It is assumed that you alread have an indicator 
 file (uint8 or uint16,
@@ -119,3 +129,9 @@ file.
 Once you have created the NRRD file, you can load it
 into the latest version of khartes, and (if all goes well)
 see the indicator colors overlaid on the scroll data.
+
+## Creating a data-plus-overlay file using your own script
+
+In this section, I describe the format of the data, readable by khartes,
+that describes an RGB image.
+

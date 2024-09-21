@@ -905,6 +905,12 @@ class MainWindow(QMainWindow):
         self.openhand_transparents = self.transparentSvgs(path+"/icons/openhand transparent.svg", 11)
         self.openhand_transparent = self.openhand_transparents[0]
 
+        
+        scrollpx = QPixmap(path+"/icons/stylized_scroll.png")
+        scrollic = QIcon(scrollpx.copy(128,128,896,896))
+
+        self.setWindowIcon(scrollic)
+
         case = 3
 
         if case == 0:
