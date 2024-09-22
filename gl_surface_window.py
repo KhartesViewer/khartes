@@ -405,17 +405,17 @@ slice_code = {
         if (uses_overlay_colormap > 0) {
             float fr = fColor[0];
             uint ir = uint(fr*65535.);
-            if ((ir & 32768) == 0) {
+            if ((ir & uint(32768)) == 0) {
                 // fColor *= 2.;
                 float gray = fColor[0]*2.;
                 fColor = vec4(gray, gray, gray, 1.);
             } else {
                 uint ob = ir & uint(31);
-                ob = ir & 31;
+                // ob = ir & 31;
                 ir >>= 5;
-                uint og = ir & 31;
+                uint og = ir & uint(31);
                 ir >>= 5;
-                uint or = ir & 31;
+                uint or = ir & uint(31);
                 fColor[0] = float(or) / 31.;
                 fColor[1] = float(og) / 31.;
                 fColor[2] = float(ob) / 31.;
