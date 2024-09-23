@@ -552,6 +552,7 @@ class GLDataWindow(DataWindow):
             if len(tindexes) == 0:
                 print("tindexes is empty!  This should not happen")
                 return None
+            # print("a tindexes", tindexes)
             trgl_index = tindexes[0]
 
         else:
@@ -567,12 +568,26 @@ class GLDataWindow(DataWindow):
             if mind > maxd:
                 return None
 
+            '''
+            if True or self.axis == 0:
+                print("b minindex", minindex, mxyft[minindex])
+                # print(mxyft)
+            '''
             trgl_index = mxyft[minindex, 3]
 
         if check_for_single_detached_point:
             return None
         if trgl_index >= len(mfv.trgls()):
             print("Error: stxyzInRange trgl index",trgl_index,">=",len(mfv.trgls()))
+            '''
+            print("uniques", np.unique(xyfvs[:,3]))
+            if self.axis == 2:
+                mx = xyfvs.max(axis=0)
+                print("mx", mx)
+                oar = np.zeros((mx[0]+1, mx[1]+1), dtype=np.uint8)
+                oar[xyfvs[:,0], xyfvs[:,1]] = 20*xyfvs[:,3]
+                cv2.imwrite("problem.png", oar.T)
+            '''
             return None
         trgl = mfv.trgls()[trgl_index]
         vpts = mfv.vpoints[trgl][:,:3]
@@ -1017,6 +1032,10 @@ fragment_trgls_code = {
       // max_vertices = 10+4 (10 for thick line, 4 for pick line)
       layout(triangle_strip, max_vertices = 14) out;
       flat out int trgl_type;
+      // On MacOS, gl_PrimitiveID doesn't seem
+      // to behave as specified, so need to use trgl_id
+      // instead
+      flat out int trgl_id;
       in vec4 stxyt[];
   
       %s
@@ -1170,7 +1189,12 @@ fragment_trgls_code = {
             ivec2 iv = v4[i];
             gl_Position = pcs[iv.x] + 1.*offsets[iv.y];
             trgl_type = 1;
-            gl_PrimitiveID = gl_PrimitiveIDIn;
+            // On MacOS, the fragment shader below
+            // does not receive the value of gl_PrimitiveID
+            // set in this shader
+            // gl_PrimitiveID = gl_PrimitiveIDIn;
+            // So put the value in trgl_id instead
+            trgl_id = gl_PrimitiveIDIn;
             EmitVertex();
           }
         }
@@ -1193,6 +1217,7 @@ fragment_trgls_code = {
       // empty_color is effectively not drawn
       const vec4 empty_color = vec4(0.,0.,0.,0.);
       flat in int trgl_type;
+      flat in int trgl_id;
 
       void main()
       {
@@ -1204,8 +1229,13 @@ fragment_trgls_code = {
           pick_color = empty_color;
         } else {
           frag_color = empty_color;
-          uint lsid = gl_PrimitiveID & 0xffff;
-          uint msid = (gl_PrimitiveID>>16) & 0xffff;
+          // On MacOS, the value of gl_PrimitiveID set in
+          // the geometry shader above is ignored, so its
+          // value cannot be trusted here
+          // uint uid = uint(gl_PrimitiveID);
+          uint uid = uint(trgl_id);
+          uint lsid = uid & uint(0xffff);
+          uint msid = (uid>>16) & uint(0xffff);
           // remember alpha must = 1!
           // vec4 ocolor = vec4(icolor.r, float(msid)/65536., float(lsid)/65536., 1.);
           vec4 ocolor = vec4(icolor.r, float(msid)/65535., float(lsid)/65535., 1.);
