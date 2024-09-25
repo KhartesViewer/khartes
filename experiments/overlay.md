@@ -6,18 +6,20 @@ scroll data viewed in khartes.
 
 This method, which relies on special scripts and
 a hacky data format, is intended to be temporary, and should eventually
-be replaced by an overlay method that is entirely
-inside of khartes.
+be replaced by an overlay method that is entirely internal
+to khartes and does not
+rely on scripts.
 
 ## Overview
 
-At the bottom of this file, I describe the data format,
-in case you want to write a script to convert your own
-data plus overlay into a form that can be viewed in khartes.
+At the bottom of this file, I describe the modified data format,
+in case you want to create your own RGB 3D data set to
+be viewed in khartes.
 
 However, if you already have scroll data and indicator data
-in a particular format (3D TIFF files), you can use the scripts
-that I describe in the next section instead of writing your own.
+in a certain format (3D TIFF files), you can use the scripts
+that I describe in the next section to overlay colored data
+on top of scroll data.
 
 ## Creating an overlay file using existing scripts
 
@@ -127,11 +129,65 @@ file.
 ## `khartes.py`
 
 Once you have created the NRRD file, you can load it
-into the latest version of khartes, and (if all goes well)
+into the latest version of khartes (currently the
+khartes3d-beta branch) and (if all goes well)
 see the indicator colors overlaid on the scroll data.
 
-## Creating a data-plus-overlay file using your own script
+## Creating a 3D RGB file to be viewed in khartes.
 
-In this section, I describe the format of the data, readable by khartes,
-that describes an RGB image.
+In this section, I describe the format used by khartes
+to encode RGB data in a single-channel uint16 file.
 
+Eventually, khartes will be updated to read conventional
+multi-channel RGB or RGBA files, and at that time khartes
+will also be able to overlay colored data on
+top of the scroll data, without requiring the suite of
+scripts described above.
+
+However, such a change will require updating the entire
+graphics pipeline used by khartes.
+
+In the meantime, this document describes a hacky way of
+viewing RGB data in khartes, using an encoding that compacts
+RGB data into a single uint16 word.
+
+This method relies on the fact that khartes can read volume
+data in NRRD format, which consists of header information followed
+by raw data.  The headers required by khartes can be seen,
+for example, at the bottom of the `3dtif_to_nrrd.py` script.
+
+The header `khartes_uses_overlay_colormap` specifies whether
+the raw data is in normal uint16 grayscale (when the header
+is set to `False`, or the header is absent),
+or whether the data is in the more complicated
+format described below (when the header is set to `True`)
+
+### The uint16 RGB format
+
+In order to encode RGB information into a single uint16 word,
+a special format is used.
+
+First, some terminology.  The 16 bits of the uint16 word are
+numbered from 0 (least-significant bit) to 15 (most significant bit).
+
+In this format, bit 15 is used as a flag.
+
+If bit 15 is set to 0, then the remaining bits (0 through 14) are
+considered to carry grayscale values, where the minimum possible
+value (0) encodes black, and the maximum possible value (32767)
+encodes white.
+
+If bit 15 is set to 1, then the remaining bits encode RGB
+values.  Bits 10 through 14 encode the red value (the value 0 
+represents no red and 31 represents full red), 
+bits 5 through 9 encode the green
+value (value range 0 through 31), and bits 0 through 4 encode
+the blue value (again, the range of possible values is 0 through 31).
+
+Note that this format only defines the gray scales and RGB values
+to be displayed.
+It is up to the script that creates a file in this format to
+compute and set the RGB values that
+correspond to a transparent overlay color
+on top of gray scale scroll data, and to set pure gray scale values
+in areas of the scroll data that have no overlays.
