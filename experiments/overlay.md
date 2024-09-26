@@ -1,3 +1,5 @@
+<img src="../images/ind_overlay.png" width="800"/>
+
 # Viewing color overlays in khartes
 
 This document describes a method of overlaying colored
@@ -17,14 +19,65 @@ in case you want to create your own RGB 3D data set to
 be viewed in khartes.
 
 However, if you already have scroll data and indicator data
-in a certain format (3D TIFF files), you can use the scripts
-that I describe in the next section to overlay colored data
+in certain format (3D TIFF files, or labeled-instance NRRD files), 
+you can use the scripts
+that I describe in the next sections to overlay colored data
 on top of scroll data.
 
-## Creating an overlay file using existing scripts
+## Creating an overlay file from labeled-instance NRRD files
 
-The process of creating a file with overlays, using
-the existing scripts, has several steps:
+The process of creating a volume with overlays,
+from labeled-instance NRRD files, has a couple of steps:
+
+0) It is assumed that you have NRRD files of the
+type found, for example, in
+https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/seg-volumetric-labels/instance-annotated-cubes-harmonized-labels/
+and that these files (including mask files and volume files) are
+all stored in a single directory.
+
+1) Use the `inst_ann.py` script to create a khartes-format NRRD file
+from these mask and volume file.
+
+2) Load the NRRD file into khartes, and view it.
+
+### `inst_ann.py`
+
+The `inst_ann.py` script reads all of the labeled-instance NRRD files,
+known as mask and volume files, that are in a given directory. 
+
+It create an NRRD file that can be displayed in khartes, with the
+colored indicators overlaid on the scroll data.
+
+This script take two mandatory arguments:
+
+1) The name of the directory that contains the mask and volume files.
+**Important note:** The output volume will be created to be
+large enough to encompass all the given input volumes.  If the
+input volumes are scattered in various parts of the scroll,
+then the output volume could be huge in order
+to encompass them all.  So make sure the input files
+describe a relatively compact volume.
+
+2) The name of the output NRRD file that will contain the scroll
+data, overlaid by the label colors.
+
+There is also one optional argument:
+
+`--alpha` sets the transparency of the overlay.  A value of 0.0
+means completely transparent; 1.0 means completely opaque.
+The default value is 0.25.
+
+### `khartes.py`
+
+Once you have created the NRRD file, you can load it
+into the latest version of khartes (currently the
+khartes3d-beta branch) and (if all goes well)
+see the label colors overlaid on the scroll data.
+
+## Creating an overlay file from 3D TIFF files
+
+The process of creating a volume with overlays, from 3D TIFF
+files, has several steps:
 
 0) It is assumed that you alread have an indicator 
 file (uint8 or uint16,
@@ -47,7 +100,7 @@ can only be made sense of by the latest version of khartes.
 
 3) Load the NRRD file into khartes, and view it.
 
-## `ind_to_tif.py`
+### `ind_to_tif.py`
 
 The `ind_to_tif.py` script reads an indicator file
 (a file with an indicator number at each pixel),
@@ -81,7 +134,7 @@ allowed ranges are 0.0 (fully transparent) to
 1.0 (fully opaque).  The default alpha value is 1.0
 (opaque).
 
-## `3d_tif_to_nrrd.py`
+### `3d_tif_to_nrrd.py`
 
 The `3d_tif_to_nrrd.py` script reads a 3D TIFF file and
 creates a NRRD file containing the headers that
@@ -126,7 +179,7 @@ value is `None`, which means that the alpha value
 will be taken from the A channel of the overlay
 file.
 
-## `khartes.py`
+### `khartes.py`
 
 Once you have created the NRRD file, you can load it
 into the latest version of khartes (currently the
@@ -141,7 +194,7 @@ to encode RGB data in a single-channel uint16 file.
 Eventually, khartes will be updated to read conventional
 multi-channel RGB or RGBA files, and at that time khartes
 will also be able to overlay colored data on
-top of the scroll data, without requiring the suite of
+top of the scroll data, without requiring all of the
 scripts described above.
 
 However, such a change will require updating the entire
@@ -154,7 +207,7 @@ RGB data into a single uint16 word.
 This method relies on the fact that khartes can read volume
 data in NRRD format, which consists of header information followed
 by raw data.  The headers required by khartes can be seen,
-for example, at the bottom of the `3dtif_to_nrrd.py` script.
+for example, at the bottom of the `inst_ann.py` script.
 
 The header `khartes_uses_overlay_colormap` specifies whether
 the raw data is in normal uint16 grayscale (when the header

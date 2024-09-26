@@ -2034,7 +2034,7 @@ class Atlas:
         atlas_data_code["fragment"] = atlas_data_code["fragment_template"].format(max_nchunks = max_nchunks)
         self.program = GLDataWindowChild.buildProgram(atlas_data_code)
 
-        self.setVolumeView(volume_view)
+        # self.setVolumeView(volume_view)
         
         self.program.bind()
         # for var in ["atlas", "xyz_xform", "tmins", "tmaxs", "TMins", "TMaxs", "XForms", "ZChartIds", "chart_ids", "ncharts"]:
@@ -2063,20 +2063,23 @@ class Atlas:
         loc = gl.glGetUniformBlockIndex(pid, "ChartIds")
         self.chart_id_ubo.bindToShader(pid, loc)
 
-        uoc = volume_view.volume.uses_overlay_colormap
-
         # allocate 3D texture 
         tex3d = QOpenGLTexture(QOpenGLTexture.Target3D)
         tex3d.setWrapMode(QOpenGLTexture.ClampToBorder)
         # Useful for debugging:
         # tex3d.setBorderColor(QColor(100,100,200,255))
         tex3d.setAutoMipMapGenerationEnabled(False)
+
+        '''
+        uoc = volume_view.volume.uses_overlay_colormap
+        print("uoc", uoc)
         if uoc:
             tex3d.setMagnificationFilter(QOpenGLTexture.Nearest)
             tex3d.setMinificationFilter(QOpenGLTexture.Nearest)
         else:
             tex3d.setMagnificationFilter(QOpenGLTexture.Linear)
             tex3d.setMinificationFilter(QOpenGLTexture.Linear)
+        '''
         # width, height, depth
         tex3d.setSize(*self.asz)
         # see https://stackoverflow.com/questions/23533749/difference-between-gl-r16-and-gl-r16ui
@@ -2112,6 +2115,7 @@ class Atlas:
             print("error message!")
             self.valid = False
         ml.close()
+        self.setVolumeView(volume_view)
 
     def setVolumeView(self, volume_view):
         print("setVolumeView", volume_view.volume.name if volume_view else "(None)")
@@ -2131,6 +2135,16 @@ class Atlas:
         vdir = volume_view.direction
         is_zarr = vol.is_zarr
         dcsz = self.dcsz
+
+        uoc = vol.uses_overlay_colormap
+        # print("svv uoc", uoc)
+        tex3d = self.tex3d
+        if uoc:
+            tex3d.setMagnificationFilter(QOpenGLTexture.Nearest)
+            tex3d.setMinificationFilter(QOpenGLTexture.Nearest)
+        else:
+            tex3d.setMagnificationFilter(QOpenGLTexture.Linear)
+            tex3d.setMinificationFilter(QOpenGLTexture.Linear)
 
         datas = []
         if not is_zarr:
