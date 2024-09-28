@@ -298,7 +298,7 @@ class ZarrStreamLoader(QMainWindow):
         main_window = self.main_window
         main_window.app.processEvents()
         loading = main_window.showLoading()
-        '''
+        """
         if self.directory_has_tiffs:
             tifs = list(pdir.glob("*.tif"))
             tiff0 = tifffile.imread(tifs[0])
@@ -317,7 +317,7 @@ class ZarrStreamLoader(QMainWindow):
                 new_volume = CachedZarrVolume.createFromTiffs(project, pdir, volume_name, vcrender)
         else:
             new_volume = CachedZarrVolume.createFromZarr(project, pdir, volume_name, vcrender)
-        '''
+        """
         new_volume = CachedZarrVolume.createFromZarr(project, pdir, volume_name, vcrender)
         loading = None
 
