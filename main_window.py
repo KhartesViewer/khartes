@@ -42,6 +42,7 @@ from PyQt5.QtXml import QDomDocument
 
 from tiff_loader import TiffLoader
 from zarr_loader import ZarrLoader
+from stream_loader import ZarrStreamLoader
 from data_window import DataWindow, SurfaceWindow
 from project import Project, ProjectView
 from fragment import Fragment, FragmentsModel, FragmentView
@@ -1020,6 +1021,10 @@ class MainWindow(QMainWindow):
         self.attach_zarr_action.triggered.connect(self.onAttachZarrButtonClick)
         self.attach_zarr_action.setEnabled(False)
 
+        self.attach_stream_action = QAction("Attach Zarr/OME data stream...", self)
+        self.attach_stream_action.triggered.connect(self.onAttachStreamButtonClick)
+        self.attach_stream_action.setEnabled(False)
+
         self.export_mesh_action = QAction("Export fragment as mesh...", self)
         self.export_mesh_action.triggered.connect(self.onExportAsMeshButtonClick)
         self.export_mesh_action.setEnabled(False)
@@ -1045,6 +1050,7 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(self.import_ppm_action)
         self.file_menu.addAction(self.import_tiffs_action)
         self.file_menu.addAction(self.attach_zarr_action)
+        self.file_menu.addAction(self.attach_stream_action)
         self.file_menu.addAction(self.export_mesh_action)
         # self.file_menu.addAction(self.load_hardwired_project_action)
         self.file_menu.addAction(self.exit_action)
@@ -1079,6 +1085,7 @@ class MainWindow(QMainWindow):
         self.volumes_model = VolumesModel(None, self)
         self.tiff_loader = TiffLoader(self)
         self.zarr_loader = ZarrLoader(self)
+        self.stream_loader = ZarrStreamLoader(self)
         self.zarr_timer = QTimer()
         self.zarr_timer.setSingleShot(True)
         self.zarr_timer.timeout.connect(self.zarrTimerCallback)
@@ -2547,6 +2554,10 @@ class MainWindow(QMainWindow):
         self.zarr_loader.show()
         self.zarr_loader.raise_()
 
+    def onAttachStreamButtonClick(self, s):
+        self.stream_loader.show()
+        self.stream_loader.raise_()
+
     # TODO: Need to alert user if load fails
     def onOpenProjectButtonClick(self, s):
         #print("open project clicked")
@@ -2927,6 +2938,7 @@ class MainWindow(QMainWindow):
         self.import_ppm_action.setEnabled(False)
         self.import_tiffs_action.setEnabled(False)
         self.attach_zarr_action.setEnabled(False)
+        self.attach_stream_action.setEnabled(False)
         self.enableWidgetsIfActiveFragment()
         self.drawSlices()
         self.app.processEvents()
@@ -2951,6 +2963,7 @@ class MainWindow(QMainWindow):
         self.import_obj_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
         self.attach_zarr_action.setEnabled(True)
+        self.attach_stream_action.setEnabled(True)
         # self.export_mesh_action.setEnabled(project_view.mainActiveFragmentView() is not None)
         # self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
         self.enableWidgetsIfActiveFragment()
@@ -3075,6 +3088,7 @@ class MainWindow(QMainWindow):
     def zarrTimerCallback(self):
         # print("timer callback", int(QThread.currentThreadId()))
         self.drawSlices()
+        # print("timer callback completed", int(QThread.currentThreadId()))
 
     # This function slows down the pace of redraws 
     # initiated by zarr threads.

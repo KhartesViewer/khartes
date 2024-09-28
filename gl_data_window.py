@@ -1757,14 +1757,17 @@ class GLDataWindowChild(QOpenGLWidget):
         # the full 16 bits, so need to go through a
         # series of explicit steps
         if qiformat == QImage.Format_Grayscale16:
+            imm = img.mirrored()
             tex = QOpenGLTexture(QOpenGLTexture.Target2D)
             tex.setFormat(QOpenGLTexture.R16_UNorm)
-            tex.setSize(img.width(), img.height())
+            tex.setSize(imm.width(), imm.height())
             tex.setMipLevels(1)
             tex.allocateStorage(QOpenGLTexture.Red, QOpenGLTexture.UInt16)
             uploadOptions = QOpenGLPixelTransferOptions()
             uploadOptions.setAlignment(2)
-            tex.setData(0, QOpenGLTexture.Red, QOpenGLTexture.UInt16, img.mirrored().constBits(), uploadOptions)
+            # print("g", bytesperline)
+            tex.setData(0, QOpenGLTexture.Red, QOpenGLTexture.UInt16, imm.constBits(), uploadOptions)
+            # print("h")
             # tex.setData(0, QOpenGLTexture.R16_UNorm, QOpenGLTexture.UInt16, img.constBits())
         else:
             # mirror image vertically because of different y direction conventions

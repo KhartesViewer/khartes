@@ -558,11 +558,13 @@ class CachedZarrVolume():
         """
         Generates a new volume object from a zarr directory
         """
+        '''
         tdir = pathlib.Path(ds_directory)
         if not tdir.is_dir():
             err = f"{tdir} is not a directory"
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
+        '''
 
         output_filename = name
         if not output_filename.endswith(".volzarr"):
@@ -593,6 +595,10 @@ class CachedZarrVolume():
             json.dump(header, outfile, indent=4)
 
         volume = CachedZarrVolume.loadFile(filepath)
+        if not volume.valid:
+            err = volume.error
+            print(err)
+            return CachedZarrVolume.createErrorVolume(err)
         # print("about to set callback")
         project.addVolume(volume)
         return volume
