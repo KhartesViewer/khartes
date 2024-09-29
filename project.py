@@ -130,8 +130,8 @@ class ProjectView:
         pv.error = err
         return pv
 
-    def open(fullpath):
-        project = Project.open(fullpath)
+    def open(fullpath, load_zarr_options=None):
+        project = Project.open(fullpath, load_zarr_options)
         if not project.valid:
             err = "Error creating project: %s"%project.error
             print(err)
@@ -551,7 +551,7 @@ class Project:
             self.modified_callback(self)
         Project.notify_counter += 1
 
-    def open(fullpath):
+    def open(fullpath, load_zarr_options=None):
         fp = pathlib.Path(fullpath)
         if not fp.is_dir():
             err = "Directory %s does not exist"%fullpath
@@ -616,7 +616,7 @@ class Project:
                 prj.addVolume(vol)
 
         for vfile in vdir.glob("*.volzarr"):
-            vol = CachedZarrVolume.loadFile(vfile)
+            vol = CachedZarrVolume.loadFile(vfile, load_zarr_options)
             if vol is not None and vol.valid:
                 prj.addVolume(vol)
 

@@ -851,6 +851,10 @@ class MainWindow(QMainWindow):
             "max_cache_size_gb": 8,
             "max_window_width": 480,
         },
+        "stream": {
+            "cache_directory": "",
+            "use_cache_directory": False,
+        },
     }
 
     # zarr_signal = Signal(str)
@@ -1091,6 +1095,16 @@ class MainWindow(QMainWindow):
         self.zarr_timer.timeout.connect(self.zarrTimerCallback)
         self.zarr_signal.connect(self.zarrSlot)
         self.setZarrMaxCacheSize(self.draw_settings["zarr"]["max_cache_size_gb"], False)
+
+        self.stream_cache_directory = self.draw_settings["stream"]["cache_directory"]
+        self.use_stream_cache_directory = self.draw_settings["stream"]["use_cache_directory"]
+
+        # TODO for testing
+        self.stream_cache_directory = ""
+        self.use_stream_cache_directory = False
+        # self.stream_cache_directory = "J:\Vesuvius\cache"
+        # self.use_stream_cache_directory = True
+
         # self.setDrawSettingsToDefaults()
         # command line arguments
         args = QCoreApplication.arguments()
@@ -2613,7 +2627,11 @@ class MainWindow(QMainWindow):
         print(f"Loading project from {fname}")
         loading = self.showLoading()
         self.unsetProjectView()
-        pv = ProjectView.open(fname)
+        load_zarr_options = None
+        if self.use_stream_cache_directory:
+            load_zarr_options = {"stream_cache_directory": self.stream_cache_directory}
+
+        pv = ProjectView.open(fname, load_zarr_options)
         if not pv.valid:
             print("Project file %s not opened: %s"%(fname, pv.error))
             return

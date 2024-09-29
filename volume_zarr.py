@@ -83,8 +83,19 @@ def load_tif(path):
     stack_array = zarr.open(store, mode="r")
     return stack_array
 
-def load_zarr(dirname):
-    stack_array = zarr.open(dirname, mode="r")
+def load_zarr(dirname, load_zarr_options=None):
+    options = None
+    # print("load_zarr options", load_zarr_options)
+    if load_zarr_options is not None and "stream_cache_directory" in load_zarr_options:
+        cache_dir = load_zarr_options["stream_cache_directory"]
+        # print("load_zarr stream_cache_directory", cache_dir)
+        dp = pathlib.Path(cache_dir)
+        if dp.is_dir():
+            dirname = "simplecache::"+dirname
+            options = {"simplecache": {"cache_storage": cache_dir}}
+        else:
+            print("WARNING: stream cache directory", cache_dir, "not found!")
+    stack_array = zarr.open(dirname, mode="r", storage_options=options)
     return stack_array
 
 def load_writable_volume(path):
@@ -193,7 +204,12 @@ class TransposedDataView():
         result = self.data[alls[0],alls[1],alls[2]]
         if self.original_dtype == np.uint8 and result.dtype == np.uint8:
             result = result.astype(np.uint16)
-            result = result * 256 + 128  # Scale up to full 16-bit range
+            # result = result * 256 + 128  # Scale up to full 16-bit range
+
+            # Important: if input is 0, output must be
+            # be 0.  Otherwise, paintLevel can't tell whether
+            # a level is incomplete.
+            result = result * 256  # Scale up to full 16-bit range
         
         if len(result.shape) == 1:
             # Fancy-indexing collapses the shape, so we don't need to transpose
@@ -553,7 +569,8 @@ class CachedZarrVolume():
             ds_directory,
             ds_directory_name,
             name,
-            from_vc_render=False
+            from_vc_render=False,
+            load_zarr_options=None
         ):
         """
         Generates a new volume object from a zarr directory
@@ -594,7 +611,7 @@ class CachedZarrVolume():
             #     outfile.write(f"{key}\t{value}\n")
             json.dump(header, outfile, indent=4)
 
-        volume = CachedZarrVolume.loadFile(filepath)
+        volume = CachedZarrVolume.loadFile(filepath, load_zarr_options)
         if not volume.valid:
             err = volume.error
             print(err)
@@ -608,14 +625,16 @@ class CachedZarrVolume():
             project,
             zarr_directory,
             name,
-            from_vc_render=False
+            from_vc_render=False,
+            load_zarr_options=None
         ):
         return CachedZarrVolume.createFromDataStore(
                 project,
                 zarr_directory,
                 "zarr_dir",
                 name,
-                from_vc_render
+                from_vc_render,
+                load_zarr_options=None
                 )
 
     @staticmethod
@@ -634,7 +653,7 @@ class CachedZarrVolume():
                 )
 
     @staticmethod
-    def loadFile(filename):
+    def loadFile(filename, load_zarr_options=None):
         try:
             try:
                 with open(filename, "r") as infile:
@@ -691,7 +710,7 @@ class CachedZarrVolume():
                 array = load_tif(ddir)
             elif zarr_directory is not None:
                 print(f"Loading zarr directory {ddir}")
-                array = load_zarr(ddir)
+                array = load_zarr(ddir, load_zarr_options)
         except Exception as e:
             err = f"Failed to read input directory {ddir}\n  specified in {filename} (error {e})"
             print(err)
@@ -993,6 +1012,7 @@ class CachedZarrVolume():
         mask = (out == 0)
         msum = mask.sum()
         if msum == 0: # no zeros
+            # print(axis,level.scale,out.min(),out.max(),"no zeros")
             return True
         if msum != out.shape[0]*out.shape[1]: # some but not all zeros
             # dilate the mask by one pixel
@@ -1100,7 +1120,7 @@ class CachedZarrVolume():
             
         # if misses0 = misses1, this means that there were no
         # klru cache misses during the call to getSliceInRange
-        # print("  ms",misses0,misses1)
+        # print("  ms",axis,level.scale,misses0,misses1)
         return misses0 == misses1
 
     def paintSlice(self, out, axis, ijkt, zoom, zarr_max_width, direction):
@@ -1125,7 +1145,7 @@ class CachedZarrVolume():
         start = i
         for i in range(start,len(self.levels)):
             level = self.levels[i]
-            # print("level", i, draw)
+            # print("level", axis, i, draw)
             # zarr_max_width is set to 0 for the multi-resolution case
             result = self.paintLevel(
                     out, axis, ijkt, zoom, direction, 
