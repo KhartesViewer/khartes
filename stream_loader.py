@@ -320,7 +320,7 @@ class ZarrStreamLoader(QMainWindow):
         """
         # new_volume = CachedZarrVolume.createFromZarr(project, pdir, volume_name, vcrender)
         options = None
-        if self.main_window.stream_use_cache_directory:
+        if self.main_window.use_stream_cache_directory:
             options = {"stream_cache_directory", self.main_window.stream_cache_directory}
         new_volume = CachedZarrVolume.createFromZarr(project, pdir, volume_name, vcrender, options)
         loading = None

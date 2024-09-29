@@ -7,6 +7,7 @@ import time
 import numpy as np
 import platform
 import traceback
+import numcodecs
 
 from PyQt5.QtWidgets import (
         QAction,
@@ -862,6 +863,12 @@ class MainWindow(QMainWindow):
 
     def __init__(self, appname, app):
         super(MainWindow, self).__init__()
+
+        # Prevents a crash in numcodecs.blosc.decompress
+        # that occurs on MacOS when combining streaming with
+        # caching.  See this thread:
+        # https://github.com/pangeo-data/pangeo/issues/196
+        numcodecs.blosc_use_threads = False
 
         self.app = app
         self.platform = platform.system()
