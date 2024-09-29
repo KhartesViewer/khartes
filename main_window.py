@@ -868,7 +868,7 @@ class MainWindow(QMainWindow):
         # that occurs on MacOS when combining streaming with
         # caching.  See this thread:
         # https://github.com/pangeo-data/pangeo/issues/196
-        numcodecs.blosc_use_threads = False
+        numcodecs.blosc.use_threads = True
 
         self.app = app
         self.platform = platform.system()
@@ -1110,6 +1110,8 @@ class MainWindow(QMainWindow):
         self.stream_cache_directory = ""
         self.use_stream_cache_directory = False
         # self.stream_cache_directory = "J:\Vesuvius\cache"
+        # self.use_stream_cache_directory = True
+        # self.stream_cache_directory = "/Users/dev/Desktop/Progs/Vesuvius/cache"
         # self.use_stream_cache_directory = True
 
         # self.setDrawSettingsToDefaults()
