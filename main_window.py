@@ -1032,7 +1032,7 @@ class MainWindow(QMainWindow):
         self.attach_zarr_action.triggered.connect(self.onAttachZarrButtonClick)
         self.attach_zarr_action.setEnabled(False)
 
-        self.attach_stream_action = QAction("Attach Zarr/OME data stream...", self)
+        self.attach_stream_action = QAction("Attach OME/Zarr data stream...", self)
         self.attach_stream_action.triggered.connect(self.onAttachStreamButtonClick)
         self.attach_stream_action.setEnabled(False)
 
