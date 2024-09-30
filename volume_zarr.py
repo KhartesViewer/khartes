@@ -264,10 +264,32 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         # but over a slow connection, the user probably wants to
         # see the most-recently-requested data first.
         self.executor._work_queue = queue.LifoQueue()
+        self.compressor = None
 
     def __getitem__old(self, key):
         print("get item", key)
         return super().__getitem__(key)
+
+    '''
+    def setCompressor(self, compressor):
+        self.compressor = compressor
+    '''
+
+    # By default, the LRU cache holds chunks that it copies
+    # directly from the original data store.  This means that
+    # if the data store contains compressed chunks, the cache
+    # will hold compressed chunks.
+    # Each such chunk has to be decompressed every time it is
+    # accessed, which is as often as once per redraw.
+    # This causes noticeable slowing.
+    # The routine below modifies the internals of the array
+    # that uses the LRU cache as the data store, so that compressed
+    # chunks are decompressed when they go into the cache, and
+    # so that they are not decompressed an additional time when
+    # they are accessed.
+    def transferCompressor(self, array):
+        self.compressor = array._compressor
+        array._compressor = None
 
     def setImmediateDataMode(self, flag):
         with self._mutex:
@@ -393,9 +415,21 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                 future.add_done_callback(lambda x: self.processValue(key, x))
                 raise KeyError(key)
 
+    # This function gets a chunk from the underlying data
+    # store.  The access may cause an exception to be thrown.
+    # This function does not try to catch exceptions, because
+    # the caller of this function will handle them.
+    # If decompression has been transfered to the LRU cache
+    # (see the transferCompressor function), do the decompression
+    # here.
     def getValue(self, key):
         # print("getValue", key)
         value = self._store[key]
+        # print("nv", type(value), len(value))
+        if len(value) > 0 and self.compressor is not None:
+            dc = self.compressor.decode(value)
+            # print("dc", type(dc), len(dc))
+            return dc
         # print("  found", key)
         return value
 
@@ -448,6 +482,10 @@ class ZarrLevel():
         self.data = zarr.open(klru, mode="r")
         if path != "":
             self.data = self.data[path]
+        # klru.setCompressor(self.data._compressor)
+        # self.data._compressor = None
+        klru.transferCompressor(self.data)
+        # print("self data compressor", self.data._compressor)
         self.scale = scale
         # don't know if self.from_vc_render will ever be used
         self.from_vc_render = from_vc_render
