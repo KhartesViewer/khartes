@@ -104,7 +104,10 @@ def main():
                     continue 
                 if len(ws[0]) < 8:
                     continue
-                ind = int(ws[0][7:])
+                try:
+                    ind = int(ws[0][7:])
+                except:
+                    continue
                 maxind = max(maxind, ind)
                 if ws[1] == "ID":
                     vs = value.split('_')
