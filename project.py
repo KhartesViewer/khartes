@@ -690,3 +690,9 @@ class Project:
             v.setVoxelSizeUm(vs)
         self.notifyModified()
 
+    def hasStreamingVolume(self):
+        for v in self.volumes:
+            # print("hsv", v.name, v.is_streaming)
+            if v.is_streaming:
+                return True
+        return False

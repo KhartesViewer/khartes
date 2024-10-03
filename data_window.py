@@ -751,6 +751,12 @@ class DataWindow(QLabel):
     def setIjkTf(self, tf):
         self.volume_view.setIjkTf(tf)
 
+    def setLastJumpIjkTf(self, tf):
+        self.volume_view.setLastJumpIjkTf(tf)
+
+    def returnToLastJumpIjkTf(self):
+        self.volume_view.returnToLastJumpIjkTf()
+
     # def setIjkOrStxyTf(self, tf):
     #     self.setIjkTf(tf)
 
@@ -996,6 +1002,7 @@ class DataWindow(QLabel):
         # on how ctrl is mapped in MacOS
         alt_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.AltModifier) != 0
         ctrl_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.ControlModifier) != 0
+        shift_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.ShiftModifier) != 0
         opts = {
             Qt.Key_Left: (1*sgn,0,0),
             Qt.Key_A:    (1*sgn,0,0),
@@ -1092,20 +1099,25 @@ class DataWindow(QLabel):
 
         elif not self.isMovingNode and key == Qt.Key_X:
             # print("key X")
-            ijk = self.getNearbyNodeIjk()
-            # print("ijk", ijk)
-            if ijk is None:
-                pt = self.mapFromGlobal(QCursor.pos())
-                mxy = (pt.x(), pt.y())
-                # ij = self.xyToIj(mxy)
-                # tijk = self.ijToTijk(ij)
-                tijk = self.xyToTijk(mxy)
+            if alt_pressed:
+                self.returnToLastJumpIjkTf()
+                tijk = self.volume_view.ijktf
             else:
+                ijk = self.getNearbyNodeIjk()
                 # print("ijk", ijk)
-                # tijk = self.ijToTijk(ijk[0:2])
-                tijk = self.ijkToTijk(ijk)
-            # print("tijk", tijk)
-            self.setIjkTf(tijk)
+                if ijk is None:
+                    pt = self.mapFromGlobal(QCursor.pos())
+                    mxy = (pt.x(), pt.y())
+                    # ij = self.xyToIj(mxy)
+                    # tijk = self.ijToTijk(ij)
+                    tijk = self.xyToTijk(mxy)
+                else:
+                    # print("ijk", ijk)
+                    # tijk = self.ijToTijk(ijk[0:2])
+                    tijk = self.ijkToTijk(ijk)
+                # print("tijk", tijk)
+                self.setIjkTf(tijk)
+                self.setLastJumpIjkTf(tijk)
             self.window.drawSlices()
             # move cursor to cross hairs
             ij = self.tijkToIj(tijk)

@@ -349,6 +349,7 @@ class VolumeView():
         # in transposed-grid coordinates
         # so focus pixel = datatr[ktf, jtf, itf]
         self.ijktf = (0,0,0)
+        self.last_jump_ijktf = None
         # self.stxytf = (0.,0.)
         self.stxytf = None
         self.zoom = 0.
@@ -399,6 +400,7 @@ class VolumeView():
             ijk = self.ijktf
             self.ijktf = (ijk[2], ijk[1], ijk[0])
             self.stxytf = None
+            self.clearLastJumpIjkTf()
         self.direction = direction
         if self.volume.data is not None:
             self.trdata = self.volume.trdatas[direction]
@@ -455,12 +457,26 @@ class VolumeView():
         jtf = int(sh[1]/2)
         ktf = int(sh[0]/2)
         self.ijktf = (itf, jtf, ktf)
+        self.clearLastJumpIjkTf()
 
         gi,gj,gk = self.transposedIjkToGlobalPosition(
                 self.ijktf)
         print("global position x %d y %d image %d"%(gi,gj,gk))
         if not no_notify:
             self.notifyModified()
+
+    def setLastJumpIjkTf(self, tf):
+        self.last_jump_ijktf = tf
+
+    def returnToLastJumpIjkTf(self):
+        lj = self.last_jump_ijktf
+        if lj is None:
+            return
+        self.ijktf = lj
+        self.notifyModified()
+
+    def clearLastJumpIjkTf(self):
+        self.last_jump_ijktf = None
 
     def setIjkTf(self, tf):
         o = [0,0,0]
@@ -475,6 +491,7 @@ class VolumeView():
             m = sh[2-i] - 1
             t = min(m, max(t,0))
             o[i] = t
+        # self.last_jump_ijktf = self.ijktf
         self.ijktf = tuple(o)
         self.notifyModified()
 
@@ -528,6 +545,7 @@ class Volume():
         self.trdatas = None
         self.data_header = None
         self.is_zarr = False
+        self.is_streaming = False
         self.valid = False
         self.error = "no error message set"
         self.active_project_views = set()

@@ -485,6 +485,62 @@ class CursorModeButton(QPushButton):
         self.doSetToolTip()
 
 
+class UseStreamCacheCheckBox(QCheckBox):
+    def __init__(self, main_window, parent=None):
+        super(UseStreamCacheCheckBox, self).__init__("Use stream cache directory", parent)
+        self.main_window = main_window
+        self.setting = "stream"
+        self.param = "use_cache_directory"
+        self.setChecked(main_window.draw_settings[self.setting][self.param])
+        main_window.draw_settings_widgets[self.setting][self.param] = self
+        self.stateChanged.connect(self.onStateChanged)
+
+    def onStateChanged(self, s):
+        # print("osc", s, Qt.Checked, Qt.CheckState(s), Qt.Checked.value, s==Qt.Checked)
+        cs = Qt.CheckState(s)
+        # self.main_window.setVolBoxesVisible(cs==Qt.Checked)
+        self.main_window.setUseStreamCache(cs==Qt.Checked)
+
+class StreamCacheDirectoryButton(QPushButton):
+    def __init__(self, main_window, parent=None):
+        super(StreamCacheDirectoryButton, self).__init__("Select directory to use as cache", parent)
+        self.main_window = main_window
+        self.clicked.connect(self.onButtonClicked)
+        self.setting = "stream"
+        self.param = "cache_directory"
+        cdir = main_window.draw_settings[self.setting][self.param]
+        if cdir != "":
+            self.setText(cdir)
+        enabled = main_window.draw_settings[self.setting]["use_cache_directory"]
+        self.setEnabled(enabled)
+        main_window.draw_settings_widgets[self.setting][self.param] = self
+        # self.directory_is_valid = False
+        # self.directory = ""
+
+    def onButtonClicked(self, s):
+        print("dir button clicked")
+        sdir = self.main_window.settingsGetDirectory("stream_cache_")
+        dialog = QFileDialog(self)
+        if sdir is not None and Path(sdir).is_dir():
+            dialog.setDirectory(sdir)
+        dialog.setOptions(QFileDialog.ShowDirsOnly)
+        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setLabelText(QFileDialog.Accept, "Select cache folder")
+        if not dialog.exec():
+            print("exec failed")
+            return
+        sels = dialog.selectedFiles()
+        if len(sels) != 1:
+            print("expected 1 file")
+            return
+        cdir = sels[0]
+        if not Path(cdir).is_dir():
+            print("not a dir")
+            return
+        self.main_window.settingsSaveDirectory(str(Path(cdir).parent), "stream_cache_")
+        # self.directory_is_valid = True
+        self.main_window.setStreamCacheDirectory(cdir)
+
 class VolBoxesVisibleCheckBox(QCheckBox):
     def __init__(self, main_window, parent=None):
         super(VolBoxesVisibleCheckBox, self).__init__("Volume Boxes Visible", parent)
@@ -893,6 +949,9 @@ class MainWindow(QMainWindow):
 
         self.draw_settings = copy.deepcopy(MainWindow.draw_settings_defaults)
         self.settingsLoadDrawSettings()
+        # TODO for testing!
+        # self.draw_settings["stream"]["cache_directory"] = ""
+
         self.draw_settings_widgets = copy.deepcopy(MainWindow.draw_settings_defaults)
 
         # if False, shift lock only requires a single click
@@ -918,7 +977,8 @@ class MainWindow(QMainWindow):
         self.openhand_transparent = self.openhand_transparents[0]
 
         
-        scrollpx = QPixmap(path+"/icons/stylized_scroll.png")
+        # scrollpx = QPixmap(path+"/icons/stylized_scroll.png")
+        scrollpx = QPixmap(path+"/icons/Khartes_Chi.png")
         scrollic = QIcon(scrollpx.copy(128,128,896,896))
 
         self.setWindowIcon(scrollic)
@@ -1103,12 +1163,12 @@ class MainWindow(QMainWindow):
         self.zarr_signal.connect(self.zarrSlot)
         self.setZarrMaxCacheSize(self.draw_settings["zarr"]["max_cache_size_gb"], False)
 
-        self.stream_cache_directory = self.draw_settings["stream"]["cache_directory"]
-        self.use_stream_cache_directory = self.draw_settings["stream"]["use_cache_directory"]
+        # self.stream_cache_directory = self.draw_settings["stream"]["cache_directory"]
+        # self.use_stream_cache_directory = self.draw_settings["stream"]["use_cache_directory"]
 
         # TODO for testing
-        self.stream_cache_directory = ""
-        self.use_stream_cache_directory = False
+        # self.stream_cache_directory = ""
+        # self.use_stream_cache_directory = False
         # self.stream_cache_directory = "J:\Vesuvius\cache"
         # self.use_stream_cache_directory = True
         # self.stream_cache_directory = "/Users/dev/Desktop/Progs/Vesuvius/cache"
@@ -1585,10 +1645,24 @@ class MainWindow(QMainWindow):
         vs = VoxelSizeEditor(self)
         self.settings_voxel_size_um = vs
         slices_layout.addWidget(vs)
+        usc = UseStreamCacheCheckBox(self)
+        self.settings_use_stream_cache = usc
+        slices_layout.addWidget(usc)
+        scd = StreamCacheDirectoryButton(self)
+        self.settings_stream_cache_directory = scd
+        slices_layout.addWidget(scd)
+
+        more_vbox = QVBoxLayout()
+        hlayout.addLayout(more_vbox)
+        more_frame = QGroupBox("More settings")
+        more_vbox.addWidget(more_frame)
+        more_vbox.addStretch()
+        more_layout = QVBoxLayout()
+        more_frame.setLayout(more_layout)
         zmww = ZarrMaxWindowWidthEditor(self)
-        slices_layout.addWidget(zmww)
+        more_layout.addWidget(zmww)
         zmcs = ZarrMaxCacheGb(self)
-        slices_layout.addWidget(zmcs)
+        more_layout.addWidget(zmcs)
 
         hlayout.addStretch()
         # fragment_layout = QVBoxLayout()
@@ -1646,6 +1720,33 @@ class MainWindow(QMainWindow):
         # self.project_view.notifyModified()
         self.settingsSaveDrawSettings()
         # self.drawSlices()
+
+    def getStreamCacheDirectory(self):
+        return self.draw_settings["stream"]["cache_directory"]
+
+    def setStreamCacheDirectory(self, value):
+        old_value = self.getStreamCacheDirectory()
+        if old_value == value:
+            return
+        if self.project_view is not None and self.project_view.project.hasStreamingVolume():
+            QMessageBox.warning(self, "khartes", "This change will only apply to streams attached after this time.\nTo apply the change to existing streams, save your project and reload it.", QMessageBox.Ok)
+        self.draw_settings["stream"]["cache_directory"] = value
+        self.settings_stream_cache_directory.setText(self.getStreamCacheDirectory())
+        self.settingsSaveDrawSettings()
+
+    def getUseStreamCache(self):
+        return self.draw_settings["stream"]["use_cache_directory"]
+
+    def setUseStreamCache(self, value):
+        old_value = self.getUseStreamCache()
+        if old_value == value:
+            return
+        if self.project_view is not None and self.project_view.project.hasStreamingVolume():
+            QMessageBox.warning(self, "khartes", "This change will only apply to streams attached after this time.\nTo apply the change to existing streams, save your project and reload it.", QMessageBox.Ok)
+        self.draw_settings["stream"]["use_cache_directory"] = value
+        self.settings_use_stream_cache.setChecked(self.getUseStreamCache())
+        self.settings_stream_cache_directory.setEnabled(self.getUseStreamCache())
+        self.settingsSaveDrawSettings()
 
     def getVolBoxesVisible(self):
         if self.project_view is None:
@@ -2637,8 +2738,9 @@ class MainWindow(QMainWindow):
         loading = self.showLoading()
         self.unsetProjectView()
         load_zarr_options = None
-        if self.use_stream_cache_directory:
-            load_zarr_options = {"stream_cache_directory": self.stream_cache_directory}
+        # print("LP", self.use_stream_cache_directory, self.stream_cache_directory)
+        if self.getUseStreamCache() and self.getStreamCacheDirectory() != "":
+            load_zarr_options = {"stream_cache_directory": self.getStreamCacheDirectory()}
 
         pv = ProjectView.open(fname, load_zarr_options)
         if not pv.valid:

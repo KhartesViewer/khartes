@@ -9,6 +9,7 @@ import queue
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
+import fsspec
 import cv2
 from scipy import ndimage
 from utils import Utils
@@ -83,10 +84,16 @@ def load_tif(path):
     stack_array = zarr.open(store, mode="r")
     return stack_array
 
+def zarr_is_file(path):
+    fs, _, _ = fsspec.get_fs_token_paths(path)
+    proto = fs.protocol
+    return proto == "file"
+
 def load_zarr(dirname, load_zarr_options=None):
     options = None
     # print("load_zarr options", load_zarr_options)
-    if load_zarr_options is not None and "stream_cache_directory" in load_zarr_options:
+    if not zarr_is_file(dirname) and load_zarr_options is not None and "stream_cache_directory" in load_zarr_options:
+        print("load_zarr options", load_zarr_options)
         cache_dir = load_zarr_options["stream_cache_directory"]
         # print("load_zarr stream_cache_directory", cache_dir)
         dp = pathlib.Path(cache_dir)
@@ -265,6 +272,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         # see the most-recently-requested data first.
         self.executor._work_queue = queue.LifoQueue()
         self.compressor = None
+        self.dtype = None
 
     def __getitem__old(self, key):
         print("get item", key)
@@ -290,6 +298,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
     def transferCompressor(self, array):
         self.compressor = array._compressor
         array._compressor = None
+        self.dtype = array.dtype
 
     def setImmediateDataMode(self, flag):
         with self._mutex:
@@ -427,7 +436,12 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         value = self._store[key]
         # print("nv", type(value), len(value))
         if len(value) > 0 and self.compressor is not None:
-            dc = self.compressor.decode(value)
+            for i in range(3):
+                try:
+                    dc = self.compressor.decode(value)
+                    break
+                except Exception as e:
+                    print("decompression failure try %d: %s"%(i+1, e))
             # print("dc", type(dc), len(dc))
             return dc
         # print("  found", key)
@@ -536,6 +550,7 @@ class CachedZarrVolume():
         self.uses_overlay_colormap = False
         self.original_dtype = None
         self.valid = False
+        self.is_streaming = False
         self.error = "no error message set"
         self.active_project_views = set()
         self.from_vc_render = False
@@ -550,7 +565,7 @@ class CachedZarrVolume():
         if self.from_vc_render:
             shape = (shape[1],shape[0],shape[2])
         return shape
-    
+
     def trshape(self, direction):
         shape = self.shape
         if self.from_vc_render:
@@ -672,7 +687,7 @@ class CachedZarrVolume():
                 "zarr_dir",
                 name,
                 from_vc_render,
-                load_zarr_options=None
+                load_zarr_options
                 )
 
     @staticmethod
@@ -759,6 +774,7 @@ class CachedZarrVolume():
         else:
             volume.setLevelFromArray(array, CachedZarrVolume.max_mem_gb)
 
+        volume.is_streaming = not zarr_is_file(ddir)
         if len(volume.levels) < 1:
             err = f"Problem parsing zdata from input directory {ddir}"
             print(err)
