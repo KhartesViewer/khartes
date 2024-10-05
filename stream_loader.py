@@ -60,6 +60,7 @@ class ZarrStreamLoader(QMainWindow):
        "https://dl.ash2txt.org/other/dev/scrolls/3/volumes/70keV_3.24um.zarr",
        "https://dl.ash2txt.org/other/dev/scrolls/4/volumes/53keV_7.91um.zarr",
        "https://dl.ash2txt.org/other/dev/scrolls/4/volumes/88keV_3.24um.zarr",
+       "",
             ]
 
     def __init__(self, main_window):
