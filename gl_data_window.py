@@ -1892,13 +1892,18 @@ class GLDataWindowChild(QOpenGLWidget):
         whw = ww//2
         whh = wh//2
 
-        data_slice = np.zeros((wh,ww), dtype=np.uint16)
+        # data_slice = np.zeros((wh,ww), dtype=np.uint16)
+        # TODO: need 1 or 4
+        data_slice = np.zeros((wh,ww,1), dtype=np.uint16)
+        # data_slice = np.zeros((wh,ww), dtype=np.uint16)
         zarr_max_width = self.gldw.getZarrMaxWidth()
         paint_result = volume_view.paintSlice(
                 data_slice, self.gldw.axis, volume_view.ijktf, 
                 self.gldw.getZoom(), zarr_max_width)
 
-        base_tex = self.texFromData(data_slice, QImage.Format_Grayscale16)
+        # base_tex = self.texFromData(data_slice, QImage.Format_Grayscale16)
+        # TODO: 
+        base_tex = self.texFromData(data_slice[:,:,0], QImage.Format_Grayscale16)
         bloc = self.slice_program.uniformLocation("base_sampler")
         if bloc < 0:
             print("couldn't get loc for base sampler")

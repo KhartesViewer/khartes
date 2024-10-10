@@ -1664,6 +1664,10 @@ class Chunk:
         if int_dr is None:
             self.status = Chunk.Status.IGNORE
             return False
+        # TODO:
+        int_dr4 = (
+                (0, int_dr[0][0], int_dr[0][1], int_dr[0][2]),
+                (1, int_dr[1][0], int_dr[1][1], int_dr[1][2]))
         # print(pdr, all_dr, int_dr)
 
         # Compute change in pdr (padded data-chunk rectangle) 
@@ -1678,10 +1682,12 @@ class Chunk:
         # print(skip0, skip1)
         # print(dr, int_dr)
         acsz = self.atlas.acsz
-        buf = np.zeros((acsz[2], acsz[1], acsz[0]), np.uint16)
         c0 = skip0
         c1 = tuple(acsz[i]-skip1[i] for i in range(len(acsz)))
+        # adata = self.atlas.datas[dl]
         adata = self.atlas.datas[dl]
+        # TODO:
+        buf = np.zeros((acsz[2], acsz[1], acsz[0], adata.shape[3]), adata.dtype)
 
         timera = Utils.Timer()
         timera.active = False
@@ -1701,7 +1707,8 @@ class Chunk:
         # to shape (128, 128).  For some reason, this dimension loss 
         # occurs with adata but not buf.
         # The reshape restores the lost dimension.
-        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]].reshape([int_dr[1][i]-int_dr[0][i] for i in reversed(range(3))])
+        # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]].reshape([int_dr[1][i]-int_dr[0][i] for i in reversed(range(3))])
+        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0], :].reshape([int_dr4[1][i]-int_dr4[0][i] for i in reversed(range(4))])
         '''
         # Trying to figure out the dropped-dimension problem...
         try:
@@ -2157,7 +2164,9 @@ class Atlas:
         dsz = []
         for data in datas:
             # print("data shape", data.shape)
-            shape = data.shape
+            # TODO
+            # shape = data.shape
+            shape = data.shape[:3]
             dsz.append(tuple(shape[::-1]))
         self.datas = datas
         self.dsz = dsz

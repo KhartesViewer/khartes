@@ -1572,6 +1572,13 @@ class FragmentView(BaseFragmentView):
         ixyzs = ixyzs[:,ixyzs[0,:]<ftrdata.shape[0]]
         ixyzs = ixyzs[:,ixyzs[0,:]>=0]
         # use_linear_interpolation = True
+        # TODO: commented out this code because it should
+        # no longer be needed, since createZsurf should
+        # only be called when exporting the fragment as
+        # an obj file.
+        # The code below no longer works because trdata is
+        # now 4D, not 3D
+        ''' 
         vol = self.cur_volume_view.volume
         vol.setImmediateDataMode(True)
         if FragmentView.use_linear_interpolation:
@@ -1589,6 +1596,7 @@ class FragmentView(BaseFragmentView):
             # print("nn")
             self.ssurf[(ixyzs[1,:],ixyzs[2,:])] = ftrdata[(ixyzs[0,:], ixyzs[1,:], ixyzs[2,:])]
         vol.setImmediateDataMode(False)
+        '''
 
 
         timer.time("ssurf")

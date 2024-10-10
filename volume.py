@@ -404,7 +404,7 @@ class VolumeView():
         self.direction = direction
         if self.volume.data is not None:
             self.trdata = self.volume.trdatas[direction]
-            self.trshape = self.trdata.shape
+            self.trshape = self.trdata.shape[:3]
             self.notifyModified()
         else:
             print("warning, VolumeView.setDirection: volume data is not loaded")
@@ -412,7 +412,7 @@ class VolumeView():
 
     def dataLoaded(self):
         self.trdata = self.volume.trdatas[self.direction]
-        self.trshape = self.trdata.shape
+        self.trshape = self.trdata.shape[:3]
 
     # call after direction is set
     def getDefaultZoom(self, window, zarr_max_width):
@@ -537,6 +537,26 @@ class VolumeView():
     def getSliceBounds(self, axis, ijkt, zarr_max_width):
         return self.volume.getSliceBounds(axis, ijkt, zarr_max_width, self.direction)
 
+class TransposedDataView():
+    def __init__(self, data, direction=0):
+        self.direction = direction
+        data4d = data[:,:,:,np.newaxis]
+        if direction == 0:
+            self.data = data4d.transpose(2,0,1,3)
+        else:
+            self.data = data4d.transpose(1,0,2,3)
+
+    @property
+    def shape(self):
+        return self.data.shape
+
+    @property
+    def dtype(self):
+        return self.data.dtype
+
+    def __getitem__(self, selection):
+        result = self.data[selection]
+        return result
 
 class Volume():
 
@@ -903,8 +923,10 @@ class Volume():
 
     def createTransposedData(self):
         self.trdatas = []
-        self.trdatas.append(self.data.transpose(2,0,1))
-        self.trdatas.append(self.data.transpose(1,0,2))
+        # self.trdatas.append(self.data.transpose(2,0,1))
+        # self.trdatas.append(self.data.transpose(1,0,2))
+        self.trdatas.append(TransposedDataView(self.data, 0))
+        self.trdatas.append(TransposedDataView(self.data, 1))
 
     def ijkToTransposedIjk(self, ijk, direction):
         i,j,k = ijk
@@ -1003,7 +1025,7 @@ class Volume():
         slices[axis] = k
         slices[i] = islice
         slices[j] = jslice
-        result = data[slices[2],slices[1],slices[0]]
+        result = data[slices[2],slices[1],slices[0],:]
         return result
 
     def getSliceShape(self, axis, zarr_max_width, direction):
@@ -1021,7 +1043,7 @@ class Volume():
         data = self.trdatas[direction]
         z = zoom
         it,jt,kt = ijkt
-        wh,ww = out.shape
+        wh,ww,wd = out.shape
         whw = ww//2
         whh = wh//2
         il, jl = self.ijIndexesInPlaneOfSlice(axis)
@@ -1077,9 +1099,12 @@ class Volume():
                 zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_NEAREST)
             else:
                 zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+
+            # TODO:
+            zslc = zslc[:,:,np.newaxis]
             # paste resized data slice into the intersection window
             # in the drawing window
-            out[y1:y2, x1:x2] = zslc
+            out[y1:y2, x1:x2, :] = zslc
             
         return True
 

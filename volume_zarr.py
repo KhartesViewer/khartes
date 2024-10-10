@@ -143,24 +143,77 @@ def hashable_to_slice(item):
     return slice(item[0], item[1], None)
 
 
+'''
+# This fails because "data" is a zarr array, not
+# a numpy array.  And zarr arrays don't have
+# a transpose function!
+class TransposedDataViewWontWork():
+    def __init__(self, data, direction=0, from_vc_render=False):
+        self.direction = direction
+        self.from_vc_render = from_vc_render
+        idata = data
+        if from_vc_render:
+            idata = data.transpose(1,0,2)
+        if direction == 0:
+            self.data = idata.transpose(2,0,1)
+        else:
+            self.data = idata.transpose(1,0,2)
+
+    @property
+    def shape(self):
+        return self.data.shape
+
+    def getDataAndMisses(self, slice0, slice1, slice2):
+        klru = self.data.store
+        misses0 = klru.nz_misses
+        data = self[slice0, slice1, slice2]
+        misses1 = klru.nz_misses
+        return data, misses1-misses0
+
+    def __getitem__(self, selection):
+        result = self.data[selection]
+        if input_dtype == np.uint8 and result.dtype == np.uint8:
+            result = result.astype(np.uint16)
+            # Important: if input is 0, output must be
+            # be 0.  Otherwise, paintLevel can't tell whether
+            # a level is incomplete.
+            result = result * 256  # Scale up to full 16-bit range
+        return result
+'''
+
+
 class TransposedDataView():
-    def __init__(self, data, direction=0, from_vc_render=False, original_dtype=None):
+    # def __init__(self, data, direction=0, from_vc_render=False, original_dtype=None):
+    # Note that "data" is a zarr array, not a numpy array
+    def __init__(self, data, direction=0, from_vc_render=False):
         self.data = data
         self.from_vc_render = from_vc_render
         self.direction = direction
-        self.original_dtype = original_dtype
+        # self.original_dtype = original_dtype
 
     @property
     def shape(self):
         shape = self.data.shape
+        if len(shape) == 3:
+            # shape.append(1)
+            shape = (*shape, 1)
         if self.from_vc_render:
-            shape = (shape[1],shape[0],shape[2])
+            shape = (shape[1],shape[0],shape[2], shape[3])
         if self.direction == 0:
-            return (shape[2], shape[0], shape[1])
+            return (shape[2], shape[0], shape[1], shape[3])
         elif self.direction == 1:
-            return (shape[1], shape[0], shape[2])
+            return (shape[1], shape[0], shape[2], shape[3])
+
+    # TODO: currently hard-wired to uint16 to reflect the fact
+    # that __getitem__ converts uint8 data to uint16
+    @property
+    def dtype(self):
+        # return self.data.dtype
+        return np.uint16
 
     # def getDataAndMisses(self, slice0, slice1, slice2, immediate=False):
+    # Is this used any more?
+    """
     def getDataAndMisses(self, slice0, slice1, slice2):
         klru = self.data.store
         '''
@@ -176,10 +229,13 @@ class TransposedDataView():
         data = self[slice0, slice1, slice2]
         misses1 = klru.nz_misses
         return data, misses1-misses0
+    """
 
-
+    # NOTE: This routine is complicated because "data" is
+    # a zarr array, not a numpy array.  Zarr arrays don't
+    # have a transpose function. Instead...
     # Two steps:
-    # First, select the data from the original data cube
+    # First, select the data from the original data cube (zarr array)
     # (need to transpose the selection into global coordinates
     # to do this);
     # Second, transpose the results (which are aligned with the global
@@ -189,9 +245,9 @@ class TransposedDataView():
     def __getitem__(self, selection):
         # transpose selection to global axes
         if self.direction == 0:
-            s2, s0, s1 = selection
+            s2, s0, s1, s3 = selection
         elif self.direction == 1:
-            s1, s0, s2 = selection
+            s1, s0, s2, s3 = selection
         if self.from_vc_render:
             s1,s0,s2 = s0,s1,s2
 
@@ -202,14 +258,22 @@ class TransposedDataView():
         # would have fewer dimensions than expected
         alls = []
         # print(type(s0),type(s1),type(s2))
-        for s in (s0,s1,s2):
+        for s in (s0,s1,s2, s3):
             if isinstance(s, int):
                 alls.append(slice(s,s+1))
             else:
                 alls.append(s)
 
-        result = self.data[alls[0],alls[1],alls[2]]
-        if self.original_dtype == np.uint8 and result.dtype == np.uint8:
+        if len(self.data.shape) == 3:
+            result = self.data[alls[0],alls[1],alls[2]]
+            result = result[:,:,:,np.newaxis]
+        else:
+            result = self.data[alls[0],alls[1],alls[2],alls[3]]
+        input_dtype = self.data.dtype
+        # if input_dtype != self.original_dtype:
+        #     print("mismatch", input_dtype, self.original_dtype)
+        # if self.original_dtype == np.uint8 and result.dtype == np.uint8:
+        if input_dtype == np.uint8 and result.dtype == np.uint8:
             result = result.astype(np.uint16)
             # result = result * 256 + 128  # Scale up to full 16-bit range
 
@@ -224,11 +288,11 @@ class TransposedDataView():
         # print("ar", alls, result.shape)
         # transpose the result back to the transposed axes
         if self.from_vc_render:
-            result = result.transpose(1,0,2)
+            result = result.transpose(1,0,2,3)
         if self.direction == 0:
-            result = result.transpose(2, 0, 1)
+            result = result.transpose(2, 0, 1, 3)
         elif self.direction == 1:
-            result = result.transpose(1, 0, 2)
+            result = result.transpose(1, 0, 2, 3)
         # squeeze away any axes of size 1
         result = np.squeeze(result)
         return result
@@ -488,7 +552,8 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
 
 
 class ZarrLevel():
-    def __init__(self, array, path, scale, ilevel, max_mem_gb, from_vc_render=False, original_dtype=None):
+    # def __init__(self, array, path, scale, ilevel, max_mem_gb, from_vc_render=False, original_dtype=None):
+    def __init__(self, array, path, scale, ilevel, max_mem_gb, from_vc_render=False):
         klru = KhartesThreadedLRUCache(
                 array.store, max_size=int(max_mem_gb*2**30))
         self.klru = klru
@@ -503,10 +568,12 @@ class ZarrLevel():
         self.scale = scale
         # don't know if self.from_vc_render will ever be used
         self.from_vc_render = from_vc_render
-        self.original_dtype = original_dtype
+        # self.original_dtype = original_dtype
         self.trdatas = []
-        self.trdatas.append(TransposedDataView(self.data, 0, from_vc_render, original_dtype))
-        self.trdatas.append(TransposedDataView(self.data, 1, from_vc_render, original_dtype))
+        # self.trdatas.append(TransposedDataView(self.data, 0, from_vc_render, original_dtype))
+        # self.trdatas.append(TransposedDataView(self.data, 1, from_vc_render, original_dtype))
+        self.trdatas.append(TransposedDataView(self.data, 0, from_vc_render))
+        self.trdatas.append(TransposedDataView(self.data, 1, from_vc_render))
 
 
     # The callback takes 2 arguments: key (a string) and
@@ -548,7 +615,7 @@ class CachedZarrVolume():
         self.is_zarr = True
         self.data_header = None
         self.uses_overlay_colormap = False
-        self.original_dtype = None
+        # self.original_dtype = None
         self.valid = False
         self.is_streaming = False
         self.error = "no error message set"
@@ -786,8 +853,10 @@ class CachedZarrVolume():
 
         volume.valid = True
         volume.trdatas = []
-        volume.trdatas.append(TransposedDataView(volume.data, 0, from_vc_render, volume.data.dtype))
-        volume.trdatas.append(TransposedDataView(volume.data, 1, from_vc_render, volume.data.dtype))
+        # volume.trdatas.append(TransposedDataView(volume.data, 0, from_vc_render, volume.data.dtype))
+        volume.trdatas.append(TransposedDataView(volume.data, 0, from_vc_render))
+        # volume.trdatas.append(TransposedDataView(volume.data, 1, from_vc_render, volume.data.dtype))
+        volume.trdatas.append(TransposedDataView(volume.data, 1, from_vc_render))
         volume.sizes = [int(size) for size in volume.data.shape]
         # volume.sizes is in ijk order, volume.data.shape is in kji order 
         volume.sizes.reverse()
@@ -797,8 +866,9 @@ class CachedZarrVolume():
         return volume
 
     def setLevelFromArray(self, array, max_mem_gb):
-        self.original_dtype = array.dtype
-        level = ZarrLevel(array, "", 1., 0, max_mem_gb, self.from_vc_render, self.original_dtype)
+        # self.original_dtype = array.dtype
+        # level = ZarrLevel(array, "", 1., 0, max_mem_gb, self.from_vc_render, self.original_dtype)
+        level = ZarrLevel(array, "", 1., 0, max_mem_gb, self.from_vc_render)
         self.levels.append(level)
 
     def parseMetadata(self, hier):
@@ -902,10 +972,11 @@ class CachedZarrVolume():
             max_gb = max(max_gb, min_max_gb)
 
             # Get the dtype of the zarr array without loading it into memory
-            self.original_dtype = hier[path].dtype
+            # self.original_dtype = hier[path].dtype
 
             # Create a custom ZarrLevel that handles the dtype conversion
-            level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb), self.from_vc_render, self.original_dtype)
+            # level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb), self.from_vc_render, self.original_dtype)
+            level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb), self.from_vc_render)
             self.levels.append(level)
             expected_scale *= 2.
             expected_path_int += 1
@@ -1053,7 +1124,7 @@ class CachedZarrVolume():
         slices[axis] = k
         slices[i] = islice
         slices[j] = jslice
-        result = data[slices[2],slices[1],slices[0]]
+        result = data[slices[2],slices[1],slices[0],:]
         # print(islice, jslice, k, data.shape, axis, result.shape)
         return result
 
@@ -1072,7 +1143,7 @@ class CachedZarrVolume():
             # dilate the mask by one pixel
             # to avoid small black lines from appearing
             # (cause unknown!) during loading
-            kernel = np.ones((3,3),dtype=np.bool_)
+            kernel = np.ones((3,3,1),dtype=np.bool_)
             mask = ndimage.binary_dilation(mask, kernel)
             pass
 
@@ -1086,7 +1157,7 @@ class CachedZarrVolume():
         jt = jt//iscale
         kt = kt//iscale
         ijkt = (it,jt,kt)
-        wh,ww = out.shape
+        wh,ww,wd = out.shape
         whw = ww//2
         whh = wh//2
         il, jl = self.ijIndexesInPlaneOfSlice(axis)
@@ -1162,9 +1233,12 @@ class CachedZarrVolume():
             # paste resized data slice into the intersection window
             # in the drawing window
             # print("mask, out", mask.shape, out.shape, out[mask].shape, zslc.shape)
+
+            # TODO: 
+            zslc = zslc[:,:,np.newaxis]
             if draw:
                 buf = np.zeros_like(out)
-                buf[y1:y2, x1:x2] = zslc
+                buf[y1:y2, x1:x2, :] = zslc
                 # if scale == 1.:
                 #     buf[buf != 0] = 24000
                 # if level.ilevel != 2:
