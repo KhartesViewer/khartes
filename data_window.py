@@ -9,6 +9,7 @@ import numpy.linalg as npla
 import cv2
 
 from utils import Utils
+from project import ProjectView
 from st import ST
 # import PIL
 # import PIL.Image
@@ -30,6 +31,7 @@ class DataWindow(QLabel):
         self.resetText()
 
         self.volume_view = None
+        self.overlay_volume_views = ProjectView.overlay_count*[None]
         self.has_had_volume_view = False
         self.mouseStartPoint = None
         self.isPanning = False
@@ -105,6 +107,9 @@ class DataWindow(QLabel):
 
     # def getDrawSetting(self, clss, name):
     #     return self.window.draw_settings[clss][name]
+
+    def setOverlayVolumeView(self, index, vv):
+        self.overlay_volume_views[index] = vv
 
     def setVolumeView(self, vv):
         self.volume_view = vv

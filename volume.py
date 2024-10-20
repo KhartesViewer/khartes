@@ -126,8 +126,9 @@ class VolumesModel(QtCore.QAbstractTableModel):
         self.project_view = project_view
         self.main_window = main_window
 
+    '''
     columns = [
-            "Use",
+            "Base",
             "Name",
             "Color",
             "Ld",
@@ -143,9 +144,24 @@ class VolumesModel(QtCore.QAbstractTableModel):
             "dZ",
             "Gb",
             ]
+    '''
 
+    columns = [
+            "Base",
+            "O1",
+            "O2",
+            "Name",
+            "Color",
+            "Ld",
+            "Dir",
+            "Info"
+            ]
+
+    '''
     ctips = [
             "Select which volume is visible;\nclick box to select",
+            "Select overlay volume;\nclick box to select",
+            "Select second overlay volume;\nclick box to select",
             "Name of the volume",
             "Color of the volume outline drawn on slices;\nclick to edit",
             "Is volume currently loaded in memory\n(volumes that are not currently displayed\nare unloaded by default)",
@@ -165,20 +181,44 @@ tiff files is aligned with the slice vertical axes""",
             "Z step (number of tiff images stepped for each slice image)",
             "Data size in Gb (10^9 bytes)",
             ]
+    '''
+    ctips = [
+            "Select which volume is visible;\nclick box to select",
+            "Name of the volume",
+            "Color of the volume outline drawn on slices;\nclick to edit",
+            "Is volume currently loaded in memory\n(volumes that are not currently displayed\nare unloaded by default)",
+            """Direction (orientation) of the volume;
+X means that the X axis in the original tiff 
+files is aligned with the vertical axes of the slice
+displays; Y means that the Y axis in the original
+tiff files is aligned with the slice vertical axes""",
+            "Hover over the ⓘ for more info"
+    ]
+
+    @staticmethod
+    def columnIndex(name):
+        return VolumesModel.columns.index(name)
+
+    @staticmethod
+    def columnIndices(names):
+        inds = []
+        for name in names:
+            inds.append(VolumesModel.columnIndex(name))
+        return inds
     
     def flags(self, index):
         col = index.column()
         # if col in (0,1,2):
         #     return Qt.ItemIsEditable|Qt.ItemIsEnabled
         oflags = super(VolumesModel, self).flags(index)
-        if col == 0:
+        if col in self.columnIndices(["Base", "O1", "O2"]):
             # print(col, int(oflags))
             nflags = Qt.ItemNeverHasChildren
             nflags |= Qt.ItemIsUserCheckable
             nflags |= Qt.ItemIsEnabled
             # nflags |= Qt.ItemIsEditable
             return nflags
-        elif col== 2 or col == 4:
+        elif col in self.columnIndices(["Color", "Dir"]):
             nflags = Qt.ItemNeverHasChildren
             # nflags |= Qt.ItemIsUserCheckable
             nflags |= Qt.ItemIsEnabled
@@ -198,9 +238,9 @@ tiff files is aligned with the slice vertical axes""",
                 # make sure the combo box in column 4 is always open
                 # (so no double-clicking required)
                 for i in range(self.rowCount()):
-                    index = self.createIndex(i, 2)
+                    index = self.createIndex(i, self.columnIndex("Color"))
                     table.openPersistentEditor(index)
-                    index = self.createIndex(i, 4)
+                    index = self.createIndex(i, self.columnIndex("Dir"))
                     table.openPersistentEditor(index)
 
             return VolumesModel.columns[section]
@@ -229,16 +269,20 @@ tiff files is aligned with the slice vertical axes""",
             return self.dataBackgroundRole(index, role)
         elif role == Qt.CheckStateRole:
             return self.dataCheckStateRole(index, role)
+        elif role == Qt.ToolTipRole:
+            return self.ToolTipRole(index, role)
         return None
 
     def dataCheckStateRole(self, index, role):
         column = index.column()
         row = index.row()
         volumes = self.project_view.volumes
-        volume = list(volumes.keys())[row]
-        selected = (self.project_view.cur_volume == volume)
-        if column == 0:
-            if selected:
+        # volume = list(volumes.keys())[row]
+        volume_view = list(volumes.values())[row]
+        # selected = (self.project_view.cur_volume == volume)
+        if column in self.columnIndices(["Base", "O1", "O2"]):
+            ovv = self.getVolumeViewOrOverlay(column)
+            if ovv == volume_view:
                 return Qt.Checked
             else:
                 return Qt.Unchecked
@@ -266,21 +310,22 @@ tiff files is aligned with the slice vertical axes""",
         steps = volume.gijk_steps 
         sizes = volume.sizes
         selected = (self.project_view.cur_volume == volume)
-        if column == 1:
+        if column == self.columnIndex("Name"):
             return volume.name
-        elif column == 2:
+        elif column == self.columnIndex("Color"):
             # print("ddr", row, volume_view.color.name())
             return volume_view.color.name()
-        elif column == 3:
+        elif column == self.columnIndex("Ld"):
             if volume.data is None:
                 return 'No'
             else:
                 return 'Yes'
-        elif column == 4:
+        elif column == self.columnIndex("Dir"):
             # return "%s"%(('X','Y')[volume_view.direction])
             # print("data display role", row, volume_view.direction)
             return (0,1)[volume_view.direction]
 
+            '''
         elif column >= 5 and column < 14:
             i3 = column-5
             i = i3//3
@@ -298,8 +343,64 @@ tiff files is aligned with the slice vertical axes""",
             gb = volume.dataSize()/1000000000
             # print(volume.name,gb)
             return "%0.1f"%gb
+            '''
+
+        elif column == self.columnIndex("Info"):
+            return "ⓘ"
+
         else:
             return None
+
+    def ToolTipRole(self, index, role):
+        row = index.row()
+        column = index.column()
+        if column != self.columnIndex("Info"):
+            return
+        volumes = self.project_view.volumes
+        volume = list(volumes.keys())[row]
+        volume_view = volumes[volume]
+        mins = volume.gijk_starts
+        steps = volume.gijk_steps 
+        sizes = volume.sizes
+        dtype_str = volume.dtype_str
+        zarr_str = ""
+        if volume.is_zarr:
+            zarr_str = " (zarr)"
+        gb = volume.dataSize()/1000000000
+        # maxes = [mins[i]+steps[i]*(sizes[i]-1) for i in range(3)]
+        ostr = ""
+        axs = ["X", "Y", "Z"]
+        for i in range(3):
+            mn = mins[i]
+            d = steps[i]
+            n = sizes[i]
+            mx = mn+d*(n-1)
+            ax = axs[i]
+            lstr = "%s: min %d, max %d, step %d\n" % (ax, mn, mx, d)
+            ostr += lstr
+        ostr += "%0.1f Gb%s, data type %s"%(gb, zarr_str, dtype_str)
+        return ostr
+
+    def getVolumeViewOrOverlay(self, col_index):
+        name = self.columns[col_index]
+        pv = self.project_view
+        if name == "Base":
+            # self.main_window.setVolume(volume)
+            return pv.cur_volume_view
+        elif name == "O1":
+            # self.main_window.setOverlay(0, volume)
+            return pv.overlay_volume_views[0]
+        elif name == "O2":
+            return pv.overlay_volume_views[1]
+
+    def setVolumeOrOverlay(self, col_index, volume):
+        name = self.columns[col_index]
+        if name == "Base":
+            self.main_window.setVolume(volume)
+        elif name == "O1":
+            self.main_window.setOverlay(0, volume)
+        elif name == "O2":
+            self.main_window.setOverlay(1, volume)
 
     def setData(self, index, value, role):
         row = index.row()
@@ -307,18 +408,20 @@ tiff files is aligned with the slice vertical axes""",
         # print("setdata", row, column, value, role)
         # if role != Qt.EditRole:
         #     return False
-        if role == Qt.CheckStateRole and column == 0:
+        if role == Qt.CheckStateRole and column in self.columnIndices(["Base", "O1", "O2"]):
             # print(row, value)
             cv = Qt.CheckState(value)
             if cv != Qt.Checked:
-                self.main_window.setVolume(None)
+                # self.main_window.setVolume(None)
+                self.setVolumeOrOverlay(column, None)
                 return False
             volumes = self.project_view.volumes
             volume = list(volumes.keys())[row]
-            volume_view = volumes[volume]
-            self.main_window.setVolume(volume)
+            # volume_view = volumes[volume]
+            # self.main_window.setVolume(volume)
+            self.setVolumeOrOverlay(column, volume)
             # return True
-        if role == Qt.EditRole and column == 2:
+        if role == Qt.EditRole and column == self.columnIndex("Color"):
             color = value
             volumes = self.project_view.volumes
             volume = list(volumes.keys())[row]
@@ -326,7 +429,7 @@ tiff files is aligned with the slice vertical axes""",
             # print("setdata", row, color.name())
             # volume_view.setColor(color)
             self.main_window.setVolumeViewColor(volume_view, color)
-        if role == Qt.EditRole and column == 4:
+        if role == Qt.EditRole and column == self.columnIndex("Dir"):
             # print("setdata", row, value)
             direction = 0
             if value == 'Y':
@@ -571,6 +674,10 @@ class Volume():
         self.active_project_views = set()
         self.from_vc_render = False
         self.uses_overlay_colormap = False
+        self.colormap_name = ""
+        # self.colormap = None
+        self.colormap_range = None
+        self.colormap_is_indicator = False
 
     @property
     def shape(self):
@@ -912,12 +1019,16 @@ class Volume():
         volume.modified = modified
         volume.from_vc_render = from_vc_render
         volume.uses_overlay_colormap = uses_overlay_colormap
+        if uses_overlay_colormap:
+            volume.colormap_name = "kh_encoded_555"
+            volume.colormap_is_indicator = True
         volume.valid = True
         volume.path = filename
         volume.name = filename.stem
         volume.data = None
         # convert np.int32 to int
         volume.sizes = tuple(int(sz) for sz in sizes)
+        volume.dtype_str = data_header["type"]
         print(version, created, modified, volume.sizes)
         return volume
 

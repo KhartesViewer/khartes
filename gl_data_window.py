@@ -712,8 +712,10 @@ slice_code = {
       uniform sampler2D underlay_sampler;
       uniform sampler2D overlay_sampler;
       uniform sampler2D fragments_sampler;
+      uniform sampler1D colormap_sampler;
       // uniform float frag_opacity = 1.;
       uniform int uses_overlay_colormap = 0;
+      uniform int use_colormap = 0;
       in vec2 ftxt;
       out vec4 fColor;
 
@@ -2113,6 +2115,54 @@ class GLDataWindowChild(QOpenGLWidget):
         print("max uniform block size", 
               pygl.glGetIntegerv(pygl.GL_MAX_UNIFORM_BLOCK_SIZE)) 
 
+'''
+# gl is the OpenGL function holder
+# arr is the numpy array
+# uniform_index is the location of the uniform block in the shader
+# binding_point is the binding point
+# To use: modify values in the data member, then call setBuffer().
+class UniBuf:
+    def __init__(self, gl, arr, binding_point):
+        gl = pygl
+        self.gl = gl
+        self.binding_point = binding_point
+        self.data = arr
+        self.buffer_id = gl.glGenBuffers(1)
+        gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, self.binding_point, self.buffer_id)
+        self.setBuffer()
+
+    def bindToShader(self, shader_id, uniform_index):
+        gl = self.gl
+        gl.glUniformBlockBinding(shader_id, uniform_index, self.binding_point)
+
+    def setBuffer(self):
+        gl = self.gl
+        gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, self.binding_point, self.buffer_id)
+        byte_size = self.data.size * self.data.itemsize
+        gl.glBufferData(gl.GL_UNIFORM_BUFFER, byte_size, self.data, gl.GL_STATIC_DRAW)
+        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
+
+    def setSubBuffer(self, cnt):
+        gl = self.gl
+        # cnt = 0
+        if cnt == 0:
+            return
+        full_size = self.data.size * self.data.itemsize
+        cnt_size = abs(cnt)*self.data.shape[1] * self.data.itemsize
+        if cnt < 0:
+            offset = full_size - cnt_size
+            subdata = self.data[offset:]
+        else:
+            offset = 0
+            subdata = self.data[:cnt_size]
+        # print(cnt, full_size, cnt_size, offset, subdata.shape)
+        # print("about to bind buffer", self.buffer_id)
+        gl.glBindBuffer(pygl.GL_UNIFORM_BUFFER, self.buffer_id)
+        # print("about to set buffer", self.data.shape, self.data.dtype)
+        gl.glBufferSubData(gl.GL_UNIFORM_BUFFER, offset, cnt_size, subdata)
+        # print("buffer has been set")
+        gl.glBindBuffer(gl.GL_UNIFORM_BUFFER, 0)
+'''
 
 class FragmentVao:
     def __init__(self, fragment_view, position_location, normal_location, gl):

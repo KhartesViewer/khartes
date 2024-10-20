@@ -64,7 +64,12 @@ def VoidPtr(i):
 
 from utils import Utils
 from data_window import DataWindow
-from gl_data_window import GLDataWindowChild, fragment_trgls_code, common_offset_code
+from gl_data_window import (
+        GLDataWindowChild, 
+        fragment_trgls_code, 
+        common_offset_code, 
+        # UniBuf
+        )
 
 
 class GLSurfaceWindow(DataWindow):
@@ -2125,7 +2130,7 @@ class Atlas:
         self.setVolumeView(volume_view)
 
     def setVolumeView(self, volume_view):
-        print("setVolumeView", volume_view.volume.name if volume_view else "(None)")
+        print("Atlas.setVolumeView", volume_view.volume.name if volume_view else "(None)")
         self.clearData()
 
         self.volume_view = volume_view

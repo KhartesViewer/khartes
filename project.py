@@ -15,6 +15,8 @@ from PyQt5.QtGui import QColor
 
 class ProjectView:
 
+    overlay_count = 2
+
     def __init__(self, project):
         print("Initializing project view")
         self.project = project
@@ -22,6 +24,8 @@ class ProjectView:
         if not project.valid:
             return
 
+        # dict: Volume to VolumeView
+        # (VolumeView has a pointer back to Volume)
         self.volumes = {}
         for volume in project.volumes:
             # print(volume.name)
@@ -34,6 +38,7 @@ class ProjectView:
 
         self.cur_volume = None
         self.cur_volume_view = None
+        self.overlay_volume_views = self.overlay_count*[None]
         self.nearby_node_index = -1
         self.nearby_node_fv = None
         project.project_views.append(self)
@@ -233,7 +238,6 @@ class ProjectView:
             # print("slp")
             fv.setLocalPoints(True)
 
-
     def setCurrentVolume(self, volume, no_notify=False):
         if self.cur_volume != volume:
             if self.cur_volume is not None:
@@ -246,6 +250,35 @@ class ProjectView:
         else:
             self.cur_volume_view = self.volumes[volume]
             self.cur_volume_view.dataLoaded()
+            cdir = self.cur_volume_view.direction
+            for i, ovv in enumerate(self.overlay_volume_views):
+                if ovv == self.cur_volume_view:
+                    # This is commented out, because overlay volume
+                    # views should only be changed via MainWindow.
+                    # Otherwise, memory will not be properly freed.
+                    # self.overlay_volume_view[i] = None
+                    print("ProjectView.setCurrent Volume: This should not happen!")
+                elif ovv is not None:
+                    self.setDirection(ovv.volume, cdir)
+        if not no_notify:
+            self.notifyModified()
+
+    def setOverlay(self, index, volume, no_notify=False):
+        volume_view = None
+        if volume is not None:
+            volume_view = self.volumes[volume]
+        ovv = self.overlay_volume_views[index]
+        if ovv != volume_view:
+            if ovv is not None:
+                ovv.volume.unloadData(self)
+            if volume is not None:
+                volume.loadData(self)
+        self.overlay_volume_views[index] = volume_view
+        cdir = 0
+        if self.cur_volume_view is not None:
+            cdir = self.cur_volume_view.direction
+        if volume_view is not None:
+            volume_view.setDirection(cdir)
         if not no_notify:
             self.notifyModified()
 

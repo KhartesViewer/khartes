@@ -1489,8 +1489,10 @@ class MainWindow(QMainWindow):
         # get deleted on going out of scope
         self.volumes_csd = volumes_csd
         self.volumes_dsd = volumes_dsd
-        self.volumes_table.setItemDelegateForColumn(2, volumes_csd)
-        self.volumes_table.setItemDelegateForColumn(4, volumes_dsd)
+        cind = VolumesModel.columnIndex("Color")
+        dind = VolumesModel.columnIndex("Dir")
+        self.volumes_table.setItemDelegateForColumn(cind, volumes_csd)
+        self.volumes_table.setItemDelegateForColumn(dind, volumes_dsd)
         # print("edit triggers", int(self.volumes_table.editTriggers()))
         # self.volumes_table.setEditTriggers(QAbstractItemView.AllEditTriggers)
         # print("mss", hh.minimumSectionSize())
@@ -2917,8 +2919,58 @@ class MainWindow(QMainWindow):
             self.app.processEvents()
             return loading
 
+    def setOverlay(self, index, volume, no_notify=False):
+        pv = self.project_view
+        # TODO: if volume is same as any other overlay, set that overlay
+        # to None.   
+        # If volume is the same as pv.cur_volume, set cur_volume to None.
+        # Main question: where exactly to do this?
+        if volume is not None:
+            cv = pv.cur_volume
+            if cv == volume:
+                self.setVolume(None, no_notify=no_notify)
+            for i, ovv in enumerate(pv.overlay_volume_views):
+                if i == index:
+                    continue
+                if ovv is not None and ovv.volume == volume:
+                    self.setOverlay(i, None, no_notify=no_notify)
+
+        if volume is not None and (volume.data is None or volume.is_zarr):
+            # Note that this won't get called multiple times,
+            # because the "volume is not None" clause protects it.
+            loading = self.showLoading()
+
+        self.volumes_table.model().beginResetModel()
+        old_vv = pv.overlay_volume_views[index]
+        if old_vv is not None and volume is not None and old_vv != volume:
+            # Force GLSurfaceWindow to let go of old volume's data,
+            # so that the memory can be reclaimed
+            vv = None
+            self.depth.setOverlayVolumeView(index, vv);
+            self.xline.setOverlayVolumeView(index, vv);
+            self.inline.setOverlayVolumeView(index, vv);
+            self.surface.setOverlayVolumeView(index, vv);
+            self.drawSlices()
+            self.app.processEvents()
+        pv.setOverlay(index, volume, no_notify)
+        self.volumes_table.model().endResetModel()
+        vv = pv.overlay_volume_views[index]
+        self.depth.setOverlayVolumeView(index, vv);
+        self.xline.setOverlayVolumeView(index, vv);
+        self.inline.setOverlayVolumeView(index, vv);
+        self.surface.setOverlayVolumeView(index, vv);
+        self.app.processEvents()
+        self.drawSlices()
+
     def setVolume(self, volume, no_notify=False):
         pv = self.project_view
+        # TODO: if volume is same as any overlay, set that overlay
+        # to None.   Main question: where exactly to do this?
+        if volume is not None:
+            for i, ovv in enumerate(pv.overlay_volume_views):
+                if ovv is not None and ovv.volume == volume:
+                    self.setOverlay(i, None, no_notify=no_notify)
+
         if volume is not None and (volume.data is None or volume.is_zarr):
             loading = self.showLoading()
 

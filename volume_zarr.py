@@ -615,6 +615,10 @@ class CachedZarrVolume():
         self.is_zarr = True
         self.data_header = None
         self.uses_overlay_colormap = False
+        self.colormap_name = ""
+        # self.colormap = None
+        self.colormap_range = None
+        self.colormap_is_indicator = False
         # self.original_dtype = None
         self.valid = False
         self.is_streaming = False
@@ -861,6 +865,7 @@ class CachedZarrVolume():
         # volume.sizes is in ijk order, volume.data.shape is in kji order 
         volume.sizes.reverse()
         volume.sizes = tuple(volume.sizes)
+        volume.dtype_str = str(volume.data.dtype)
         if volume.from_vc_render:
             volume.sizes = (volume.sizes[0],volume.sizes[2],volume.sizes[1])
         return volume

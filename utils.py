@@ -3,6 +3,7 @@ import random
 import datetime
 import re
 import numpy as np
+import cmap
 from PyQt5.QtGui import QColorConstants as QCC
 from PyQt5.QtGui import QColor
 # import PySide6.QtGuiQColor.SVG as QtSVG
@@ -157,6 +158,38 @@ class Utils:
         ru = ((min(ax1,bx1), min(ay1,by1)),
               (max(ax2,bx2), max(ay2,by2)))
         return ru
+
+
+    class ColorMap():
+
+        def __init__(self, cmap_name, dtype, index_range=None):
+            # assumes dtype is unsigned int
+            self.cmap_name = cmap_name
+            dtmax = np.iinfo(dtype).max
+            lutsize = dtmax+1
+            vmin = 0
+            vmax = dtmax
+            self.lut = np.zeros((lutsize, 4), dtype=np.float32)
+            self.lut[:,3] = 1.
+            if index_range is not None:
+                if index_range[0] is not None:
+                    vmin = index_range[0]
+                if index_range[1] is not None:
+                    vmax = index_range[1]
+            if cmap_name == "kh_encoded_555":
+                self.lut[:32768, 0:3] = np.arange(np.linrange(0., 1., 32768))[:, np.newaxis]
+                rng = np.arange(0, 32768)
+                r = (rng >> 10) & 31
+                g = (rng >> 5) & 31
+                b = rng & 31
+                self.lut[32768:,0] = r / 31.
+                self.lut[32768:,1] = g / 31.
+                self.lut[32768:,2] = b / 31.
+            else:
+                cm = cmap.Colormap(cmap_name)
+                cmlut = cm.lut(vmax-vmin+1)
+                self.lut[vmin:(vmax+1)] = cmlut
+
 
     def getNextColorOld():
         Utils.colorCounter = (Utils.colorCounter+1)%len(Utils.colors)
