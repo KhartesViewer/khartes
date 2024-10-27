@@ -162,22 +162,44 @@ class Utils:
 
     class ColorMap():
 
-        def __init__(self, cmap_name, dtype, index_range=None):
-            # assumes dtype is unsigned int
+        # index_range (if not None) is a two-element tuple,
+        # giving the range (min and max) of the color map,
+        # with min and max between 0.0 and 1.0.
+        # Values outside of the range will be set to
+        # transparent.
+        def __init__(self, cmap_name, dtype, alpha, index_range=None):
             self.cmap_name = cmap_name
+            if cmap_name == "":
+                # cmap_name = "matlab:gray"
+                # index_range = None
+                self.lut = None
+                return
+            '''
+            # assumes dtype is unsigned int (uint8 or uint16)
             dtmax = np.iinfo(dtype).max
             lutsize = dtmax+1
             vmin = 0
             vmax = dtmax
+            '''
+            # wanted lutsize to be based on the dtype,
+            # but for OpenGL reasons (limitations on the
+            # max size of a texture map), cannot have
+            # a lut with size 65536
+            lutsize = 256
+
             self.lut = np.zeros((lutsize, 4), dtype=np.float32)
-            self.lut[:,3] = 1.
+            vmin = 0.
+            vmax = 1.
             if index_range is not None:
                 if index_range[0] is not None:
                     vmin = index_range[0]
                 if index_range[1] is not None:
                     vmax = index_range[1]
+            imin = int(vmin*lutsize+.5)
+            imax = int(vmax*lutsize-.5)
+            '''
             if cmap_name == "kh_encoded_555":
-                self.lut[:32768, 0:3] = np.arange(np.linrange(0., 1., 32768))[:, np.newaxis]
+                self.lut[:32768, 0:3] = np.linspace(0., 1., 32768)[:, np.newaxis]
                 rng = np.arange(0, 32768)
                 r = (rng >> 10) & 31
                 g = (rng >> 5) & 31
@@ -185,11 +207,22 @@ class Utils:
                 self.lut[32768:,0] = r / 31.
                 self.lut[32768:,1] = g / 31.
                 self.lut[32768:,2] = b / 31.
+                self.lut[:,3] = alpha
             else:
                 cm = cmap.Colormap(cmap_name)
                 cmlut = cm.lut(vmax-vmin+1)
                 self.lut[vmin:(vmax+1)] = cmlut
-
+                self.lut[vmin:(vmax+1), 3] = alpha
+            '''
+            # would prefer "nearest" for indicator values,
+            # but providing "nearest" returns an incorrectly
+            # sized lut for certain colormaps (those that only
+            # contain a few colors).
+            cm = cmap.Colormap(cmap_name, interpolation="linear")
+            cmlut = cm.lut(N=(imax-imin+1))
+            print(imin,imax,cmlut.shape)
+            self.lut[imin:(imax+1)] = cmlut
+            self.lut[imin:(imax+1), 3] = alpha
 
     def getNextColorOld():
         Utils.colorCounter = (Utils.colorCounter+1)%len(Utils.colors)

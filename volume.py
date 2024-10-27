@@ -362,7 +362,8 @@ tiff files is aligned with the slice vertical axes""",
         mins = volume.gijk_starts
         steps = volume.gijk_steps 
         sizes = volume.sizes
-        dtype_str = volume.dtype_str
+        # dtype_str = volume.dtype_str
+        dtype_str = str(volume.dtype)
         zarr_str = ""
         if volume.is_zarr:
             zarr_str = " (zarr)"
@@ -464,11 +465,23 @@ class VolumeView():
         # than to FragmentView.
         # However, if a user changes a volume's color, we
         # don't want to have to re-write the entire NRRD file.
-        # So associate color with VolumeView instead.
+        # So associate color with VolumeView instead, which
+        # means it is stored in the project-view file
         color = Utils.getNextColor()
         self.setColor(color, no_notify=True)
         # self.color = QColor()
         # self.cvcolor = (0,0,0,0)
+        # Same for opacity as for color
+        self.opacity = 1.
+
+        self.colormap_range = (0., 1.)
+        self.colormap_name = ""
+        self.colormap_lut = None
+        self.colormap_lut_timestamp = Utils.timestamp()
+        if volume.uses_overlay_colormap:
+            self.colormap_is_indicator = True
+        else:
+            self.colormap_is_indicator = False
 
     def notifyModified(self, tstamp=""):
         if tstamp == "":
@@ -482,6 +495,15 @@ class VolumeView():
         self.cvcolor = [int(65535*c) for c in rgba] 
         if not no_notify:
             self.notifyModified()
+
+    def setColormap(self, force_set=False):
+        v = self.volume
+        if not v.can_modify_colormap and not force_set:
+            return
+        print("setColormap", self.colormap_name)
+        cmap = Utils.ColorMap(self.colormap_name, v.dtype, 1., self.colormap_range)
+        self.colormap_lut = cmap.lut
+        self.colormap_lut_timestamp = Utils.timestamp()
 
     def setZoom(self, zoom):
         self.zoom = min(self.maxZoom, max(zoom, self.minZoom))
@@ -674,10 +696,13 @@ class Volume():
         self.active_project_views = set()
         self.from_vc_render = False
         self.uses_overlay_colormap = False
-        self.colormap_name = ""
+        # self.can_modify_colormap = False
+        self.can_modify_colormap = True
+        # self.colormap_name = ""
         # self.colormap = None
-        self.colormap_range = None
-        self.colormap_is_indicator = False
+        # self.colormap_range = None
+        # self.colormap_is_indicator = False
+        # self.colormap_lut = None
 
     @property
     def shape(self):
@@ -1019,16 +1044,24 @@ class Volume():
         volume.modified = modified
         volume.from_vc_render = from_vc_render
         volume.uses_overlay_colormap = uses_overlay_colormap
+        '''
         if uses_overlay_colormap:
+            volume.colormap_range = None
             volume.colormap_name = "kh_encoded_555"
             volume.colormap_is_indicator = True
+        volume.setColormap(force_set=True)
+        '''
+        if uses_overlay_colormap:
+            volume.can_modify_colormap = False
         volume.valid = True
         volume.path = filename
         volume.name = filename.stem
         volume.data = None
         # convert np.int32 to int
         volume.sizes = tuple(int(sz) for sz in sizes)
-        volume.dtype_str = data_header["type"]
+        # volume.dtype_str = data_header["type"]
+        dtype_str = data_header["type"]
+        volume.dtype = np.dtype(dtype_str)
         print(version, created, modified, volume.sizes)
         return volume
 

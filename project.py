@@ -103,6 +103,14 @@ class ProjectView:
         prj = {}
         if self.cur_volume is not None:
             prj['cur_volume'] = self.cur_volume.name
+        overlay_volume_names = []
+        for ovv in self.overlay_volume_views:
+            if ovv is None:
+                name = ""
+            else:
+                name = ovv.volume.name
+            overlay_volume_names.append(name)
+        prj['overlay_volumes'] = overlay_volume_names
         prj['vol_boxes_visible'] = self.vol_boxes_visible
         info['project'] = prj
 
@@ -113,6 +121,9 @@ class ProjectView:
             vv['zoom'] = vol.zoom
             vv['ijktf'] = list(vol.ijktf)
             vv['color'] = vol.color.name()
+            vv['opacity'] = vol.opacity
+            vv['colormap_name'] = vol.colormap_name
+            vv['colormap_range'] = vol.colormap_range
             vvs[vol.volume.name] = vv
         info['volumes'] = vvs
 
@@ -176,6 +187,13 @@ class ProjectView:
                     vv.ijktf = vinfo['ijktf']
                 if 'color' in vinfo:
                     vv.setColor(QColor(vinfo['color']), no_notify=True)
+                if 'opacity' in vinfo:
+                    vv.opacity = vinfo['opacity']
+                if 'colormap_range' in vinfo:
+                    vv.colormap_range = vinfo['colormap_range']
+                if 'colormap_name' in vinfo:
+                    vv.colormap_name = vinfo['colormap_name']
+                vv.setColormap()
                 # else:
                 # this else clause is not needed because VolumeView
                 # creator sets a random color
@@ -217,6 +235,15 @@ class ProjectView:
                         pv.setCurrentVolume(vol, no_notify=True)
                         # print("set cur vol")
                         break
+            if 'overlay_volumes' in pinfo:
+                for i, ovname in enumerate(pinfo['overlay_volumes']):
+                    if ovname == "":
+                        continue
+                    for vol in pv.volumes.keys():
+                        # print(" vol name", vol.name)
+                        if vol.name == ovname:
+                            pv.setOverlay(i, vol, no_notify=True)
+                            break
             if 'cur_fragment' in pinfo:
                 cfname = pinfo['cur_fragment']
                 for frag in pv.fragments.keys():
@@ -258,7 +285,7 @@ class ProjectView:
                     # Otherwise, memory will not be properly freed.
                     # self.overlay_volume_view[i] = None
                     print("ProjectView.setCurrent Volume: This should not happen!")
-                elif ovv is not None:
+                elif ovv is not None and ovv.direction != cdir:
                     self.setDirection(ovv.volume, cdir)
         if not no_notify:
             self.notifyModified()
@@ -277,7 +304,7 @@ class ProjectView:
         cdir = 0
         if self.cur_volume_view is not None:
             cdir = self.cur_volume_view.direction
-        if volume_view is not None:
+        if volume_view is not None and volume_view.direction != cdir:
             volume_view.setDirection(cdir)
         if not no_notify:
             self.notifyModified()

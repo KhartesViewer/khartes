@@ -615,10 +615,14 @@ class CachedZarrVolume():
         self.is_zarr = True
         self.data_header = None
         self.uses_overlay_colormap = False
-        self.colormap_name = ""
+        # TODO: monochrome can have colormap,
+        # RGBA can't
+        self.can_modify_colormap = True
+        # self.colormap_name = ""
         # self.colormap = None
-        self.colormap_range = None
-        self.colormap_is_indicator = False
+        # self.colormap_range = None
+        # self.colormap_is_indicator = False
+        # self.colormap_lut = None
         # self.original_dtype = None
         self.valid = False
         self.is_streaming = False
@@ -645,6 +649,14 @@ class CachedZarrVolume():
             return (shape[2], shape[0], shape[1])
         else:
             return (shape[1], shape[0], shape[2])
+
+    '''
+    def setColormap(self, force_set=False):
+        if not force_set and not self.can_modify_colormap:
+            return
+        cmap = Utils.ColorMap(self.cmap_name, self.dtype, 1., self.index_range)
+        self.colormap_lut = cmap.lut
+    '''
 
     @staticmethod
     def createErrorVolume(error):
@@ -865,7 +877,8 @@ class CachedZarrVolume():
         # volume.sizes is in ijk order, volume.data.shape is in kji order 
         volume.sizes.reverse()
         volume.sizes = tuple(volume.sizes)
-        volume.dtype_str = str(volume.data.dtype)
+        # volume.dtype_str = str(volume.data.dtype)
+        volume.dtype = volume.data.dtype
         if volume.from_vc_render:
             volume.sizes = (volume.sizes[0],volume.sizes[2],volume.sizes[1])
         return volume

@@ -709,13 +709,22 @@ slice_code = {
       #version 410 core
 
       uniform sampler2D base_sampler;
+      uniform int use_colormap_sampler = 0;
+      uniform sampler2D colormap_sampler;
+
+      uniform sampler2D overlay_samplers[2];
+      uniform float overlay_alphas[2];
+      uniform int overlay_use_colormap_samplers[2];
+      uniform sampler1D overlay_colormap_samplers[2];
+      // uniform uint overlay_min_values[2];
+      // uniform uint overlay_max_values[2];
+
       uniform sampler2D underlay_sampler;
-      uniform sampler2D overlay_sampler;
+      uniform sampler2D top_label_sampler;
       uniform sampler2D fragments_sampler;
-      uniform sampler1D colormap_sampler;
       // uniform float frag_opacity = 1.;
+      // TODO: remove
       uniform int uses_overlay_colormap = 0;
-      uniform int use_colormap = 0;
       in vec2 ftxt;
       out vec4 fColor;
 
@@ -742,10 +751,25 @@ slice_code = {
                 fColor[2] = float(ob) / 31.;
                 fColor[3] = 1.;
             }
+        } else if (use_colormap_sampler > 0) {
+            float fr = fColor[0];
+            vec2 ftx = vec2(fr, .5);
+            fColor = texture(colormap_sampler, ftx);
         } else {
             float fr = fColor[0];
             fColor = vec4(fr, fr, fr, 1.);
         }
+
+        /*
+        for (int i=0; i<2; i++) {
+            float oalpha = overlay_alphas[i];
+            if (oalpha == 0.) continue;
+            vec4 oColor = texture(overlay_samplers[i], ftxt);
+            float fo = oColor[0];
+            vec4 foRgba = vec4(fo, fo, fo, 1.);
+            fColor = (1.-oalpha)*fColor + oalpha*foRgba;
+        }
+        */
 
         vec4 uColor = texture(underlay_sampler, ftxt);
         alpha = uColor.a;
@@ -756,7 +780,7 @@ slice_code = {
         alpha = frColor.a;
         fColor = (1.-alpha)*fColor + alpha*frColor;
 
-        vec4 oColor = texture(overlay_sampler, ftxt);
+        vec4 oColor = texture(top_label_sampler, ftxt);
         alpha = oColor.a;
         fColor = (1.-alpha)*fColor + alpha*oColor;
       }
@@ -1248,18 +1272,118 @@ fragment_trgls_code = {
     ''',
 }
 
+class ColormapTexture:
+    def __init__(self, volume_view):
+        self.volume_view = volume_view
+        self.timestamp = 0
+        self.tex = None
+        self.update()
+        print("created ColormapTexture")
+
+    # update texture (do nothing if texture is already up to date)
+    def update(self):
+        vv = self.volume_view
+        if self.timestamp != vv.colormap_lut_timestamp:
+            print(self.timestamp, vv.colormap_lut_timestamp)
+            self.tex = self.textureFromLut(self.volume_view.colormap_lut)
+            print("update self.tex", self.tex)
+            self.timestamp = vv.colormap_lut_timestamp
+
+    # create and return texture from lut, 
+    # or return None if no lut
+    @staticmethod
+    def textureFromLut(lut):
+        print("textureFromLut")
+        if lut is None:
+            print(" returning None")
+            return None
+        # OpenGL 4.1 does not support 1D textures!  They were
+        # added in OpenGL 4.2.
+        # tex = QOpenGLTexture(QOpenGLTexture.Target1D)
+        tex = QOpenGLTexture(QOpenGLTexture.Target2D)
+        # setFormat takes 
+        # https://doc.qt.io/qt-5/qopengltexture.html#TextureFormat-enum 
+        # as argument (TextureFormat is not to be confused with PixelFormat)
+        tex.setFormat(QOpenGLTexture.RGBA32F)
+        print("lut", lut.shape, lut.size, lut.dtype)
+        # tex.setSize(512,1)
+        tex.setSize(lut.shape[0],1)
+        tex.setMipLevels(1)
+        # allocateStorage takes PixelFormat (not TextureFormat!) 
+        # and PixelType as arguments
+        tex.allocateStorage(QOpenGLTexture.RGBA, QOpenGLTexture.Float32)
+        # tex.allocateStorage(0,0)
+        # pygl.glActiveTexture(pygl.GL_TEXTURE0)
+        lut_bytes = lut.tobytes()
+        tex.setData(0, QOpenGLTexture.RGBA, QOpenGLTexture.Float32, lut_bytes)
+        tex.setWrapMode(QOpenGLTexture.DirectionS, 
+                        QOpenGLTexture.ClampToBorder)
+        tex.setWrapMode(QOpenGLTexture.DirectionT, 
+                        QOpenGLTexture.ClampToBorder)
+        tex.setMagnificationFilter(QOpenGLTexture.Linear)
+        tex.setMinificationFilter(QOpenGLTexture.Linear)
+        return tex
+        '''
+            imm = img.mirrored()
+            tex = QOpenGLTexture(QOpenGLTexture.Target2D)
+            tex.setFormat(QOpenGLTexture.R16_UNorm)
+            tex.setSize(imm.width(), imm.height())
+            tex.setMipLevels(1)
+            tex.allocateStorage(QOpenGLTexture.Red, QOpenGLTexture.UInt16)
+            uploadOptions = QOpenGLPixelTransferOptions()
+            uploadOptions.setAlignment(2)
+            # print("g", bytesperline)
+            tex.setData(0, QOpenGLTexture.Red, QOpenGLTexture.UInt16, imm.constBits(), uploadOptions)
+        '''
+
+    def getTexture(self):
+        self.update()
+        # print("getTexture self.tex", self.tex)
+        return self.tex
+
 class GLDataWindowChild(QOpenGLWidget):
     def __init__(self, gldw, parent=None):
         super(GLDataWindowChild, self).__init__(parent)
         self.gldw = gldw
         self.setMouseTracking(True)
         self.fragment_vaos = {}
+        self.colormap_textures = {}
+        self.prev_pv = None
 
         # synchronous mode is said to be much slower
         # self.logging_mode = QOpenGLDebugLogger.SynchronousLogging
         self.logging_mode = QOpenGLDebugLogger.AsynchronousLogging
         # self.common_offset_code = common_offset_code
         self.localInit()
+
+    def getColormapTexture(self, volume_view):
+        self.clearOldColormapTextures()
+        # print(len(self.colormap_textures), volume_view in self.colormap_textures)
+        # return self.colormap_textures.setdefault(
+        #         volume_view, ColormapTexture(volume_view))
+        if volume_view not in self.colormap_textures:
+            cmt = ColormapTexture(volume_view)
+            print("created cmt", cmt.tex)
+            self.colormap_textures[volume_view] = cmt
+        else:
+            cmt = self.colormap_textures[volume_view]
+        return cmt.getTexture()
+
+    def clearOldColormapTextures(self):
+        pv = self.gldw.window.project_view
+        if pv != self.prev_pv:
+            print("clearing textures")
+            self.colormap_textures = {}
+            self.prev_pv = pv
+        '''
+        pvv = pv.volumes
+        new_cmt = {}
+        for vv, tex in self.colormap_textures.items():
+            v = vv.volume
+            if v in pvv:
+                new_cmt[vv] = tex
+        self.colormap_textures = new_cmt
+        '''
 
     def localInit(self):
         self.xyfvs = None
@@ -1749,7 +1873,8 @@ class GLDataWindowChild(QOpenGLWidget):
     # and then creating a texture map from the QImage.
     # On of the main purposes of this function is to set
     # defaults that are suitable for this program.
-    def texFromData(self, data, qiformat):
+    @staticmethod
+    def texFromData(data, qiformat):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
         img = QImage(data, data.shape[1], data.shape[0],
                      bytesperline, qiformat)
@@ -1761,9 +1886,14 @@ class GLDataWindowChild(QOpenGLWidget):
         if qiformat == QImage.Format_Grayscale16:
             imm = img.mirrored()
             tex = QOpenGLTexture(QOpenGLTexture.Target2D)
+            # setFormat takes 
+            # https://doc.qt.io/qt-5/qopengltexture.html#TextureFormat-enum 
+            # as argument (TextureFormat is not to be confused with PixelFormat)
             tex.setFormat(QOpenGLTexture.R16_UNorm)
             tex.setSize(imm.width(), imm.height())
             tex.setMipLevels(1)
+            # allocateStorage takes PixelFormat (not TextureFormat!) 
+            # and PixelType as arguments
             tex.allocateStorage(QOpenGLTexture.Red, QOpenGLTexture.UInt16)
             uploadOptions = QOpenGLPixelTransferOptions()
             uploadOptions.setAlignment(2)
@@ -1825,7 +1955,7 @@ class GLDataWindowChild(QOpenGLWidget):
     def areVolBoxesVisible(self):
         return self.gldw.window.getVolBoxesVisible()
 
-    def drawOverlays(self, data):
+    def drawTopLabels(self, data):
         dw = self.gldw
         volume_view = dw.volume_view
         opacity = dw.getDrawOpacity("overlay")
@@ -1879,11 +2009,33 @@ class GLDataWindowChild(QOpenGLWidget):
             cv2.putText(data, txt, org, cv2.FONT_HERSHEY_PLAIN, size, white, 1)
             dw.drawScaleBar(data, alpha16)
             dw.drawTrackingCursor(data, alpha16)
-                
+
+    '''
+    class ColormapTexture:
+        def __init__(self, volume_view):
+            self.volume_view = volume_view
+            self.timestamp = 0
+            self.update()
+            self.texture = None
+
+        # update texture (do nothing if texture is already up to date)
+        def update(self):
+            vv = self.volume_view
+            if self.timestamp != vv.colormap_lut_timestamp:
+                self.tex = self.textureFromLut(self.volume_view.colormap_lut)
+                self.timestamp = self.volume_view.colormap_lut_timestamp
+
+        @staticmethod
+        def textureFromLut(lut):
+            # create and return texture from lut, 
+            # or return None if no lut
+            pass
+    '''
 
     def paintSlice(self):
         dw = self.gldw
         volume_view = dw.volume_view
+        # self.clearOldColormapTextures()
         f = self.gl
         self.slice_program.bind()
 
@@ -1903,7 +2055,7 @@ class GLDataWindowChild(QOpenGLWidget):
                 data_slice, self.gldw.axis, volume_view.ijktf, 
                 self.gldw.getZoom(), zarr_max_width)
 
-        # base_tex = self.texFromData(data_slice, QImage.Format_Grayscale16)
+
         # TODO: 
         base_tex = self.texFromData(data_slice[:,:,0], QImage.Format_Grayscale16)
         bloc = self.slice_program.uniformLocation("base_sampler")
@@ -1911,15 +2063,28 @@ class GLDataWindowChild(QOpenGLWidget):
             print("couldn't get loc for base sampler")
             return
         # print("bloc", bloc)
-        bunit = 1
-        f.glActiveTexture(pygl.GL_TEXTURE0+bunit)
+        tunit = 1
+        # bunit = 1
+        f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
         base_tex.bind()
-        self.slice_program.setUniformValue(bloc, bunit)
+        self.slice_program.setUniformValue(bloc, tunit)
 
         uoc = 0
         if volume_view.volume.uses_overlay_colormap:
             uoc = 1
         self.slice_program.setUniformValue("uses_overlay_colormap", uoc)
+
+        cmtex = self.getColormapTexture(volume_view)
+        if cmtex is None:
+            self.slice_program.setUniformValue("use_colormap_sampler", 0)
+        else:
+            cloc = self.slice_program.uniformLocation("colormap_sampler")
+            tunit += 1
+            f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
+            cmtex.bind()
+            self.slice_program.setUniformValue(cloc, tunit)
+            # print("using colormap sampler")
+            self.slice_program.setUniformValue("use_colormap_sampler", 1)
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
@@ -1928,22 +2093,24 @@ class GLDataWindowChild(QOpenGLWidget):
         if uloc < 0:
             print("couldn't get loc for underlay sampler")
             return
-        uunit = 2
-        f.glActiveTexture(pygl.GL_TEXTURE0+uunit)
+        # uunit = 2
+        tunit += 1
+        f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
         underlay_tex.bind()
-        self.slice_program.setUniformValue(uloc, uunit)
+        self.slice_program.setUniformValue(uloc, tunit)
 
-        overlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
-        self.drawOverlays(overlay_data)
-        overlay_tex = self.texFromData(overlay_data, QImage.Format_RGBA64)
-        oloc = self.slice_program.uniformLocation("overlay_sampler")
+        top_label_data = np.zeros((wh,ww,4), dtype=np.uint16)
+        self.drawTopLabels(top_label_data)
+        top_label_tex = self.texFromData(top_label_data, QImage.Format_RGBA64)
+        oloc = self.slice_program.uniformLocation("top_label_sampler")
         if oloc < 0:
-            print("couldn't get loc for overlay sampler")
+            print("couldn't get loc for top_label sampler")
             return
-        ounit = 3
-        f.glActiveTexture(pygl.GL_TEXTURE0+ounit)
-        overlay_tex.bind()
-        self.slice_program.setUniformValue(oloc, ounit)
+        # ounit = 3
+        tunit += 1
+        f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
+        top_label_tex.bind()
+        self.slice_program.setUniformValue(oloc, tunit)
 
         self.drawFragments()
 
@@ -1952,8 +2119,9 @@ class GLDataWindowChild(QOpenGLWidget):
         if floc < 0:
             print("couldn't get loc for fragments sampler")
             return
-        funit = 4
-        f.glActiveTexture(pygl.GL_TEXTURE0+funit)
+        # funit = 4
+        tunit += 1
+        f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
         # only valid if texture is created using
         # addColorAttachment()
         tex_ids = self.fragment_fbo.textures()
@@ -1966,10 +2134,11 @@ class GLDataWindowChild(QOpenGLWidget):
         # testing:
         # fragments_tex_id = tex_ids[1]
         f.glBindTexture(pygl.GL_TEXTURE_2D, fragments_tex_id)
-        self.slice_program.setUniformValue(floc, funit)
-
+        self.slice_program.setUniformValue(floc, tunit)
         f.glActiveTexture(pygl.GL_TEXTURE0)
+
         vaoBinder = QOpenGLVertexArrayObject.Binder(self.slice_vao)
+
         self.slice_program.bind()
         f.glDrawElements(pygl.GL_TRIANGLES, 
                          self.slice_indices.size, pygl.GL_UNSIGNED_INT, VoidPtr(0))
