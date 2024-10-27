@@ -753,8 +753,14 @@ slice_code = {
             }
         } else if (use_colormap_sampler > 0) {
             float fr = fColor[0];
+            // fr *= .999;
             vec2 ftx = vec2(fr, .5);
             fColor = texture(colormap_sampler, ftx);
+            /*
+            if (fr == 1.0) {
+                fColor = vec4(1.,0.,0.,1.);
+            }
+            */
         } else {
             float fr = fColor[0];
             fColor = vec4(fr, fr, fr, 1.);
@@ -1305,7 +1311,7 @@ class ColormapTexture:
         # https://doc.qt.io/qt-5/qopengltexture.html#TextureFormat-enum 
         # as argument (TextureFormat is not to be confused with PixelFormat)
         tex.setFormat(QOpenGLTexture.RGBA32F)
-        print("lut", lut.shape, lut.size, lut.dtype)
+        print("lut", lut.shape, lut.size, lut.dtype, lut[0], lut[-1])
         # tex.setSize(512,1)
         tex.setSize(lut.shape[0],1)
         tex.setMipLevels(1)
@@ -1317,9 +1323,9 @@ class ColormapTexture:
         lut_bytes = lut.tobytes()
         tex.setData(0, QOpenGLTexture.RGBA, QOpenGLTexture.Float32, lut_bytes)
         tex.setWrapMode(QOpenGLTexture.DirectionS, 
-                        QOpenGLTexture.ClampToBorder)
+                        QOpenGLTexture.ClampToEdge)
         tex.setWrapMode(QOpenGLTexture.DirectionT, 
-                        QOpenGLTexture.ClampToBorder)
+                        QOpenGLTexture.ClampToEdge)
         tex.setMagnificationFilter(QOpenGLTexture.Linear)
         tex.setMinificationFilter(QOpenGLTexture.Linear)
         return tex
