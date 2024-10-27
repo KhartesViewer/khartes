@@ -723,7 +723,6 @@ slice_code = {
       uniform sampler2D top_label_sampler;
       uniform sampler2D fragments_sampler;
       // uniform float frag_opacity = 1.;
-      // TODO: remove
       uniform int uses_overlay_colormap = 0;
       in vec2 ftxt;
       out vec4 fColor;

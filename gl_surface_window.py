@@ -66,6 +66,7 @@ from utils import Utils
 from data_window import DataWindow
 from gl_data_window import (
         GLDataWindowChild, 
+        ColormapTexture,
         fragment_trgls_code, 
         common_offset_code, 
         # UniBuf
@@ -396,8 +397,16 @@ slice_code = {
       #version 410 core
 
       uniform sampler2D base_sampler;
+      uniform int use_colormap_sampler = 0;
+      uniform sampler2D colormap_sampler;
+
+      uniform sampler2D overlay_samplers[2];
+      uniform float overlay_alphas[2];
+      uniform int overlay_use_colormap_samplers[2];
+      uniform sampler1D overlay_colormap_samplers[2];
+      
       uniform sampler2D underlay_sampler;
-      uniform sampler2D overlay_sampler;
+      uniform sampler2D top_label_sampler;
       uniform sampler2D trgls_sampler;
       uniform int uses_overlay_colormap = 0;
       in vec2 ftxt;
@@ -427,6 +436,10 @@ slice_code = {
                 fColor[3] = 1.;
             }
 
+        } else if (use_colormap_sampler > 0) {
+            float fr = fColor[0];
+            vec2 ftx = vec2(fr, .5);
+            fColor = texture(colormap_sampler, ftx);
         }
 
         vec4 uColor = texture(underlay_sampler, ftxt);
@@ -438,7 +451,7 @@ slice_code = {
         // alpha = 0.;
         fColor = (1.-alpha)*fColor + alpha*frColor;
 
-        vec4 oColor = texture(overlay_sampler, ftxt);
+        vec4 oColor = texture(top_label_sampler, ftxt);
         alpha = oColor.a;
         fColor = (1.-alpha)*fColor + alpha*oColor;
       }
@@ -772,7 +785,12 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             self.volume_view = None
             self.volume_view_direction = -1
             self.active_fragment = None
+            # TODO: for testing only!
             # self.atlas = None
+            # if self.atlas is set to None without
+            # calling setVolumeView first, the old volume_view's
+            # memory will not be released until after the new volume_view
+            # is loaded!
             if self.atlas is not None:
                 self.atlas.setVolumeView(None)
             return
@@ -785,6 +803,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction :
             self.volume_view = dw.volume_view
             self.volume_view_direction = self.volume_view.direction
+            # TODO: for testing!
+            self.atlas = None
             if self.atlas is None:
                 aw,ah,ad = (2048,2048,400)
                 # TODO: for testing
@@ -931,15 +951,28 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if bloc < 0:
             print("couldn't get loc for base sampler")
             return
-        bunit = 1
-        f.glActiveTexture(pygl.GL_TEXTURE0+bunit)
+        tunit = 1
+        # bunit = 1
+        f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
         f.glBindTexture(pygl.GL_TEXTURE_2D, base_tex)
-        self.slice_program.setUniformValue(bloc, bunit)
+        self.slice_program.setUniformValue(bloc, tunit)
 
         uoc = 0
         if volume_view.volume.uses_overlay_colormap:
             uoc = 1
         self.slice_program.setUniformValue("uses_overlay_colormap", uoc)
+
+        cmtex = self.getColormapTexture(volume_view)
+        if cmtex is None:
+            self.slice_program.setUniformValue("use_colormap_sampler", 0)
+        else:
+            cloc = self.slice_program.uniformLocation("colormap_sampler")
+            tunit += 1
+            f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
+            cmtex.bind()
+            self.slice_program.setUniformValue(cloc, tunit)
+            # print("using colormap sampler")
+            self.slice_program.setUniformValue("use_colormap_sampler", 1)
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
@@ -948,28 +981,30 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if uloc < 0:
             print("couldn't get loc for underlay sampler")
             return
-        uunit = 2
-        f.glActiveTexture(pygl.GL_TEXTURE0+uunit)
+        tunit += 1
+        # uunit = 2
+        f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
         underlay_tex.bind()
-        self.slice_program.setUniformValue(uloc, uunit)
+        self.slice_program.setUniformValue(uloc, tunit)
 
-        overlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
-        self.drawOverlays(overlay_data, overlay_label_text)
-        overlay_tex = self.texFromData(overlay_data, QImage.Format_RGBA64)
-        oloc = self.slice_program.uniformLocation("overlay_sampler")
+        top_label_data = np.zeros((wh,ww,4), dtype=np.uint16)
+        self.drawOverlays(top_label_data, overlay_label_text)
+        top_label_tex = self.texFromData(top_label_data, QImage.Format_RGBA64)
+        oloc = self.slice_program.uniformLocation("top_label_sampler")
         if oloc < 0:
-            print("couldn't get loc for overlay sampler")
+            print("couldn't get loc for top_label sampler")
             return
-        ounit = 3
-        f.glActiveTexture(pygl.GL_TEXTURE0+ounit)
-        overlay_tex.bind()
-        self.slice_program.setUniformValue(oloc, ounit)
+        # ounit = 3
+        tunit += 1
+        f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
+        top_label_tex.bind()
+        self.slice_program.setUniformValue(oloc, tunit)
 
         tloc = self.slice_program.uniformLocation("trgls_sampler")
         if tloc < 0:
             print("couldn't get loc for trgls sampler")
             return
-        tunit = 4
+        tunit += 1
         f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
         tex_ids = self.trgls_fbo.textures()
         trgls_tex_id = tex_ids[0]
@@ -1935,6 +1970,8 @@ atlas_data_code = {
       }
     ''',
 
+    # double braces ({{ and }}) because this code is
+    # templated, to allow max_nchunks to be varied
     "fragment_template": '''
       #version 410 core
 
@@ -2094,6 +2131,7 @@ class Atlas:
         '''
         # width, height, depth
         tex3d.setSize(*self.asz)
+        # TODO: set format based on volume_view information
         # see https://stackoverflow.com/questions/23533749/difference-between-gl-r16-and-gl-r16ui
         tex3d.setFormat(QOpenGLTexture.R16_UNorm)
 
@@ -2105,7 +2143,7 @@ class Atlas:
             # This will fail if there is not enough GPU memory
             tex3d.allocateStorage()
             self.tex3d = tex3d
-            aunit = 4
+            aunit = 1
             # If the OpenGL module is allowed to throw exceptions
             # (the default; this can be changed at the top of
             # gl_data_window.py), the out-of-memory exception
@@ -2148,6 +2186,7 @@ class Atlas:
         is_zarr = vol.is_zarr
         dcsz = self.dcsz
 
+        # TODO: use volume_view.colormap_is_indicator
         uoc = vol.uses_overlay_colormap
         # print("svv uoc", uoc)
         tex3d = self.tex3d
