@@ -397,12 +397,13 @@ slice_code = {
       #version 410 core
 
       uniform sampler2D base_sampler;
-      uniform int use_colormap_sampler = 0;
+      // uniform int use_colormap_sampler = 0;
+      uniform int colormap_sampler_size = 0;
       uniform sampler2D colormap_sampler;
 
       uniform sampler2D overlay_samplers[2];
       uniform float overlay_alphas[2];
-      uniform int overlay_use_colormap_samplers[2];
+      uniform int overlay_colormap_sampler_sizes[2];
       uniform sampler1D overlay_colormap_samplers[2];
       
       uniform sampler2D underlay_sampler;
@@ -436,8 +437,10 @@ slice_code = {
                 fColor[3] = 1.;
             }
 
-        } else if (use_colormap_sampler > 0) {
+        } else if (colormap_sampler_size > 0) {
             float fr = fColor[0];
+            float sz = float(colormap_sampler_size);
+            fr = .5/sz + fr*(sz-1)/sz;
             vec2 ftx = vec2(fr, .5);
             fColor = texture(colormap_sampler, ftx);
         }
@@ -688,7 +691,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f.glClearColor(.6,.3,.3,1.)
         self.buildPrograms()
         self.buildSliceVao()
-        self.printInfo()
+        # self.printInfo()
 
     def setDefaultViewport(self):
         f = self.gl
@@ -964,7 +967,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         cmtex = self.getColormapTexture(volume_view)
         if cmtex is None:
-            self.slice_program.setUniformValue("use_colormap_sampler", 0)
+            self.slice_program.setUniformValue("colormap_sampler_size", 0)
         else:
             cloc = self.slice_program.uniformLocation("colormap_sampler")
             tunit += 1
@@ -972,7 +975,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             cmtex.bind()
             self.slice_program.setUniformValue(cloc, tunit)
             # print("using colormap sampler")
-            self.slice_program.setUniformValue("use_colormap_sampler", 1)
+            self.slice_program.setUniformValue("colormap_sampler_size", cmtex.width())
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
@@ -2089,7 +2092,7 @@ class Atlas:
         # for var in ["atlas", "xyz_xform", "tmins", "tmaxs", "TMins", "TMaxs", "XForms", "ZChartIds", "chart_ids", "ncharts"]:
         #     print(var, self.program.uniformLocation(var))
         pid = self.program.programId()
-        print("program id", pid)
+        # print("program id", pid)
 
         # for var in ["TMaxs", "TMins", "XForms", "ZChartIds"]:
         #    print(var, gl.glGetUniformBlockIndex(pid, var))
@@ -2187,10 +2190,10 @@ class Atlas:
         dcsz = self.dcsz
 
         # TODO: use volume_view.colormap_is_indicator
-        uoc = vol.uses_overlay_colormap
-        # print("svv uoc", uoc)
+        ind = volume_view.colormap_is_indicator
+        # print("svv ind", ind)
         tex3d = self.tex3d
-        if uoc:
+        if ind:
             tex3d.setMagnificationFilter(QOpenGLTexture.Nearest)
             tex3d.setMinificationFilter(QOpenGLTexture.Nearest)
         else:

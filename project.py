@@ -124,6 +124,7 @@ class ProjectView:
             vv['opacity'] = vol.opacity
             vv['colormap_name'] = vol.colormap_name
             vv['colormap_range'] = vol.colormap_range
+            vv['colormap_is_indicator'] = vol.colormap_is_indicator
             vvs[vol.volume.name] = vv
         info['volumes'] = vvs
 
@@ -191,6 +192,8 @@ class ProjectView:
                     vv.opacity = vinfo['opacity']
                 if 'colormap_range' in vinfo:
                     vv.colormap_range = vinfo['colormap_range']
+                if 'colormap_is_indicator' in vinfo:
+                    vv.colormap_is_indicator = vinfo['colormap_is_indicator']
                 if 'colormap_name' in vinfo:
                     vv.colormap_name = vinfo['colormap_name']
                 vv.setColormap()

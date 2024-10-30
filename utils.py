@@ -197,6 +197,8 @@ class Utils:
                     vmax = index_range[1]
             imin = int(vmin*lutsize+.5)
             imax = int(vmax*lutsize-.5)
+            imin = int(vmin*lutsize)
+            imax = int(vmax*lutsize)
             '''
             if cmap_name == "kh_encoded_555":
                 self.lut[:32768, 0:3] = np.linspace(0., 1., 32768)[:, np.newaxis]
@@ -220,7 +222,9 @@ class Utils:
             # contain a few colors).
             cm = cmap.Colormap(cmap_name, interpolation="linear")
             cmlut = cm.lut(N=(imax-imin+1))
-            print(imin,imax,cmlut.shape)
+            # print(imin,imax,cmlut.shape)
+            # print(cmlut[0], cmlut[-1])
+            # print(cmlut)
             self.lut[imin:(imax+1)] = cmlut
             self.lut[imin:(imax+1), 3] = alpha
 

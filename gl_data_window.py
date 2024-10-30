@@ -709,12 +709,13 @@ slice_code = {
       #version 410 core
 
       uniform sampler2D base_sampler;
-      uniform int use_colormap_sampler = 0;
+      // uniform int use_colormap_sampler = 0;
+      uniform int colormap_sampler_size = 0;
       uniform sampler2D colormap_sampler;
 
       uniform sampler2D overlay_samplers[2];
       uniform float overlay_alphas[2];
-      uniform int overlay_use_colormap_samplers[2];
+      uniform int overlay_colormap_sampler_sizes[2];
       uniform sampler1D overlay_colormap_samplers[2];
       // uniform uint overlay_min_values[2];
       // uniform uint overlay_max_values[2];
@@ -750,16 +751,13 @@ slice_code = {
                 fColor[2] = float(ob) / 31.;
                 fColor[3] = 1.;
             }
-        } else if (use_colormap_sampler > 0) {
+        } else if (colormap_sampler_size > 0) {
             float fr = fColor[0];
-            // fr *= .999;
+            float sz = float(colormap_sampler_size);
+            // adjust to allow for peculiarities of texture coordinates
+            fr = .5/sz + fr*(sz-1)/sz;
             vec2 ftx = vec2(fr, .5);
             fColor = texture(colormap_sampler, ftx);
-            /*
-            if (fr == 1.0) {
-                fColor = vec4(1.,0.,0.,1.);
-            }
-            */
         } else {
             float fr = fColor[0];
             fColor = vec4(fr, fr, fr, 1.);
@@ -1283,7 +1281,7 @@ class ColormapTexture:
         self.timestamp = 0
         self.tex = None
         self.update()
-        print("created ColormapTexture")
+        # print("created ColormapTexture")
 
     # update texture (do nothing if texture is already up to date)
     def update(self):
@@ -1291,16 +1289,16 @@ class ColormapTexture:
         if self.timestamp != vv.colormap_lut_timestamp:
             print(self.timestamp, vv.colormap_lut_timestamp)
             self.tex = self.textureFromLut(self.volume_view.colormap_lut)
-            print("update self.tex", self.tex)
+            # print("update self.tex", self.tex)
             self.timestamp = vv.colormap_lut_timestamp
 
     # create and return texture from lut, 
     # or return None if no lut
     @staticmethod
     def textureFromLut(lut):
-        print("textureFromLut")
+        # print("textureFromLut")
         if lut is None:
-            print(" returning None")
+            # print(" returning None")
             return None
         # OpenGL 4.1 does not support 1D textures!  They were
         # added in OpenGL 4.2.
@@ -1310,7 +1308,7 @@ class ColormapTexture:
         # https://doc.qt.io/qt-5/qopengltexture.html#TextureFormat-enum 
         # as argument (TextureFormat is not to be confused with PixelFormat)
         tex.setFormat(QOpenGLTexture.RGBA32F)
-        print("lut", lut.shape, lut.size, lut.dtype, lut[0], lut[-1])
+        # print("lut", lut.shape, lut.size, lut.dtype, lut[0], lut[-1])
         # tex.setSize(512,1)
         tex.setSize(lut.shape[0],1)
         tex.setMipLevels(1)
@@ -1327,6 +1325,8 @@ class ColormapTexture:
                         QOpenGLTexture.ClampToEdge)
         tex.setMagnificationFilter(QOpenGLTexture.Linear)
         tex.setMinificationFilter(QOpenGLTexture.Linear)
+        # tex.setMagnificationFilter(QOpenGLTexture.Nearest)
+        # tex.setMinificationFilter(QOpenGLTexture.Nearest)
         return tex
         '''
             imm = img.mirrored()
@@ -1368,7 +1368,7 @@ class GLDataWindowChild(QOpenGLWidget):
         #         volume_view, ColormapTexture(volume_view))
         if volume_view not in self.colormap_textures:
             cmt = ColormapTexture(volume_view)
-            print("created cmt", cmt.tex)
+            # print("created cmt", cmt.tex)
             self.colormap_textures[volume_view] = cmt
         else:
             cmt = self.colormap_textures[volume_view]
@@ -1377,7 +1377,7 @@ class GLDataWindowChild(QOpenGLWidget):
     def clearOldColormapTextures(self):
         pv = self.gldw.window.project_view
         if pv != self.prev_pv:
-            print("clearing textures")
+            # print("clearing textures")
             self.colormap_textures = {}
             self.prev_pv = pv
         '''
@@ -2081,7 +2081,7 @@ class GLDataWindowChild(QOpenGLWidget):
 
         cmtex = self.getColormapTexture(volume_view)
         if cmtex is None:
-            self.slice_program.setUniformValue("use_colormap_sampler", 0)
+            self.slice_program.setUniformValue("colormap_sampler_size", 0)
         else:
             cloc = self.slice_program.uniformLocation("colormap_sampler")
             tunit += 1
@@ -2089,7 +2089,7 @@ class GLDataWindowChild(QOpenGLWidget):
             cmtex.bind()
             self.slice_program.setUniformValue(cloc, tunit)
             # print("using colormap sampler")
-            self.slice_program.setUniformValue("use_colormap_sampler", 1)
+            self.slice_program.setUniformValue("colormap_sampler_size", cmtex.width())
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
@@ -2185,7 +2185,7 @@ class GLDataWindowChild(QOpenGLWidget):
         if not ok:
             print(name, "link failed")
             exit()
-        print("program", name, program.programId())
+        # print("program", name, program.programId())
         return program
 
     def buildPrograms(self):
