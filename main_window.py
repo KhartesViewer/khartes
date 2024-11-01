@@ -2759,6 +2759,10 @@ class MainWindow(QMainWindow):
                 cur_volume = list(spv.keys())[0]
         # print("setting volume")
         self.setVolume(cur_volume, no_notify=True)
+        for i, ovv in enumerate(pv.overlay_volume_views):
+            if ovv is None:
+                continue
+            self.setOverlay(i, ovv.volume, no_notify=True)
         # print("volume set")
         # intentionally called a second time to use
         # cur_volume information to set fragment view volume
@@ -3107,6 +3111,8 @@ class MainWindow(QMainWindow):
         if self.project_view == None:
             return
         self.setVolume(None, no_notify=True)
+        for i in range(ProjectView.overlay_count):
+            self.setOverlay(i, None, no_notify=True)
         self.live_zsurf_update = True
         self.live_zsurf_update_button.setChecked(self.live_zsurf_update)
         self.setFragments()
@@ -3153,6 +3159,8 @@ class MainWindow(QMainWindow):
         project_view = ProjectView(project)
         self.setProjectView(project_view)
         self.setVolume(None, no_notify=True)
+        for i in range(ProjectView.overlay_count):
+            self.setOverlay(i, None, no_notify=True)
         self.setFragments()
         # self.setCurrentFragment(None)
         self.drawSlices()

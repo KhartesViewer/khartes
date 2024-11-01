@@ -709,29 +709,62 @@ slice_code = {
       #version 410 core
 
       uniform sampler2D base_sampler;
-      // uniform int use_colormap_sampler = 0;
-      uniform int colormap_sampler_size = 0;
-      uniform sampler2D colormap_sampler;
+      uniform float base_alpha;
+      uniform int base_colormap_sampler_size = 0;
+      uniform sampler2D base_colormap_sampler;
+      uniform int base_uses_overlay_colormap = 0;
 
       uniform sampler2D overlay_samplers[2];
       uniform float overlay_alphas[2];
       uniform int overlay_colormap_sampler_sizes[2];
-      uniform sampler1D overlay_colormap_samplers[2];
-      // uniform uint overlay_min_values[2];
-      // uniform uint overlay_max_values[2];
+      uniform sampler2D overlay_colormap_samplers[2];
+      uniform int overlay_uses_overlay_colormaps[2];
 
       uniform sampler2D underlay_sampler;
       uniform sampler2D top_label_sampler;
       uniform sampler2D fragments_sampler;
       // uniform float frag_opacity = 1.;
-      uniform int uses_overlay_colormap = 0;
       in vec2 ftxt;
       out vec4 fColor;
+
+      void colormapper(in vec4 pixel, in int uoc, in int css, in sampler2D colormap, out vec4 result) {
+        if (uoc > 0) {
+            float fr = pixel[0];
+            uint ir = uint(fr*65535.);
+            if ((ir & uint(32768)) == 0) {
+                // pixel *= 2.;
+                float gray = pixel[0]*2.;
+                result = vec4(gray, gray, gray, 1.);
+            } else {
+                uint ob = ir & uint(31);
+                // ob = ir & uint(31);
+                ir >>= 5;
+                uint og = ir & uint(31);
+                ir >>= 5;
+                uint or = ir & uint(31);
+                result[0] = float(or) / 31.;
+                result[1] = float(og) / 31.;
+                result[2] = float(ob) / 31.;
+                result[3] = 1.;
+            }
+        } else if (css > 0) {
+            float fr = pixel[0];
+            float sz = float(css);
+            // adjust to allow for peculiarities of texture coordinates
+            fr = .5/sz + fr*(sz-1)/sz;
+            vec2 ftx = vec2(fr, .5);
+            result = texture(colormap, ftx);
+        } else {
+            float fr = pixel[0];
+            result = vec4(fr, fr, fr, 1.);
+        }
+      }
 
       void main()
       {
         float alpha;
         fColor = texture(base_sampler, ftxt);
+        /*
         if (uses_overlay_colormap > 0) {
             float fr = fColor[0];
             uint ir = uint(fr*65535.);
@@ -762,17 +795,26 @@ slice_code = {
             float fr = fColor[0];
             fColor = vec4(fr, fr, fr, 1.);
         }
+        */
+        vec4 result;
+        colormapper(fColor, base_uses_overlay_colormap, base_colormap_sampler_size, base_colormap_sampler, result);
+        fColor = result;
 
-        /*
         for (int i=0; i<2; i++) {
             float oalpha = overlay_alphas[i];
             if (oalpha == 0.) continue;
             vec4 oColor = texture(overlay_samplers[i], ftxt);
-            float fo = oColor[0];
-            vec4 foRgba = vec4(fo, fo, fo, 1.);
-            fColor = (1.-oalpha)*fColor + oalpha*foRgba;
+            vec4 result;
+            colormapper(oColor, overlay_uses_overlay_colormaps[i], overlay_colormap_sampler_sizes[i], overlay_colormap_samplers[i], result);
+            oalpha *= result[3];
+            fColor = (1.-oalpha)*fColor + oalpha*result;
+            // fColor = result;
+            // int overlay_colormap_sampler_sizes[2];
+            // uniform sampler1D overlay_colormap_samplers[2];
+            // float fo = oColor[0];
+            // vec4 foRgba = vec4(fo, fo, fo, 1.);
+            // fColor = (1.-oalpha)*fColor + oalpha*foRgba;
         }
-        */
 
         vec4 uColor = texture(underlay_sampler, ftxt);
         alpha = uColor.a;
@@ -2037,6 +2079,100 @@ class GLDataWindowChild(QOpenGLWidget):
             pass
     '''
 
+    '''
+      uniform sampler2D base_sampler;
+      uniform float base_alpha;
+      uniform int base_colormap_sampler_size = 0;
+      uniform sampler2D base_colormap_sampler;
+      uniform int base_uses_overlay_colormap = 0;
+    '''
+
+    # returns unit (possibly incremented) for use
+    # by caller; returns texture in order to make sure
+    # that the texture is not deleted before it is used.
+    def setTextureOfSlice(self, volume_view, ijktf, unit, 
+                          # sampler_name, uoc_name, css_size_name, cm_sampler_name
+                          prefix, suffix
+                          ):
+
+        alpha_name = prefix+"_alpha"+suffix
+        # "base_alpha" is not used in the shader code (even though
+        # it is declared), so aloc for base_alpha is negative.
+        aloc = self.slice_program.uniformLocation(alpha_name)
+        # if volume_view is None, set "_alpha" to 0., and return
+        if volume_view is None:
+            if aloc >= 0:
+                self.slice_program.setUniformValue(aloc, 0.0)
+            return unit, None
+
+        dw = self.gldw
+        f = self.gl
+        # viewing window width
+        ww = self.size().width()
+        wh = self.size().height()
+        # TODO: need 1 or 4
+        data_slice = np.zeros((wh,ww,1), dtype=np.uint16)
+        zarr_max_width = dw.getZarrMaxWidth()
+        axis = dw.axis
+        zoom = dw.getZoom()
+        paint_result = volume_view.paintSlice(
+                data_slice, axis, ijktf, zoom, zarr_max_width)
+        # print(axis, ijktf, zoom, zarr_max_width)
+        # print("res", paint_result)
+        # TODO: 
+        tex = self.texFromData(data_slice[:,:,0], QImage.Format_Grayscale16)
+
+        sampler_name = prefix+"_sampler"+suffix
+        loc = self.slice_program.uniformLocation(sampler_name)
+        # print(ww,wh,loc,unit)
+        if loc < 0:
+            print("setTextureOfSlice: couldn't get loc for", sampler_name)
+            return unit, None
+
+        f.glActiveTexture(f.GL_TEXTURE0+unit)
+        tex.bind()
+        self.slice_program.setUniformValue(loc, unit)
+        unit += 1
+
+        opacity = volume_view.opacity
+        if aloc >= 0:
+            # print("setTextureOfSlice: couldn't get aloc for", alpha_name)
+            # return unit, None
+            self.slice_program.setUniformValue(aloc, opacity)
+
+        uoc = 0
+        if volume_view.volume.uses_overlay_colormap:
+            uoc = 1
+        uoc_name = prefix+"_uses_overlay_colormap"+suffix
+        uloc = self.slice_program.uniformLocation(uoc_name)
+        if uloc < 0:
+            print("setTextureOfSlice: couldn't get uloc for", uoc_name)
+            return unit, tex
+        self.slice_program.setUniformValue(uloc, uoc)
+
+        css_size_name = prefix+"_colormap_sampler_size"+suffix
+        csloc = self.slice_program.uniformLocation(css_size_name)
+        if csloc < 0:
+            print("setTextureOfSlice: couldn't get csloc for", css_size_name)
+            return unit, tex
+        cm_sampler_name = prefix+"_colormap_sampler"+suffix
+        cmloc = self.slice_program.uniformLocation(cm_sampler_name)
+        if cmloc < 0:
+            print("setTextureOfSlice: couldn't get cmloc for", cm_sampler_name)
+            return unit, tex
+        cmtex = self.getColormapTexture(volume_view)
+        if cmtex is None:
+            self.slice_program.setUniformValue(csloc, 0)
+        else:
+            f.glActiveTexture(f.GL_TEXTURE0+unit)
+            cmtex.bind()
+            self.slice_program.setUniformValue(cmloc, unit)
+            # print("using colormap sampler")
+            self.slice_program.setUniformValue(csloc, cmtex.width())
+            unit += 1
+
+        return unit, tex
+
     def paintSlice(self):
         dw = self.gldw
         volume_view = dw.volume_view
@@ -2047,9 +2183,10 @@ class GLDataWindowChild(QOpenGLWidget):
         # viewing window width
         ww = self.size().width()
         wh = self.size().height()
+        '''
         # viewing window half width
-        whw = ww//2
-        whh = wh//2
+        # whw = ww//2
+        # whh = wh//2
 
         # data_slice = np.zeros((wh,ww), dtype=np.uint16)
         # TODO: need 1 or 4
@@ -2074,6 +2211,8 @@ class GLDataWindowChild(QOpenGLWidget):
         base_tex.bind()
         self.slice_program.setUniformValue(bloc, tunit)
 
+        '''
+        '''
         uoc = 0
         if volume_view.volume.uses_overlay_colormap:
             uoc = 1
@@ -2090,6 +2229,17 @@ class GLDataWindowChild(QOpenGLWidget):
             self.slice_program.setUniformValue(cloc, tunit)
             # print("using colormap sampler")
             self.slice_program.setUniformValue("colormap_sampler_size", cmtex.width())
+        '''
+        ijktf = volume_view.ijktf
+        tunit = 1
+        saved_texs = []
+        tunit, btex = self.setTextureOfSlice(volume_view, ijktf, tunit, "base", "")
+        saved_texs.append(btex)
+        for i, ovv in enumerate(dw.overlay_volume_views):
+            prefix = "overlay"
+            suffix = "s[%d]"%i
+            tunit, otex = self.setTextureOfSlice(ovv, ijktf, tunit, prefix, suffix)
+            saved_texs.append(otex)
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
