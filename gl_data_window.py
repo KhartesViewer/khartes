@@ -2088,24 +2088,9 @@ class GLDataWindowChild(QOpenGLWidget):
       uniform int base_uses_overlay_colormap = 0;
     '''
 
-    # returns unit (possibly incremented) for use
-    # by caller; returns texture in order to make sure
-    # that the texture is not deleted before it is used.
-    def setTextureOfSlice(self, volume_view, ijktf, unit, 
-                          # sampler_name, uoc_name, css_size_name, cm_sampler_name
-                          prefix, suffix
-                          ):
-
-        alpha_name = prefix+"_alpha"+suffix
-        # "base_alpha" is not used in the shader code (even though
-        # it is declared), so aloc for base_alpha is negative.
-        aloc = self.slice_program.uniformLocation(alpha_name)
-        # if volume_view is None, set "_alpha" to 0., and return
+    def createTextureFromVolumeView(self, volume_view, ijktf):
         if volume_view is None:
-            if aloc >= 0:
-                self.slice_program.setUniformValue(aloc, 0.0)
-            return unit, None
-
+            return None
         dw = self.gldw
         f = self.gl
         # viewing window width
@@ -2122,23 +2107,63 @@ class GLDataWindowChild(QOpenGLWidget):
         # print("res", paint_result)
         # TODO: 
         tex = self.texFromData(data_slice[:,:,0], QImage.Format_Grayscale16)
+        return tex
+
+    # returns unit (possibly incremented) for use
+    # by caller; returns texture in order to make sure
+    # that the texture is not deleted before it is used.
+    def setTextureOfSlice(self, tex_id, volume_view, unit, 
+                          # def setTextureOfSlice(self, volume_view, ijktf, unit, 
+                          # sampler_name, uoc_name, css_size_name, cm_sampler_name
+                          prefix, suffix
+                          ):
+
+        alpha_name = prefix+"_alpha"+suffix
+        # "base_alpha" is not used in the shader code (even though
+        # it is declared), so aloc for base_alpha is negative.
+        aloc = self.slice_program.uniformLocation(alpha_name)
+        # if volume_view is None, set "_alpha" to 0., and return
+        if volume_view is None:
+            if aloc >= 0:
+                self.slice_program.setUniformValue(aloc, 0.0)
+            return unit
+
+        dw = self.gldw
+        f = self.gl
+        '''
+        # viewing window width
+        ww = self.size().width()
+        wh = self.size().height()
+        # TODO: need 1 or 4
+        data_slice = np.zeros((wh,ww,1), dtype=np.uint16)
+        zarr_max_width = dw.getZarrMaxWidth()
+        axis = dw.axis
+        zoom = dw.getZoom()
+        paint_result = volume_view.paintSlice(
+                data_slice, axis, ijktf, zoom, zarr_max_width)
+        # print(axis, ijktf, zoom, zarr_max_width)
+        # print("res", paint_result)
+        # TODO: 
+        tex = self.texFromData(data_slice[:,:,0], QImage.Format_Grayscale16)
+        '''
 
         sampler_name = prefix+"_sampler"+suffix
         loc = self.slice_program.uniformLocation(sampler_name)
         # print(ww,wh,loc,unit)
         if loc < 0:
             print("setTextureOfSlice: couldn't get loc for", sampler_name)
-            return unit, None
+            return unit
 
         f.glActiveTexture(f.GL_TEXTURE0+unit)
-        tex.bind()
+        # tex.bind()
+        f.glBindTexture(f.GL_TEXTURE_2D, tex_id)
         self.slice_program.setUniformValue(loc, unit)
         unit += 1
 
         opacity = volume_view.opacity
         if aloc >= 0:
             # print("setTextureOfSlice: couldn't get aloc for", alpha_name)
-            # return unit, None
+            # return unit
             self.slice_program.setUniformValue(aloc, opacity)
 
         uoc = 0
@@ -2148,19 +2173,19 @@ class GLDataWindowChild(QOpenGLWidget):
         uloc = self.slice_program.uniformLocation(uoc_name)
         if uloc < 0:
             print("setTextureOfSlice: couldn't get uloc for", uoc_name)
-            return unit, tex
+            return unit
         self.slice_program.setUniformValue(uloc, uoc)
 
         css_size_name = prefix+"_colormap_sampler_size"+suffix
         csloc = self.slice_program.uniformLocation(css_size_name)
         if csloc < 0:
             print("setTextureOfSlice: couldn't get csloc for", css_size_name)
-            return unit, tex
+            return unit
         cm_sampler_name = prefix+"_colormap_sampler"+suffix
         cmloc = self.slice_program.uniformLocation(cm_sampler_name)
         if cmloc < 0:
             print("setTextureOfSlice: couldn't get cmloc for", cm_sampler_name)
-            return unit, tex
+            return unit
         cmtex = self.getColormapTexture(volume_view)
         if cmtex is None:
             self.slice_program.setUniformValue(csloc, 0)
@@ -2172,7 +2197,7 @@ class GLDataWindowChild(QOpenGLWidget):
             self.slice_program.setUniformValue(csloc, cmtex.width())
             unit += 1
 
-        return unit, tex
+        return unit
 
     def paintSlice(self):
         dw = self.gldw
@@ -2234,12 +2259,17 @@ class GLDataWindowChild(QOpenGLWidget):
         ijktf = volume_view.ijktf
         tunit = 1
         saved_texs = []
-        tunit, btex = self.setTextureOfSlice(volume_view, ijktf, tunit, "base", "")
+        btex = self.createTextureFromVolumeView(volume_view, ijktf)
+        tunit = self.setTextureOfSlice(btex.textureId(), volume_view, tunit, "base", "")
         saved_texs.append(btex)
         for i, ovv in enumerate(dw.overlay_volume_views):
             prefix = "overlay"
             suffix = "s[%d]"%i
-            tunit, otex = self.setTextureOfSlice(ovv, ijktf, tunit, prefix, suffix)
+            otex = self.createTextureFromVolumeView(ovv, ijktf)
+            tid = -1
+            if otex is not None:
+                tid = otex.textureId()
+            tunit = self.setTextureOfSlice(tid, ovv, tunit, prefix, suffix)
             saved_texs.append(otex)
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)

@@ -1004,6 +1004,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         self.slice_program.bind()
         base_tex = self.data_fbo.texture()
+        '''
         bloc = self.slice_program.uniformLocation("base_sampler")
         if bloc < 0:
             print("couldn't get loc for base sampler")
@@ -1030,6 +1031,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             self.slice_program.setUniformValue(cloc, tunit)
             # print("using colormap sampler")
             self.slice_program.setUniformValue("base_colormap_sampler_size", cmtex.width())
+        '''
+        tunit = 1
+        tunit = self.setTextureOfSlice(base_tex, volume_view, tunit, "base", "")
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
