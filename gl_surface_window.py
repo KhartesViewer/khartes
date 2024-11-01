@@ -64,6 +64,7 @@ def VoidPtr(i):
 
 from utils import Utils
 from data_window import DataWindow
+from project import ProjectView
 from gl_data_window import (
         GLDataWindowChild, 
         ColormapTexture,
@@ -398,26 +399,63 @@ slice_code = {
 
       uniform sampler2D base_sampler;
       // uniform int use_colormap_sampler = 0;
-      uniform int colormap_sampler_size = 0;
-      uniform sampler2D colormap_sampler;
+      // NOTE: base_alpha is not currently used
+      uniform float base_alpha;
+      uniform int base_colormap_sampler_size = 0;
+      uniform sampler2D base_colormap_sampler;
+      uniform int base_uses_overlay_colormap = 0;
 
       uniform sampler2D overlay_samplers[2];
       uniform float overlay_alphas[2];
       uniform int overlay_colormap_sampler_sizes[2];
-      uniform sampler1D overlay_colormap_samplers[2];
+      uniform sampler2D overlay_colormap_samplers[2];
+      uniform int overlay_uses_overlay_colormaps[2];
       
       uniform sampler2D underlay_sampler;
       uniform sampler2D top_label_sampler;
       uniform sampler2D trgls_sampler;
-      uniform int uses_overlay_colormap = 0;
       in vec2 ftxt;
       out vec4 fColor;
+
+      void colormapper(in vec4 pixel, in int uoc, in int css, in sampler2D colormap, out vec4 result) {
+        if (uoc > 0) {
+            float fr = pixel[0];
+            uint ir = uint(fr*65535.);
+            if ((ir & uint(32768)) == 0) {
+                // pixel *= 2.;
+                float gray = pixel[0]*2.;
+                result = vec4(gray, gray, gray, 1.);
+            } else {
+                uint ob = ir & uint(31);
+                // ob = ir & uint(31);
+                ir >>= 5;
+                uint og = ir & uint(31);
+                ir >>= 5;
+                uint or = ir & uint(31);
+                result[0] = float(or) / 31.;
+                result[1] = float(og) / 31.;
+                result[2] = float(ob) / 31.;
+                result[3] = 1.;
+            }
+        } else if (css > 0) {
+            float fr = pixel[0];
+            float sz = float(css);
+            // adjust to allow for peculiarities of texture coordinates
+            fr = .5/sz + fr*(sz-1)/sz;
+            vec2 ftx = vec2(fr, .5);
+            result = texture(colormap, ftx);
+        } else {
+            float fr = pixel[0];
+            result = vec4(fr, fr, fr, 1.);
+        }
+      }
 
       void main()
       {
         float alpha;
         fColor = texture(base_sampler, ftxt);
-        if (uses_overlay_colormap > 0) {
+        /*
+        if (base_uses_overlay_colormap > 0) {
             float fr = fColor[0];
             uint ir = uint(fr*65535.);
             if ((ir & uint(32768)) == 0) {
@@ -437,14 +475,29 @@ slice_code = {
                 fColor[3] = 1.;
             }
 
-        } else if (colormap_sampler_size > 0) {
+        } else if (base_colormap_sampler_size > 0) {
             float fr = fColor[0];
-            float sz = float(colormap_sampler_size);
+            float sz = float(base_colormap_sampler_size);
             fr = .5/sz + fr*(sz-1)/sz;
             vec2 ftx = vec2(fr, .5);
-            fColor = texture(colormap_sampler, ftx);
+            fColor = texture(base_colormap_sampler, ftx);
         }
+        */
 
+        vec4 result;
+        colormapper(fColor, base_uses_overlay_colormap, base_colormap_sampler_size, base_colormap_sampler, result);
+        fColor = result;
+
+        for (int i=0; i<2; i++) {
+            float oalpha = overlay_alphas[i];
+            if (oalpha == 0.) continue;
+            vec4 oColor = texture(overlay_samplers[i], ftxt);
+            vec4 result;
+            colormapper(oColor, overlay_uses_overlay_colormaps[i], overlay_colormap_sampler_sizes[i], overlay_colormap_samplers[i], result);
+            oalpha *= result[3];
+            fColor = (1.-oalpha)*fColor + oalpha*result;
+        }
+        
         vec4 uColor = texture(underlay_sampler, ftxt);
         alpha = uColor.a;
         fColor = (1.-alpha)*fColor + alpha*uColor;
@@ -675,6 +728,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.volume_view_direction = -1
         self.active_fragment = None
         self.atlas = None
+        self.overlay_atlases = ProjectView.overlay_count*[None]
         self.active_vao = None
         self.data_fbo = None
         self.xyz_fbo = None
@@ -757,7 +811,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.setDefaultViewport()
         
     def paintGL(self):
-        self.checkAtlas()
+        self.checkAtlases()
         if self.volume_view is None:
             return
 
@@ -782,7 +836,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
     # Rebuild atlas if volume_view or volume_view.direction
     # changes
-    def checkAtlas(self):
+    def checkAtlases(self):
         dw = self.gldw
         if dw.volume_view is None:
             self.volume_view = None
@@ -963,19 +1017,19 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         uoc = 0
         if volume_view.volume.uses_overlay_colormap:
             uoc = 1
-        self.slice_program.setUniformValue("uses_overlay_colormap", uoc)
+        self.slice_program.setUniformValue("base_uses_overlay_colormap", uoc)
 
         cmtex = self.getColormapTexture(volume_view)
         if cmtex is None:
-            self.slice_program.setUniformValue("colormap_sampler_size", 0)
+            self.slice_program.setUniformValue("base_colormap_sampler_size", 0)
         else:
-            cloc = self.slice_program.uniformLocation("colormap_sampler")
+            cloc = self.slice_program.uniformLocation("base_colormap_sampler")
             tunit += 1
             f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
             cmtex.bind()
             self.slice_program.setUniformValue(cloc, tunit)
             # print("using colormap sampler")
-            self.slice_program.setUniformValue("colormap_sampler_size", cmtex.width())
+            self.slice_program.setUniformValue("base_colormap_sampler_size", cmtex.width())
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)

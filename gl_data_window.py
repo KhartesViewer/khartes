@@ -709,6 +709,7 @@ slice_code = {
       #version 410 core
 
       uniform sampler2D base_sampler;
+      // NOTE: base_alpha is not currently used
       uniform float base_alpha;
       uniform int base_colormap_sampler_size = 0;
       uniform sampler2D base_colormap_sampler;
