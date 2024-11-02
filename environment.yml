@@ -11,3 +11,7 @@ dependencies:
   - scipy
   - pynrrd
   - rectpack
+  - pyopengl
+  - requests
+  - aiohttp
+  - fsspec
