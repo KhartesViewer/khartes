@@ -2125,6 +2125,7 @@ class GLDataWindowChild(QOpenGLWidget):
         # if volume_view is None, set "_alpha" to 0., and return
         if volume_view is None:
             if aloc >= 0:
+                # print(aloc)
                 self.slice_program.setUniformValue(aloc, 0.0)
             return unit
 

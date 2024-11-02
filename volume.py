@@ -1191,10 +1191,13 @@ class Volume():
         whw = ww//2
         whh = wh//2
         il, jl = self.ijIndexesInPlaneOfSlice(axis)
-        fi, fj = ijkt[il], ijkt[jl]
+        fi, fj, fk = ijkt[il], ijkt[jl], ijkt[axis]
         # slice width, height
         sw = data.shape[2-il]
         sh = data.shape[2-jl]
+        sd = data.shape[2-axis]
+        if fk < 0 or fk >= sd:
+            return True
         '''
         test = self.getSliceInRange(
                 slice(0,None), slice(0,None), 0, 

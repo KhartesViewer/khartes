@@ -347,6 +347,8 @@ class GLSurfaceWindow(DataWindow):
         return ((stxy[0]-dx,stxy[1]-dy),(stxy[0]+dx,stxy[1]+dy))
 
     # overrides version in DataWindow
+    # Used to set image on fragment; this is called
+    # when exporting fragment to obj file with texture.
     def setMapImage(self, fv):
         print("GLSW setMapImage")
         if fv is None:
@@ -357,7 +359,7 @@ class GLSurfaceWindow(DataWindow):
             return
         if self.volume_view.stxytf is None:
             return
-        fbo = self.glw.data_fbo
+        fbo = self.glw.base_data_fbo
         if fbo is None:
             return
         # This is a QImage
@@ -724,13 +726,17 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.message_prefix = "sw"
         # Cache these so we can recalculate the atlas 
         # whenever volume_view or volume_view.direction change
+        self.overlay_count = ProjectView.overlay_count
         self.volume_view =  None
         self.volume_view_direction = -1
+        self.overlay_volume_views = self.overlay_count*[None]
+        self.overlay_volume_view_directions = self.overlay_count*[-1]
         self.active_fragment = None
         self.atlas = None
-        self.overlay_atlases = ProjectView.overlay_count*[None]
+        self.overlay_atlases = self.overlay_count*[None]
         self.active_vao = None
-        self.data_fbo = None
+        self.base_data_fbo = None
+        self.overlay_data_fbos = self.overlay_count*[None]
         self.xyz_fbo = None
         self.xyz_pbo = None
         self.xyz_arr = None
@@ -791,11 +797,24 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # fbo where the data will be drawn
         fbo_format = QOpenGLFramebufferObjectFormat()
         fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
+        # TODO
         fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
-        self.data_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
-        self.data_fbo.bind()
+        self.base_data_fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
+        self.base_data_fbo.bind()
         draw_buffers = (pygl.GL_COLOR_ATTACHMENT0,)
         f.glDrawBuffers(len(draw_buffers), draw_buffers)
+
+        for i in range(self.overlay_count):
+            # fbo where a data overlay will be drawn
+            fbo_format = QOpenGLFramebufferObjectFormat()
+            fbo_format.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
+            # TODO
+            fbo_format.setInternalTextureFormat(pygl.GL_RGBA16)
+            fbo = QOpenGLFramebufferObject(vp_size, fbo_format)
+            fbo.bind()
+            draw_buffers = (pygl.GL_COLOR_ATTACHMENT0,)
+            f.glDrawBuffers(len(draw_buffers), draw_buffers)
+            self.overlay_data_fbos[i] = fbo
 
         # fbo where vertices and wireframe triangles will be drawn 
         fbo_format = QOpenGLFramebufferObjectFormat()
@@ -834,6 +853,29 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.trgl_pts_program = self.buildProgram(trgl_pts_code)
         self.fragment_trgls_program = self.buildProgram(fragment_trgls_code)
 
+
+    def createAtlas(self, volume_view, aunit):
+        if volume_view is None:
+            return None
+        aw,ah,ad = (2048,2048,400)
+        # aw,ah,ad = (2048,2048,200)
+        # TODO: for testing
+        # ad = 150
+        if self.atlas_chunk_size < 65:
+            ad = 70
+        # Loop to determine how much GPU memory can
+        # be allocated by Atlas.  If initial allocation
+        # fails, keep reducing the dimensions until
+        # it fits into memory.
+        atlas = None
+        while True:
+            print("creating atlas with dimensions",aw,ah,ad)
+            atlas = Atlas(volume_view, self.gl, self.logger, aunit, tex3dsz=(aw,ah,ad), chunk_size=self.atlas_chunk_size)
+            if atlas.valid:
+                break
+            aw = (aw*3)//4
+        return atlas
+
     # Rebuild atlas if volume_view or volume_view.direction
     # changes
     def checkAtlases(self):
@@ -850,6 +892,17 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             # is loaded!
             if self.atlas is not None:
                 self.atlas.setVolumeView(None)
+                self.atlas = None
+
+        for i in range(self.overlay_count):
+            if dw.overlay_volume_views[i] is None:
+                self.overlay_volume_views[i] = None
+                self.overlay_volume_view_directions[i] = -1
+                if self.overlay_atlases[i] is not None:
+                    self.overlay_atlases[i].setVolumeView(None)
+                    self.overlay_atlases[i] = None
+
+        if dw.volume_view is None:
             return
         pv = dw.window.project_view
         mfv = None
@@ -860,6 +913,9 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if self.volume_view != dw.volume_view or self.volume_view_direction != self.volume_view.direction :
             self.volume_view = dw.volume_view
             self.volume_view_direction = self.volume_view.direction
+            self.atlas = self.createAtlas(self.volume_view, 0)
+            # self.atlas.setVolumeView(self.volume_view)
+            '''
             # TODO: for testing!
             self.atlas = None
             if self.atlas is None:
@@ -880,6 +936,14 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                     aw = (aw*3)//4
             else:
                 self.atlas.setVolumeView(self.volume_view)
+            '''
+        for i in range(self.overlay_count):
+            if dw.overlay_volume_views[i] is None:
+                continue
+            if self.overlay_volume_views[i] != dw.overlay_volume_views[i] or self.overlay_volume_view_directions[i] != self.overlay_volume_views[i].direction :
+                self.overlay_volume_views[i] = dw.overlay_volume_views[i]
+                self.overlay_volume_view_directions[i] = dw.overlay_volume_views[i].direction
+                self.overlay_atlases[i] = self.createAtlas(self.overlay_volume_views[i], 1+i)
 
 
     def drawUnderlays(self, data):
@@ -980,6 +1044,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                 if len(larr) >= self.atlas.max_nchunks-1:
                     larr = larr[:self.atlas.max_nchunks-1]
                 self.atlas.addBlocks(larr, dw.window.zarrFutureDoneCallback)
+                for atlas in self.overlay_atlases:
+                    if atlas is None:
+                        continue
+                    atlas.addBlocks(larr, dw.window.zarrFutureDoneCallback)
                 overlay_label_text += "  Zoom Level: %d  Chunks: %d"%(zoom_level, len(larr))
                 timera.time("add blocks")
 
@@ -993,6 +1061,10 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # from RAM, in the background.  See comments in addBlocks
         # for more details
         self.atlas.loadTexturesFromPbos(dw.window.zarrFutureDoneCallback)
+        for atlas in self.overlay_atlases:
+            if atlas is None:
+                continue
+            atlas.loadTexturesFromPbos(dw.window.zarrFutureDoneCallback)
         timera.time("load textures")
 
         # NOTE that drawData uses the blocks added in addBlocks;
@@ -1003,7 +1075,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         vao.release()
 
         self.slice_program.bind()
-        base_tex = self.data_fbo.texture()
+        base_tex = self.base_data_fbo.texture()
         '''
         bloc = self.slice_program.uniformLocation("base_sampler")
         if bloc < 0:
@@ -1034,6 +1106,12 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         '''
         tunit = 1
         tunit = self.setTextureOfSlice(base_tex, volume_view, tunit, "base", "")
+        for i, ovv in enumerate(dw.overlay_volume_views):
+            prefix = "overlay"
+            suffix = "s[%d]"%i
+            otex = self.overlay_data_fbos[i].texture()
+            tunit = self.setTextureOfSlice(otex, ovv, tunit, prefix, suffix)
+            # print(suffix,tunit,otex)
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
@@ -1042,7 +1120,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         if uloc < 0:
             print("couldn't get loc for underlay sampler")
             return
-        tunit += 1
+        # tunit += 1
         # uunit = 2
         f.glActiveTexture(pygl.GL_TEXTURE0+tunit)
         underlay_tex.bind()
@@ -1095,13 +1173,13 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             bset.add(tuple(block))
         return bset
 
+    '''
     def getDrawnData(self):
         f = self.gl
-        fbo = self.data_fbo
+        fbo = self.base_data_fbo
         fbo.bind()
         w = fbo.width()
-
-
+    '''
 
     def getBlocks(self, fbo):
         timera = Utils.Timer()
@@ -1222,7 +1300,13 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         stxy_xform = self.stxyXform()
         # if stxy_xform is None:
         #     return
-        self.atlas.displayBlocks(self.data_fbo, self.active_vao, stxy_xform)
+        self.atlas.displayBlocks(self.base_data_fbo, self.active_vao, stxy_xform)
+        for i in range(self.overlay_count):
+            atlas = self.overlay_atlases[i]
+            if atlas is None:
+                continue
+            fbo = self.overlay_data_fbos[i]
+            atlas.displayBlocks(fbo, self.active_vao, stxy_xform)
 
     # pts are in form stxy.x, stxy.y, index
     def getPointsInStxyWindow(self, fv, xywindow):
@@ -1629,6 +1713,7 @@ class UniBuf:
         self.buffer_id = gl.glGenBuffers(1)
         gl.glBindBufferBase(gl.GL_UNIFORM_BUFFER, self.binding_point, self.buffer_id)
         self.setBuffer()
+        # print("ubo", self.data.shape, self.binding_point, self.buffer_id)
 
     def bindToShader(self, shader_id, uniform_index):
         gl = self.gl
@@ -2112,9 +2197,10 @@ class Atlas:
             self.logger.disconnect(self.connection)
 
 
-    def __init__(self, volume_view, gl, logger, tex3dsz=(2048,2048,300), chunk_size=126):
+    def __init__(self, volume_view, gl, logger, iaunit, tex3dsz=(2048,2048,300), chunk_size=126):
         print("Creating atlas")
         dcsz = (chunk_size, chunk_size, chunk_size)
+        self.valid = False
         self.gl = gl
         self.executor = ThreadPoolExecutor(max_workers=4)
         self.pbo_queue = Queue()
@@ -2154,22 +2240,25 @@ class Atlas:
 
         # for var in ["TMaxs", "TMins", "XForms", "ZChartIds"]:
         #    print(var, gl.glGetUniformBlockIndex(pid, var))
-        self.tmax_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 0)
+
+        skip = 4*iaunit
+
+        self.tmax_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), skip+0)
         loc = gl.glGetUniformBlockIndex(pid, "TMaxs")
         self.tmax_ubo.bindToShader(pid, loc)
 
-        self.tmin_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), 1)
+        self.tmin_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.float32), skip+1)
         loc = gl.glGetUniformBlockIndex(pid, "TMins")
         self.tmin_ubo.bindToShader(pid, loc)
 
-        self.xform_ubo = UniBuf(gl, np.zeros((max_nchunks, 4, 4), dtype=np.float32), 2)
+        self.xform_ubo = UniBuf(gl, np.zeros((max_nchunks, 4, 4), dtype=np.float32), skip+2)
         loc = gl.glGetUniformBlockIndex(pid, "XForms")
         self.xform_ubo.bindToShader(pid, loc)
 
         # even though data in this case could be listed as a 1D
         # array of ints, UBO layout rules require that the ints
         # be aligned every 16 bytes.
-        self.chart_id_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.int32), 3)
+        self.chart_id_ubo = UniBuf(gl, np.zeros((max_nchunks, 4), dtype=np.int32), skip+3)
         loc = gl.glGetUniformBlockIndex(pid, "ChartIds")
         self.chart_id_ubo.bindToShader(pid, loc)
 
@@ -2196,7 +2285,6 @@ class Atlas:
         # see https://stackoverflow.com/questions/23533749/difference-between-gl-r16-and-gl-r16ui
         tex3d.setFormat(QOpenGLTexture.R16_UNorm)
 
-        self.valid = False
         # MiniLogger will detect if the Qt OpenGL error logger
         # receives any error messages
         ml = self.MiniLogger(logger)
@@ -2204,7 +2292,7 @@ class Atlas:
             # This will fail if there is not enough GPU memory
             tex3d.allocateStorage()
             self.tex3d = tex3d
-            aunit = 1
+            aunit = 1+iaunit
             # If the OpenGL module is allowed to throw exceptions
             # (the default; this can be changed at the top of
             # gl_data_window.py), the out-of-memory exception
@@ -2216,9 +2304,11 @@ class Atlas:
             self.program.setUniformValue(aloc, aunit)
             gl.glActiveTexture(pygl.GL_TEXTURE0)
             tex3d.release()
+            # print(aunit, aloc, pid, tex3d.textureId())
             self.valid = True
-        except:
-            print("exception!")
+        except Exception as e:
+            print("Atlas creation exception!")
+            print(e)
             ml.close()
             pass
         if ml.message_count > 0: 
@@ -2480,11 +2570,9 @@ class Atlas:
         # (PBOs are designed to allow transferring data from
         # RAM to GPU in the background)
 
-        ''''''
         # Option 1
         self.loadPbos()
         timer.time(" to pbos")
-        ''''''
         '''
         # Option 2
         self.loadPbos()
