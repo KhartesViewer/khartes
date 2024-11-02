@@ -40,6 +40,17 @@ You should be able to run khartes simply by
 cloning the repository, making sure you have the proper dependencies
 (see [anaconda_installation.txt](anaconda_installation.txt) for a list), and then typing `python khartes.py`.
 
+#### Commands to install & launch Khartes with conda:
+```
+git clone https://github.com/KhartesViewer/khartes.git
+cd khartes
+conda env create -f environment.yml
+conda activate khartes
+python khartes.py 
+```
+
+If this doesnt work on Windows, see the anaconda_installation.txt for details.
+
 When khartes starts, it displays some explanatory text on the right-hand side of the interface
 to help you get started.  This text is fairly limited; you might want to watch the videos above to get a better
 idea how to proceed, and read the Manual/Tutorial below.
