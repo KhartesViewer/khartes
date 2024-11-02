@@ -179,6 +179,13 @@ class DataWindow(QLabel):
         tijk = self.ijToTijk(ij)
         return tijk
 
+    # overridden in GLSurfaceWindow
+    def xyToT(self, xy):
+        # return self.xyToTijk(xy, return_none_if_outside)
+        ij = self.xyToIj(xy)
+        tijk = self.ijToTijk(ij)
+        return tijk
+
     # slice ij position to window xy position
     def ijToXy(self, ij):
         i,j = ij
@@ -211,16 +218,53 @@ class DataWindow(QLabel):
 
     def getNearbyNodeIjk(self):
         xyijks = self.cur_frag_pts_xyijk
+        self.updateNearbyNode()
         nearbyNode = self.localNearbyNodeIndex
         if nearbyNode >= 0 and xyijks is not None and xyijks.shape[0] != 0:
             if nearbyNode >= xyijks.shape[0]:
-                print("PROBLEM in getNearbyNodeIjk")
+                # This will happen if the node numbering changes
+                # due to change in number of nodes visible in window
+                ''''''
+                print("PROBLEM in getNearbyNodeIjk:")
+                print("  attempt to get node", nearbyNode)
+                print("  from array of shape", xyijks.shape)
                 print(xyijks.shape, nearbyNode)
+                ''''''
+                # self.drawSlice()
+                # self.repaint()
+                # self.setNearbyNode(-1)
                 return None
             tijk = xyijks[nearbyNode, 2:]
             return self.tijkToLocalIjk(tijk)
         else:
             return None
+
+    def updateNearbyNode(self):
+        old_local_nearby = self.localNearbyNodeIndex
+        pv = self.window.project_view
+        old_global_nearby = pv.nearby_node_index
+        xyijks = self.cur_frag_pts_xyijk
+        xyijks_valid = (xyijks is not None and xyijks.shape[0] != 0)
+        # print("oln", old_local_nearby, "ogn", old_global_nearby, "valid", xyijks_valid)
+        if old_local_nearby >= 0 and xyijks_valid:
+            # print("xyijks")
+            # print(xyijks)
+            new_local_nearbys = np.nonzero(xyijks[:,5]==old_global_nearby)[0]
+            # print("new_local_nearbys", new_local_nearbys)
+            if len(new_local_nearbys) == 0:
+                new_local_nearby = -1
+            else:
+                # new_local_nearby = new_local_nearbys[0]
+                new_local_nearby = -1
+                for nln in new_local_nearbys:
+                    if self.cur_frag_pts_fv[nln] == pv.nearby_node_fv:
+                        new_local_nearby = nln
+                        break
+            # print("nln", new_local_nearby)
+            if new_local_nearby != old_local_nearby:
+                # print("setting", old_local_nearby, new_local_nearby)
+                self.setNearbyNode(new_local_nearby)
+
 
     def setWorkingRegion(self):
         xyijks = self.cur_frag_pts_xyijk
@@ -257,6 +301,26 @@ class DataWindow(QLabel):
                 # wants to continue using the key to move the node even
                 # if the node moves out of "nearby" range
                 self.window.drawSlices()
+                # but need to keep track of current nearest
+                # node in case node numbering in window changes
+                self.updateNearbyNode()
+                '''
+                old_local_nearby = self.localNearbyNodeIndex
+                pv = self.window.project_view
+                old_global_nearby = pv.nearby_node_index
+                xyijks = self.cur_frag_pts_xyijk
+                xyijks_valid = (xyijks is not None and xyijks.shape[0] != 0)
+                if old_local_nearby >= 0 and xyijks_valid:
+                    new_local_nearbys = np.nonzero(xyijks[:,5]==old_global_nearby)[0]
+                    if len(new_local_nearbys) == 0:
+                        new_local_nearby = -1
+                    else:
+                        new_local_nearby = new_local_nearbys[0]
+                    if new_local_nearby != old_local_nearby:
+                        print("setting", old_local_nearby, new_local_nearby)
+                        self.setNearbyNode(new_local_nearby)
+                '''
+
 
     # return True if nearby node changed, False otherwise
     def setNearbyNode(self, nearbyNode):
@@ -279,6 +343,7 @@ class DataWindow(QLabel):
         # So need to compare old vs new local node indices as well
         if old_global_node_index != new_global_node_index or old_global_node_fv != new_global_node_fv or self.localNearbyNodeIndex != nearbyNode:
             # print("snn", self.curNearbyNode(), nearbyNode)
+            # print("snn", old_global_node_index, new_global_node_index, self.localNearbyNodeIndex, nearbyNode)
             if nearbyNode >= 0 and xyijks_valid:
                 pv.nearby_node_fv = new_global_node_fv
                 pv.nearby_node_index = new_global_node_index
@@ -326,7 +391,9 @@ class DataWindow(QLabel):
             return None
         xys = xyijks[:,0:2]
         curfv = self.currentFragmentView()
-        if not curfv.allowAutoInterpolation():
+        # under some circumstances (I'm not sure what),
+        # curfv can be None
+        if curfv is None or not curfv.allowAutoInterpolation():
             return None
 
         d = 3
@@ -439,12 +506,22 @@ class DataWindow(QLabel):
                 # print('Shift+Click')
                 # ij = self.xyToIj(wxy)
                 # tijk = self.ijToTijk(ij)
-                tijk = self.xyToTijk(wxy, True)
+                # tijk = self.xyToTijk(wxy, True)
+                tijk = self.xyToT(wxy)
                 # print("adding point at",tijk)
                 if tijk is not None and self.currentFragmentView() is not None:
                     self.setWaitCursor()
                     # self.window.addPointToCurrentFragment(tijk)
                     self.addPoint(tijk)
+                    # Need to redraw slice before calling
+                    # findNearbyNode, because nodes may have
+                    # been renumbered
+                    self.drawSlice()
+                    # Force window to repaint immediately,
+                    # which in the case of OpenGL windows is necessary
+                    # in order to make sure the deleted node is fully purged
+                    # before findNearbyNode is called
+                    self.repaint()
                     nearbyNode = self.findNearbyNode(wxy)
                     if not self.setNearbyNode(nearbyNode):
                         self.window.drawSlices()
@@ -620,7 +697,11 @@ class DataWindow(QLabel):
             stxt += "   "
 
 
+        # oldNearbyNode = self.localNearbyNodeIndex
+        self.updateNearbyNode()
         nearbyNode = self.localNearbyNodeIndex
+        # if oldNearbyNode != nearbyNode:
+        #     print("node change", oldNearbyNode, nearbyNode)
         # check nearbyNode < len to try and prevent intermittent crash
         # that sometimes occurs when creating active region and
         # then moving mouse quickly to another data slice
@@ -645,6 +726,14 @@ class DataWindow(QLabel):
                 if i > 0:
                     stxt += " "
                 stxt += "%s"%(dtxt)
+            globalNearbyNode = self.window.project_view.nearby_node_index
+            # Trying to track down an intermittent crash that would
+            # occur while deleting nodes
+            if index != globalNearbyNode or index >= len(fv.stpoints):
+                print("node index discrepancy:", index, globalNearbyNode, len(fv.stpoints))
+            if index < len(fv.stpoints):
+                stxy = fv.stpoints[index]
+                stxt += " (uv %g %g)"%(round(stxy[0],2), round(stxy[1],2))
             stxt += "   "
 
         '''
@@ -661,6 +750,12 @@ class DataWindow(QLabel):
 
     def setIjkTf(self, tf):
         self.volume_view.setIjkTf(tf)
+
+    def setLastJumpIjkTf(self, tf):
+        self.volume_view.setLastJumpIjkTf(tf)
+
+    def returnToLastJumpIjkTf(self):
+        self.volume_view.returnToLastJumpIjkTf()
 
     # def setIjkOrStxyTf(self, tf):
     #     self.setIjkTf(tf)
@@ -717,8 +812,9 @@ class DataWindow(QLabel):
             nij = list(self.nnStartPoint)
             nij[0] += di
             nij[1] += dj
-            self.setNearbyNodeIjk(nij, True, True)
+            self.window.drawSlices()
             self.setWaitCursor()
+            self.setNearbyNodeIjk(nij, True, True)
             self.window.drawSlices()
         elif self.isMovingTiff:
             if self.ntStartPoint is None:
@@ -906,6 +1002,7 @@ class DataWindow(QLabel):
         # on how ctrl is mapped in MacOS
         alt_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.AltModifier) != 0
         ctrl_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.ControlModifier) != 0
+        shift_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.ShiftModifier) != 0
         opts = {
             Qt.Key_Left: (1*sgn,0,0),
             Qt.Key_A:    (1*sgn,0,0),
@@ -1002,19 +1099,25 @@ class DataWindow(QLabel):
 
         elif not self.isMovingNode and key == Qt.Key_X:
             # print("key X")
-            ijk = self.getNearbyNodeIjk()
-            if ijk is None:
-                pt = self.mapFromGlobal(QCursor.pos())
-                mxy = (pt.x(), pt.y())
-                # ij = self.xyToIj(mxy)
-                # tijk = self.ijToTijk(ij)
-                tijk = self.xyToTijk(mxy)
+            if alt_pressed:
+                self.returnToLastJumpIjkTf()
+                tijk = self.volume_view.ijktf
             else:
+                ijk = self.getNearbyNodeIjk()
                 # print("ijk", ijk)
-                # tijk = self.ijToTijk(ijk[0:2])
-                tijk = self.ijkToTijk(ijk)
-            # print("tijk", tijk)
-            self.setIjkTf(tijk)
+                if ijk is None:
+                    pt = self.mapFromGlobal(QCursor.pos())
+                    mxy = (pt.x(), pt.y())
+                    # ij = self.xyToIj(mxy)
+                    # tijk = self.ijToTijk(ij)
+                    tijk = self.xyToTijk(mxy)
+                else:
+                    # print("ijk", ijk)
+                    # tijk = self.ijToTijk(ijk[0:2])
+                    tijk = self.ijkToTijk(ijk)
+                # print("tijk", tijk)
+                self.setIjkTf(tijk)
+                self.setLastJumpIjkTf(tijk)
             self.window.drawSlices()
             # move cursor to cross hairs
             ij = self.tijkToIj(tijk)
@@ -1623,6 +1726,20 @@ into and out of the viewing plane.
             cv2.line(canvas, (cx,cy-r), (cx,cy+r), white, thickness+2)
             cv2.line(canvas, (cx,cy-r), (cx,cy+r), color, thickness)
 
+    def unsetMapImage(self, fv):
+        if fv is not None:
+            fv.map_image = None
+            fv.map_corners = None
+
+    # overridden in GLSurfaceWindow
+    def setMapImage(self, fv):
+        '''
+        if fv is not None:
+            fv.map_image = None
+            fv.map_corners = None
+        '''
+        self.unsetMapImage(fv)
+
     def drawSlice(self):
         timera = Utils.Timer(False)
         volume = self.volume_view
@@ -2187,8 +2304,8 @@ class SurfaceWindow(DataWindow):
                         cv2.polylines(original, vrts, True, color, 2*fragNodeSize)
                 timer.time("draw points")
 
-                if frag == pv.nearby_node_fv and pv.nearby_node_index >= 0 and fragNodeSize > 0:
-                    nni = pv.nearby_node_index
+                nni = pv.nearby_node_index
+                if frag == pv.nearby_node_fv and 0 <= nni < wvflags.size and fragNodeSize > 0:
                     if wvflags[nni]:
                         pt = allpts[nni]
                         xy = self.ijToXy(pt)

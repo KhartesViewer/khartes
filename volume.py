@@ -349,6 +349,7 @@ class VolumeView():
         # in transposed-grid coordinates
         # so focus pixel = datatr[ktf, jtf, itf]
         self.ijktf = (0,0,0)
+        self.last_jump_ijktf = None
         # self.stxytf = (0.,0.)
         self.stxytf = None
         self.zoom = 0.
@@ -399,6 +400,7 @@ class VolumeView():
             ijk = self.ijktf
             self.ijktf = (ijk[2], ijk[1], ijk[0])
             self.stxytf = None
+            self.clearLastJumpIjkTf()
         self.direction = direction
         if self.volume.data is not None:
             self.trdata = self.volume.trdatas[direction]
@@ -455,12 +457,26 @@ class VolumeView():
         jtf = int(sh[1]/2)
         ktf = int(sh[0]/2)
         self.ijktf = (itf, jtf, ktf)
+        self.clearLastJumpIjkTf()
 
         gi,gj,gk = self.transposedIjkToGlobalPosition(
                 self.ijktf)
         print("global position x %d y %d image %d"%(gi,gj,gk))
         if not no_notify:
             self.notifyModified()
+
+    def setLastJumpIjkTf(self, tf):
+        self.last_jump_ijktf = tf
+
+    def returnToLastJumpIjkTf(self):
+        lj = self.last_jump_ijktf
+        if lj is None:
+            return
+        self.ijktf = lj
+        self.notifyModified()
+
+    def clearLastJumpIjkTf(self):
+        self.last_jump_ijktf = None
 
     def setIjkTf(self, tf):
         o = [0,0,0]
@@ -475,6 +491,7 @@ class VolumeView():
             m = sh[2-i] - 1
             t = min(m, max(t,0))
             o[i] = t
+        # self.last_jump_ijktf = self.ijktf
         self.ijktf = tuple(o)
         self.notifyModified()
 
@@ -528,10 +545,12 @@ class Volume():
         self.trdatas = None
         self.data_header = None
         self.is_zarr = False
+        self.is_streaming = False
         self.valid = False
         self.error = "no error message set"
         self.active_project_views = set()
         self.from_vc_render = False
+        self.uses_overlay_colormap = False
 
     @property
     def shape(self):
@@ -741,6 +760,7 @@ class Volume():
                 "khartes_created": timestamp,
                 "khartes_modified": timestamp,
                 "khartes_from_vc_render": from_vc_render,
+                "khartes_uses_overlay_colormap": False,
                 # turns off the default gzip compression (scroll images
                 # don't compress well, so compression only slows down
                 # the I/O speed)
@@ -853,6 +873,12 @@ class Volume():
             from_vc_render = False
             if from_vc_render_str == "True":
                 from_vc_render = True
+
+            uses_overlay_colormap_str = data_header.get("khartes_uses_overlay_colormap", "False")
+            uses_overlay_colormap = False
+            if uses_overlay_colormap_str == "True":
+                uses_overlay_colormap = True
+
         except Exception as e:
             err = "Failed to read nrrd file %s: %s"%(filename,e)
             print(err)
@@ -865,6 +891,7 @@ class Volume():
         volume.created = created
         volume.modified = modified
         volume.from_vc_render = from_vc_render
+        volume.uses_overlay_colormap = uses_overlay_colormap
         volume.valid = True
         volume.path = filename
         volume.name = filename.stem
@@ -1046,7 +1073,10 @@ class Volume():
             # print(slc.shape)
             # resize windowed data slice to its size in drawing
             # window coordinates
-            zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
+            if self.uses_overlay_colormap:
+                zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_NEAREST)
+            else:
+                zslc = cv2.resize(slc, (x2-x1, y2-y1), interpolation=cv2.INTER_AREA)
             # paste resized data slice into the intersection window
             # in the drawing window
             out[y1:y2, x1:x2] = zslc

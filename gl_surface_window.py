@@ -105,10 +105,11 @@ class GLSurfaceWindow(DataWindow):
             self.volume_view.setStxyTf(stxy)
         self.volume_view.setIjkTf(tf)
 
-    def addPoint(self, tijk):
+    def addPoint(self, stxy):
         # print("glsw add point", tijk)
-        stxy = self.ijkToStxy(tijk)
+        # stxy = self.ijkToStxy(tijk)
         # print("stxy", stxy)
+        tijk = self.stxyToTijk(stxy, True)
         self.window.addPointToCurrentFragment(tijk, stxy)
 
     def computeTfStartPoint(self):
@@ -163,32 +164,87 @@ class GLSurfaceWindow(DataWindow):
         nstxy = (ostxy[0]+dx, ostxy[1]+dy)
         return nstxy
 
-    def xyToTijk(self, xy, return_none_if_outside=False):
+    # given mouse position xy, return stxy position
+    def xyToT(self, xy):
         x, y = xy
-        iind = self.iIndex
-        jind = self.jIndex
-        kind = self.kIndex
+        ww, wh = self.width(), self.height()
+        wcx, wcy = ww//2, wh//2
+        dx, dy = x-wcx, y-wcy
+        cij = self.volume_view.stxytf
+        if cij is None:
+            return None
+        # print("tf", tijk)
+        zoom = self.getZoom()
+        # i = cij[0] + int(dx/zoom)
+        # j = cij[1] + int(dy/zoom)
+        i = cij[0] + dx/zoom
+        j = cij[1] + dy/zoom
+        return (i, j)
+
+    def stxyToOglPixel(self, ij):
+        zoom = self.getZoom()
+        cij = self.volume_view.stxytf
+        if cij is None:
+            return None
+        ci = cij[0]
+        cj = cij[1]
+        ww, wh = self.width(), self.height()
+        wcx, wcy = ww//2, wh//2
+
+        # note that the values are floats:
+        x, y = (wcx+zoom*(ij[0]-ci), wcy+zoom*(ij[1]-cj))
+
+        ratio = self.screen().devicePixelRatio()
+        ix = round(x*ratio)
+        iy = round(y*ratio)
+        return (ix, iy)
+
+    def stxyToTijk(self, ij, return_none_if_outside=False):
+        if return_none_if_outside:
+            outside_value = None
+        else:
+            outside_value = self.volume_view.ijktf
+
+        if ij is None:
+            return None
+
         xyz_arr = self.glw.xyz_arr
         if xyz_arr is None:
             # print("xyz_arr is None; returning vv.ijktf")
             # return None
-            return self.volume_view.ijktf
-        ratio = self.screen().devicePixelRatio()
-        ix = round(x*ratio)
-        iy = round(y*ratio)
+            # print("None a")
+            return outside_value
+
+        ixy = self.stxyToOglPixel(ij)
+        if ixy is None:
+            # print("None b")
+            return outside_value
+
+        ix, iy = ixy
+
         if iy < 0 or iy >= xyz_arr.shape[0] or ix < 0 or ix >= xyz_arr.shape[1]:
             # print("error", x, y, xyz_arr.shape)
-            return self.volume_view.ijktf
+            # return self.volume_view.ijktf
+            # print("None c")
+            return outside_value
+
         xyza = xyz_arr[iy, ix]
         if xyza[3] == 0:
-            if return_none_if_outside:
-                return None
-            else:
-                return self.volume_view.ijktf
+            # print("None d")
+            return outside_value
+
+        iind = self.iIndex
+        jind = self.jIndex
+        kind = self.kIndex
+
         i = xyza[iind]
         j = xyza[jind]
         k = xyza[kind]
         return (i,j,k)
+
+    def xyToTijk(self, xy, return_none_if_outside=False):
+        ij = self.xyToT(xy)
+        return self.stxyToTijk(ij, return_none_if_outside)
 
     def ijToTijk(self, ij):
         return (ij[0], ij[1], 0)
@@ -283,6 +339,29 @@ class GLSurfaceWindow(DataWindow):
         dx,dy = hw/zoom, hh/zoom
         return ((stxy[0]-dx,stxy[1]-dy),(stxy[0]+dx,stxy[1]+dy))
 
+    # overrides version in DataWindow
+    def setMapImage(self, fv):
+        print("GLSW setMapImage")
+        if fv is None:
+            return
+        fv.map_image = None
+        fv.map_corners = None
+        if fv != self.glw.active_fragment:
+            return
+        if self.volume_view.stxytf is None:
+            return
+        fbo = self.glw.data_fbo
+        if fbo is None:
+            return
+        # This is a QImage
+        image = fbo.toImage()
+        imarr = self.glw.npArrayFromQImage(image)
+        # cv2.imwrite("test.png", imarr)
+        fv.map_image = imarr
+
+        fv.map_corners = self.stxyWindowBounds()
+        # print("corners", fv.map_corners)
+
     def drawSlice(self):
         # print("gsw drawSlice")
         # the MainWindow.edit widget overlays the
@@ -315,6 +394,7 @@ slice_code = {
       uniform sampler2D underlay_sampler;
       uniform sampler2D overlay_sampler;
       uniform sampler2D trgls_sampler;
+      uniform int uses_overlay_colormap = 0;
       in vec2 ftxt;
       out vec4 fColor;
 
@@ -322,6 +402,27 @@ slice_code = {
       {
         float alpha;
         fColor = texture(base_sampler, ftxt);
+        if (uses_overlay_colormap > 0) {
+            float fr = fColor[0];
+            uint ir = uint(fr*65535.);
+            if ((ir & uint(32768)) == 0) {
+                // fColor *= 2.;
+                float gray = fColor[0]*2.;
+                fColor = vec4(gray, gray, gray, 1.);
+            } else {
+                uint ob = ir & uint(31);
+                // ob = ir & 31;
+                ir >>= 5;
+                uint og = ir & uint(31);
+                ir >>= 5;
+                uint or = ir & uint(31);
+                fColor[0] = float(or) / 31.;
+                fColor[1] = float(og) / 31.;
+                fColor[2] = float(ob) / 31.;
+                fColor[3] = 1.;
+            }
+
+        }
 
         vec4 uColor = texture(underlay_sampler, ftxt);
         alpha = uColor.a;
@@ -667,6 +768,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             self.volume_view_direction = -1
             self.active_fragment = None
             # self.atlas = None
+            if self.atlas is not None:
+                self.atlas.setVolumeView(None)
             return
         pv = dw.window.project_view
         mfv = None
@@ -828,6 +931,11 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         f.glBindTexture(pygl.GL_TEXTURE_2D, base_tex)
         self.slice_program.setUniformValue(bloc, bunit)
 
+        uoc = 0
+        if volume_view.volume.uses_overlay_colormap:
+            uoc = 1
+        self.slice_program.setUniformValue("uses_overlay_colormap", uoc)
+
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
         underlay_tex = self.texFromData(underlay_data, QImage.Format_RGBA64)
@@ -885,6 +993,14 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         for block in blocks:
             bset.add(tuple(block))
         return bset
+
+    def getDrawnData(self):
+        f = self.gl
+        fbo = self.data_fbo
+        fbo.bind()
+        w = fbo.width()
+
+
 
     def getBlocks(self, fbo):
         timera = Utils.Timer()
@@ -948,8 +1064,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # print("nzarr", nzarr.shape, nzarr.dtype)
 
         if len(nzarr) == 0:
-            print("zero-length nzarr")
-            print("arr", arr.shape, arr.dtype)
+            # print("zero-length nzarr")
+            # print("arr", arr.shape, arr.dtype)
             return [], farr, zoom_level
 
         nzmin = nzarr.min(axis=0)
@@ -1140,7 +1256,8 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             self.trgl_pts_program.setUniformValue(nniloc, int(nearby_node_id))
                 
             f.glPointSize(node_thickness)
-            f.glDrawArrays(pygl.GL_POINTS, 0, fvao.stxys_size)
+            # print("fvao count", fvao.stxys_count)
+            f.glDrawArrays(pygl.GL_POINTS, 0, fvao.stxys_count)
             self.trgl_pts_program.release()
 
         QOpenGLFramebufferObject.bindDefault()
@@ -1320,8 +1437,12 @@ class FragmentMapVao:
         self.stxy_vbo.create()
         self.stxy_vbo.bind()
 
-        stxys = np.ascontiguousarray(fv.stpoints, dtype=np.float32)
+        if fv.stpoints is None:
+            stxys = np.zeros((0,2))
+        else:
+            stxys = np.ascontiguousarray(fv.stpoints, dtype=np.float32)
         self.stxys_size = stxys.size
+        self.stxys_count = stxys.shape[0]
 
         nbytes = stxys.size*stxys.itemsize
         self.stxy_vbo.allocate(stxys, nbytes)
@@ -1573,7 +1694,34 @@ class Chunk:
         # effect is that the line buf[...] = adata[...] below will block
         # until the data required by adata has been loaded from disk.
         thread.immediate_data_mode = True
-        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+        # The reshape at the end is needed because under some
+        # circumstances (when a fragment goes off the end of the
+        # data array) the indexing causes a dimension to be lost.
+        # For instance, shape (128, 1, 128) is auto-flattened
+        # to shape (128, 128).  For some reason, this dimension loss 
+        # occurs with adata but not buf.
+        # The reshape restores the lost dimension.
+        buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]].reshape([int_dr[1][i]-int_dr[0][i] for i in reversed(range(3))])
+        '''
+        # Trying to figure out the dropped-dimension problem...
+        try:
+            # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+            buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]].reshape([int_dr[1][i]-int_dr[0][i] for i in reversed(range(3))])
+        except:
+            print("shape problem", buf.shape, adata.shape)
+            print("c0, c1", c0, c1)
+            print("dc", [c1[i]-c0[i] for i in range(3)])
+            print("int_dr", int_dr)
+            print("d int_dr", [int_dr[1][i]-int_dr[0][i] for i in range(3)])
+            z1 = buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] 
+            z2 = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+            print("z1, z2", z1.shape, z2.shape)
+            y1 = buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] 
+            # y2 = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]]
+            # y2 = adata[range(int_dr[0][2],int_dr[1][2]), range(int_dr[0][1],int_dr[1][1]), range(int_dr[0][0],int_dr[1][0])]
+            y2 = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]].reshape([int_dr[1][i]-int_dr[0][i] for i in range(3)])
+            print("y1, y2", y1.shape, y2.shape)
+        '''
         # print("from disk", self.dk, self.dl, "*")
         misses = 0
 
@@ -1886,7 +2034,7 @@ class Atlas:
         atlas_data_code["fragment"] = atlas_data_code["fragment_template"].format(max_nchunks = max_nchunks)
         self.program = GLDataWindowChild.buildProgram(atlas_data_code)
 
-        self.setVolumeView(volume_view)
+        # self.setVolumeView(volume_view)
         
         self.program.bind()
         # for var in ["atlas", "xyz_xform", "tmins", "tmaxs", "TMins", "TMaxs", "XForms", "ZChartIds", "chart_ids", "ncharts"]:
@@ -1921,9 +2069,17 @@ class Atlas:
         # Useful for debugging:
         # tex3d.setBorderColor(QColor(100,100,200,255))
         tex3d.setAutoMipMapGenerationEnabled(False)
-        tex3d.setMagnificationFilter(QOpenGLTexture.Linear)
-        # tex3d.setMagnificationFilter(QOpenGLTexture.Nearest)
-        tex3d.setMinificationFilter(QOpenGLTexture.Linear)
+
+        '''
+        uoc = volume_view.volume.uses_overlay_colormap
+        print("uoc", uoc)
+        if uoc:
+            tex3d.setMagnificationFilter(QOpenGLTexture.Nearest)
+            tex3d.setMinificationFilter(QOpenGLTexture.Nearest)
+        else:
+            tex3d.setMagnificationFilter(QOpenGLTexture.Linear)
+            tex3d.setMinificationFilter(QOpenGLTexture.Linear)
+        '''
         # width, height, depth
         tex3d.setSize(*self.asz)
         # see https://stackoverflow.com/questions/23533749/difference-between-gl-r16-and-gl-r16ui
@@ -1959,6 +2115,7 @@ class Atlas:
             print("error message!")
             self.valid = False
         ml.close()
+        self.setVolumeView(volume_view)
 
     def setVolumeView(self, volume_view):
         print("setVolumeView", volume_view.volume.name if volume_view else "(None)")
@@ -1966,10 +2123,28 @@ class Atlas:
 
         self.volume_view = volume_view
 
+        if volume_view is None:
+            # Need to clear out self.datas as soon as possible
+            # when a volume's data is released, in order to make
+            # sure the data's memory is released.
+            self.datas = None
+            # print("Atlas.setVolumeView: self.datas set to None")
+            return
+
         vol = volume_view.volume
         vdir = volume_view.direction
         is_zarr = vol.is_zarr
         dcsz = self.dcsz
+
+        uoc = vol.uses_overlay_colormap
+        # print("svv uoc", uoc)
+        tex3d = self.tex3d
+        if uoc:
+            tex3d.setMagnificationFilter(QOpenGLTexture.Nearest)
+            tex3d.setMinificationFilter(QOpenGLTexture.Nearest)
+        else:
+            tex3d.setMagnificationFilter(QOpenGLTexture.Linear)
+            tex3d.setMinificationFilter(QOpenGLTexture.Linear)
 
         datas = []
         if not is_zarr:
@@ -1984,9 +2159,6 @@ class Atlas:
             # print("data shape", data.shape)
             shape = data.shape
             dsz.append(tuple(shape[::-1]))
-        # TODO: Need to clear out self.datas as soon as possible
-        # when a volume's data is released, in order to make
-        # sure the data's memory is released.
         self.datas = datas
         self.dsz = dsz
         # number of data chunks in each direction
@@ -2050,7 +2222,7 @@ class Atlas:
             pbo_size = acsz[0]*acsz[1]*acsz[2]*2
             pbo.allocate(pbo_size)
             pbo.release()
-            print("created pbo", pbo.bufferId(), pbo_size)
+            # print("created pbo", pbo.bufferId(), pbo_size)
             self.pbo_pool.put(pbo)
         return self.pbo_pool.get()
 

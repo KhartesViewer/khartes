@@ -38,7 +38,7 @@ If no errors are printed, then OpenCV is installed correctly.
 Installation list:
 
 conda create -n vch python=3.11
-activate vch
+conda activate vch
 conda install glib=2.69.1  # Only needed in Windows?  See note above
 conda install opencv
 conda install pyqt
@@ -46,6 +46,9 @@ conda install tifffile
 conda install zarr
 conda install scipy
 conda install pyopengl
+conda install requests
+conda install aiohttp
+conda install fsspec
 conda install -c conda-forge pynrrd
 conda install -c conda-forge rectpack
 

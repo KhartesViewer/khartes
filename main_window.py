@@ -7,6 +7,7 @@ import time
 import numpy as np
 import platform
 import traceback
+import numcodecs
 
 from PyQt5.QtWidgets import (
         QAction,
@@ -42,6 +43,7 @@ from PyQt5.QtXml import QDomDocument
 
 from tiff_loader import TiffLoader
 from zarr_loader import ZarrLoader
+from stream_loader import ZarrStreamLoader
 from data_window import DataWindow, SurfaceWindow
 from project import Project, ProjectView
 from fragment import Fragment, FragmentsModel, FragmentView
@@ -345,6 +347,30 @@ class CopyActiveFragmentButton(QPushButton):
     def onButtonClicked(self, s):
         self.main_window.copyActiveFragment()
 
+class ReparameterizeActiveFragmentButton(QPushButton):
+    def __init__(self, main_window, parent=None):
+        super(ReparameterizeActiveFragmentButton, self).__init__("Reparam", parent)
+        self.main_window = main_window
+        self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
+        self.setEnabled(False)
+        self.setToolTip("Recalculate uv of the currently active fragment")
+        self.clicked.connect(self.onButtonClicked)
+
+    def onButtonClicked(self, s):
+        self.main_window.reparameterizeActiveFragment()
+
+class RetriangulateActiveFragmentButton(QPushButton):
+    def __init__(self, main_window, parent=None):
+        super(RetriangulateActiveFragmentButton, self).__init__("Retriang", parent)
+        self.main_window = main_window
+        self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
+        self.setEnabled(False)
+        self.setToolTip("Retriangulate the currently active fragment")
+        self.clicked.connect(self.onButtonClicked)
+
+    def onButtonClicked(self, s):
+        self.main_window.retriangulateActiveFragment()
+
 class MoveActiveFragmentAlongZButton(QPushButton):
     def __init__(self, main_window, text, step, parent=None):
         super(MoveActiveFragmentAlongZButton, self).__init__(text, parent)
@@ -458,6 +484,62 @@ class CursorModeButton(QPushButton):
         super(CursorModeButton, self).setChecked(flag)
         self.doSetToolTip()
 
+
+class UseStreamCacheCheckBox(QCheckBox):
+    def __init__(self, main_window, parent=None):
+        super(UseStreamCacheCheckBox, self).__init__("Use stream cache directory", parent)
+        self.main_window = main_window
+        self.setting = "stream"
+        self.param = "use_cache_directory"
+        self.setChecked(main_window.draw_settings[self.setting][self.param])
+        main_window.draw_settings_widgets[self.setting][self.param] = self
+        self.stateChanged.connect(self.onStateChanged)
+
+    def onStateChanged(self, s):
+        # print("osc", s, Qt.Checked, Qt.CheckState(s), Qt.Checked.value, s==Qt.Checked)
+        cs = Qt.CheckState(s)
+        # self.main_window.setVolBoxesVisible(cs==Qt.Checked)
+        self.main_window.setUseStreamCache(cs==Qt.Checked)
+
+class StreamCacheDirectoryButton(QPushButton):
+    def __init__(self, main_window, parent=None):
+        super(StreamCacheDirectoryButton, self).__init__("Select directory to use as cache", parent)
+        self.main_window = main_window
+        self.clicked.connect(self.onButtonClicked)
+        self.setting = "stream"
+        self.param = "cache_directory"
+        cdir = main_window.draw_settings[self.setting][self.param]
+        if cdir != "":
+            self.setText(cdir)
+        enabled = main_window.draw_settings[self.setting]["use_cache_directory"]
+        self.setEnabled(enabled)
+        main_window.draw_settings_widgets[self.setting][self.param] = self
+        # self.directory_is_valid = False
+        # self.directory = ""
+
+    def onButtonClicked(self, s):
+        print("dir button clicked")
+        sdir = self.main_window.settingsGetDirectory("stream_cache_")
+        dialog = QFileDialog(self)
+        if sdir is not None and Path(sdir).is_dir():
+            dialog.setDirectory(sdir)
+        dialog.setOptions(QFileDialog.ShowDirsOnly)
+        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setLabelText(QFileDialog.Accept, "Select cache folder")
+        if not dialog.exec():
+            print("exec failed")
+            return
+        sels = dialog.selectedFiles()
+        if len(sels) != 1:
+            print("expected 1 file")
+            return
+        cdir = sels[0]
+        if not Path(cdir).is_dir():
+            print("not a dir")
+            return
+        self.main_window.settingsSaveDirectory(str(Path(cdir).parent), "stream_cache_")
+        # self.directory_is_valid = True
+        self.main_window.setStreamCacheDirectory(cdir)
 
 class VolBoxesVisibleCheckBox(QCheckBox):
     def __init__(self, main_window, parent=None):
@@ -826,6 +908,10 @@ class MainWindow(QMainWindow):
             "max_cache_size_gb": 8,
             "max_window_width": 480,
         },
+        "stream": {
+            "cache_directory": "",
+            "use_cache_directory": False,
+        },
     }
 
     # zarr_signal = Signal(str)
@@ -833,6 +919,12 @@ class MainWindow(QMainWindow):
 
     def __init__(self, appname, app):
         super(MainWindow, self).__init__()
+
+        # Prevents a crash in numcodecs.blosc.decompress
+        # that occurs on MacOS when combining streaming with
+        # caching.  See this thread:
+        # https://github.com/pangeo-data/pangeo/issues/196
+        numcodecs.blosc.use_threads = True
 
         self.app = app
         self.platform = platform.system()
@@ -857,6 +949,9 @@ class MainWindow(QMainWindow):
 
         self.draw_settings = copy.deepcopy(MainWindow.draw_settings_defaults)
         self.settingsLoadDrawSettings()
+        # TODO for testing!
+        # self.draw_settings["stream"]["cache_directory"] = ""
+
         self.draw_settings_widgets = copy.deepcopy(MainWindow.draw_settings_defaults)
 
         # if False, shift lock only requires a single click
@@ -880,6 +975,13 @@ class MainWindow(QMainWindow):
         self.openhand_transparent = QCursor(px, *self.cursor_center)
         self.openhand_transparents = self.transparentSvgs(path+"/icons/openhand transparent.svg", 11)
         self.openhand_transparent = self.openhand_transparents[0]
+
+        
+        # scrollpx = QPixmap(path+"/icons/stylized_scroll.png")
+        scrollpx = QPixmap(path+"/icons/Khartes_Chi.png")
+        scrollic = QIcon(scrollpx.copy(128,128,896,896))
+
+        self.setWindowIcon(scrollic)
 
         case = 3
 
@@ -945,6 +1047,10 @@ class MainWindow(QMainWindow):
         self.addSettingsPanel()
         self.addDevToolsPanel()
         self.addVolumeAnnotationPanel()
+        # open Fragment panel
+        # TODO: should remember which panel was last opened
+        # by user
+        self.tab_panel.setCurrentIndex(1)
 
         widget = QWidget()
         widget.setLayout(grid)
@@ -986,6 +1092,10 @@ class MainWindow(QMainWindow):
         self.attach_zarr_action.triggered.connect(self.onAttachZarrButtonClick)
         self.attach_zarr_action.setEnabled(False)
 
+        self.attach_stream_action = QAction("Attach OME/Zarr data stream...", self)
+        self.attach_stream_action.triggered.connect(self.onAttachStreamButtonClick)
+        self.attach_stream_action.setEnabled(False)
+
         self.export_mesh_action = QAction("Export fragment as mesh...", self)
         self.export_mesh_action.triggered.connect(self.onExportAsMeshButtonClick)
         self.export_mesh_action.setEnabled(False)
@@ -1011,6 +1121,7 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(self.import_ppm_action)
         self.file_menu.addAction(self.import_tiffs_action)
         self.file_menu.addAction(self.attach_zarr_action)
+        self.file_menu.addAction(self.attach_stream_action)
         self.file_menu.addAction(self.export_mesh_action)
         # self.file_menu.addAction(self.load_hardwired_project_action)
         self.file_menu.addAction(self.exit_action)
@@ -1045,11 +1156,24 @@ class MainWindow(QMainWindow):
         self.volumes_model = VolumesModel(None, self)
         self.tiff_loader = TiffLoader(self)
         self.zarr_loader = ZarrLoader(self)
+        self.stream_loader = ZarrStreamLoader(self)
         self.zarr_timer = QTimer()
         self.zarr_timer.setSingleShot(True)
         self.zarr_timer.timeout.connect(self.zarrTimerCallback)
         self.zarr_signal.connect(self.zarrSlot)
         self.setZarrMaxCacheSize(self.draw_settings["zarr"]["max_cache_size_gb"], False)
+
+        # self.stream_cache_directory = self.draw_settings["stream"]["cache_directory"]
+        # self.use_stream_cache_directory = self.draw_settings["stream"]["use_cache_directory"]
+
+        # TODO for testing
+        # self.stream_cache_directory = ""
+        # self.use_stream_cache_directory = False
+        # self.stream_cache_directory = "J:\Vesuvius\cache"
+        # self.use_stream_cache_directory = True
+        # self.stream_cache_directory = "/Users/dev/Desktop/Progs/Vesuvius/cache"
+        # self.use_stream_cache_directory = True
+
         # self.setDrawSettingsToDefaults()
         # command line arguments
         args = QCoreApplication.arguments()
@@ -1178,7 +1302,7 @@ class MainWindow(QMainWindow):
         hlayout = QHBoxLayout()
         label = QLabel("Hover mouse over column headings for more information")
         label.setAlignment(Qt.AlignCenter)
-        hlayout.addWidget(label)
+        # hlayout.addWidget(label)
         create_frag = CreateFragmentButton(self)
         # print("dark mode", self.isDarkMode())
         create_frag.setStyleSheet("QPushButton { %s; padding: 5; }"%self.highlightedBackgroundStyle())
@@ -1191,9 +1315,14 @@ class MainWindow(QMainWindow):
         # af_layout = QHBoxLayout()
         # active_frame.setLayout(af_layout)
 
+        self.retriang_frag = RetriangulateActiveFragmentButton(self)
+        hlayout.addWidget(self.retriang_frag)
+        self.reparam_frag = ReparameterizeActiveFragmentButton(self)
+        hlayout.addWidget(self.reparam_frag)
         self.copy_frag = CopyActiveFragmentButton(self)
         hlayout.addWidget(self.copy_frag)
 
+        '''
         self.move_frag_up = MoveActiveFragmentAlongZButton(self, "Z ↑", -1)
         hlayout.addWidget(self.move_frag_up)
 
@@ -1205,7 +1334,7 @@ class MainWindow(QMainWindow):
 
         self.move_frag_down_along_normals = MoveActiveFragmentAlongNormalsButton(self, "N ↓", 1)
         hlayout.addWidget(self.move_frag_down_along_normals)
-
+        '''
 
         # af_layout.addWidget(self.copy_frag)
         # hlayout.addWidget(active_frame)
@@ -1516,10 +1645,24 @@ class MainWindow(QMainWindow):
         vs = VoxelSizeEditor(self)
         self.settings_voxel_size_um = vs
         slices_layout.addWidget(vs)
+        usc = UseStreamCacheCheckBox(self)
+        self.settings_use_stream_cache = usc
+        slices_layout.addWidget(usc)
+        scd = StreamCacheDirectoryButton(self)
+        self.settings_stream_cache_directory = scd
+        slices_layout.addWidget(scd)
+
+        more_vbox = QVBoxLayout()
+        hlayout.addLayout(more_vbox)
+        more_frame = QGroupBox("More settings")
+        more_vbox.addWidget(more_frame)
+        more_vbox.addStretch()
+        more_layout = QVBoxLayout()
+        more_frame.setLayout(more_layout)
         zmww = ZarrMaxWindowWidthEditor(self)
-        slices_layout.addWidget(zmww)
+        more_layout.addWidget(zmww)
         zmcs = ZarrMaxCacheGb(self)
-        slices_layout.addWidget(zmcs)
+        more_layout.addWidget(zmcs)
 
         hlayout.addStretch()
         # fragment_layout = QVBoxLayout()
@@ -1578,6 +1721,33 @@ class MainWindow(QMainWindow):
         self.settingsSaveDrawSettings()
         # self.drawSlices()
 
+    def getStreamCacheDirectory(self):
+        return self.draw_settings["stream"]["cache_directory"]
+
+    def setStreamCacheDirectory(self, value):
+        old_value = self.getStreamCacheDirectory()
+        if old_value == value:
+            return
+        if self.project_view is not None and self.project_view.project.hasStreamingVolume():
+            QMessageBox.warning(self, "khartes", "This change will only apply to streams attached after this time.\nTo apply the change to existing streams, save your project and reload it.", QMessageBox.Ok)
+        self.draw_settings["stream"]["cache_directory"] = value
+        self.settings_stream_cache_directory.setText(self.getStreamCacheDirectory())
+        self.settingsSaveDrawSettings()
+
+    def getUseStreamCache(self):
+        return self.draw_settings["stream"]["use_cache_directory"]
+
+    def setUseStreamCache(self, value):
+        old_value = self.getUseStreamCache()
+        if old_value == value:
+            return
+        if self.project_view is not None and self.project_view.project.hasStreamingVolume():
+            QMessageBox.warning(self, "khartes", "This change will only apply to streams attached after this time.\nTo apply the change to existing streams, save your project and reload it.", QMessageBox.Ok)
+        self.draw_settings["stream"]["use_cache_directory"] = value
+        self.settings_use_stream_cache.setChecked(self.getUseStreamCache())
+        self.settings_stream_cache_directory.setEnabled(self.getUseStreamCache())
+        self.settingsSaveDrawSettings()
+
     def getVolBoxesVisible(self):
         if self.project_view is None:
             return
@@ -1605,8 +1775,12 @@ class MainWindow(QMainWindow):
         self.project_view.notifyModified()
         self.drawSlices()
 
+    '''
+    TODO:
+    is this needed?
     def onNewFragmentButtonClick(self, s):
         self.createFragment()
+    '''
 
     def uniqueFragmentName(self, start):
         pv = self.project_view
@@ -1640,10 +1814,14 @@ class MainWindow(QMainWindow):
             active = (pv.mainActiveFragmentView(unaligned_ok=True) is not None)
         self.export_mesh_action.setEnabled(active)
         self.copy_frag.setEnabled(active)
+        self.reparam_frag.setEnabled(active)
+        self.retriang_frag.setEnabled(active)
+        '''
         self.move_frag_up.setEnabled(active)
         self.move_frag_down.setEnabled(active)
         self.move_frag_up_along_normals.setEnabled(active)
         self.move_frag_down_along_normals.setEnabled(active)
+        '''
 
     def moveActiveFragmentAlongZ(self, step):
         pv = self.project_view
@@ -1750,7 +1928,8 @@ class MainWindow(QMainWindow):
             print("Can't create unique fragment name from stem", stem)
             return
         # print("color",color)
-        frag = Fragment(name, vv.direction)
+        # frag = Fragment(name, vv.direction)
+        frag = TrglFragment(name)
         frag.setColor(Utils.getNextColor(), no_notify=True)
         frag.valid = True
         print("created fragment %s"%frag.name)
@@ -1773,6 +1952,42 @@ class MainWindow(QMainWindow):
         self.app.processEvents()
         index = pv.project.fragments.index(frag)
         self.fragments_table.model().scrollToRow(index)
+
+    def reparameterizeActiveFragment(self):
+        pv = self.project_view
+        if pv is None:
+            print("Warning, cannot reparameterize fragment without project")
+            return
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            # this should never be reached; button should be
+            # inactive in this case
+            print("No currently active fragment")
+            return
+        # mf = mfv.fragment
+        mfv.reparameterize()
+        cvv = self.project_view.cur_volume_view
+        # Force recalculation of stxytf in GLDataWindow
+        cvv.stxytf = None
+        self.drawSlices()
+
+    def retriangulateActiveFragment(self):
+        pv = self.project_view
+        if pv is None:
+            print("Warning, cannot retriangulate fragment without project")
+            return
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            # this should never be reached; button should be
+            # inactive in this case
+            print("No currently active fragment")
+            return
+        # mf = mfv.fragment
+        mfv.rebuildStPoints()
+        cvv = self.project_view.cur_volume_view
+        # Force recalculation of stxytf in GLDataWindow
+        cvv.stxytf = None
+        self.drawSlices()
 
     def renameFragment(self, frag, name):
         if frag.name == name:
@@ -2394,6 +2609,7 @@ class MainWindow(QMainWindow):
                 frags.append(frag)
                 if frag.meshExportNeedsInfill():
                     needs_infill = True
+                # self.surface.setMapImage(fv)
                 fvs.append(fv)
         if len(frags) == 0:
             print("No active fragment")
@@ -2439,7 +2655,11 @@ class MainWindow(QMainWindow):
             ppm_loading = None
 
         loading = self.showLoading("Saving obj file...")
+        for fv in fvs:
+            self.surface.setMapImage(fv)
         err = BaseFragment.saveListAsObjMesh(fvs, pname, infill, ppm)
+        for fv in fvs:
+            self.surface.unsetMapImage(fv)
 
         if err != "":
             msg = QMessageBox()
@@ -2450,7 +2670,6 @@ class MainWindow(QMainWindow):
 
         self.settingsSaveDirectory(str(pname.parent), "mesh_")
 
-
     def onImportTiffsButtonClick(self, s):
         self.tiff_loader.show()
         self.tiff_loader.raise_()
@@ -2458,6 +2677,10 @@ class MainWindow(QMainWindow):
     def onAttachZarrButtonClick(self, s):
         self.zarr_loader.show()
         self.zarr_loader.raise_()
+
+    def onAttachStreamButtonClick(self, s):
+        self.stream_loader.show()
+        self.stream_loader.raise_()
 
     # TODO: Need to alert user if load fails
     def onOpenProjectButtonClick(self, s):
@@ -2514,7 +2737,12 @@ class MainWindow(QMainWindow):
         print(f"Loading project from {fname}")
         loading = self.showLoading()
         self.unsetProjectView()
-        pv = ProjectView.open(fname)
+        load_zarr_options = None
+        # print("LP", self.use_stream_cache_directory, self.stream_cache_directory)
+        if self.getUseStreamCache() and self.getStreamCacheDirectory() != "":
+            load_zarr_options = {"stream_cache_directory": self.getStreamCacheDirectory()}
+
+        pv = ProjectView.open(fname, load_zarr_options)
         if not pv.valid:
             print("Project file %s not opened: %s"%(fname, pv.error))
             return
@@ -2695,11 +2923,29 @@ class MainWindow(QMainWindow):
             loading = self.showLoading()
 
         self.volumes_table.model().beginResetModel()
+        old_vv = pv.cur_volume_view
+        if old_vv is not None and volume is not None and old_vv != volume:
+            # Force GLSurfaceWindow to let go of old volume's data,
+            # so that the memory can be reclaimed
+            vv = None
+            self.depth.setVolumeView(vv);
+            self.xline.setVolumeView(vv);
+            self.inline.setVolumeView(vv);
+            self.surface.setVolumeView(vv);
+            self.drawSlices()
+            self.app.processEvents()
         pv.setCurrentVolume(volume, no_notify)
         self.volumes_table.model().endResetModel()
         vv = None
         if volume is not None:
             vv = pv.cur_volume_view
+            if old_vv is not None and old_vv.zoom != 0 and old_vv.direction == vv.direction:
+                old_v = old_vv.volume
+                if volume.gijk_starts == old_v.gijk_starts and volume.gijk_steps == old_v.gijk_steps and volume.sizes == old_v.sizes:
+                    vv.zoom = old_vv.zoom
+                    vv.ijktf = old_vv.ijktf
+                    vv.stxytf = None
+
             zarr_max_width = self.draw_settings["zarr"]["max_window_width"]
             if vv.zoom == 0.:
                 print("setting volume default parameters", volume.name)
@@ -2753,6 +2999,12 @@ class MainWindow(QMainWindow):
         self.fragments_table.model().endResetModel()
         self.drawSlices()
 
+    def fragmentUndo(self):
+        afvs = self.project_view.activeFragmentViews(unaligned_ok=True)
+        for fragment_view in afvs:
+            if fragment_view.active:
+                fragment_view.popFragmentState()
+        self.drawSlices()
 
     def setFragmentVisibility(self, fragment, visible):
         fragment_view = self.project_view.fragments[fragment]
@@ -2815,6 +3067,7 @@ class MainWindow(QMainWindow):
         self.import_ppm_action.setEnabled(False)
         self.import_tiffs_action.setEnabled(False)
         self.attach_zarr_action.setEnabled(False)
+        self.attach_stream_action.setEnabled(False)
         self.enableWidgetsIfActiveFragment()
         self.drawSlices()
         self.app.processEvents()
@@ -2839,6 +3092,7 @@ class MainWindow(QMainWindow):
         self.import_obj_action.setEnabled(True)
         self.import_tiffs_action.setEnabled(True)
         self.attach_zarr_action.setEnabled(True)
+        self.attach_stream_action.setEnabled(True)
         # self.export_mesh_action.setEnabled(project_view.mainActiveFragmentView() is not None)
         # self.export_mesh_action.setEnabled(len(self.project_view.activeFragmentViews(unaligned_ok=True)) > 0)
         self.enableWidgetsIfActiveFragment()
@@ -2893,6 +3147,9 @@ class MainWindow(QMainWindow):
             method = getattr(w, "dwKeyPressEvent", None)
             if w != self and method is not None:
                 w.dwKeyPressEvent(e)
+        elif e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_Z:
+            # Undo lasted node added, if possible
+            self.fragmentUndo()
         else:
             w = QApplication.widgetAt(QCursor.pos())
             method = getattr(w, "dwKeyPressEvent", None)
@@ -2960,6 +3217,7 @@ class MainWindow(QMainWindow):
     def zarrTimerCallback(self):
         # print("timer callback", int(QThread.currentThreadId()))
         self.drawSlices()
+        # print("timer callback completed", int(QThread.currentThreadId()))
 
     # This function slows down the pace of redraws 
     # initiated by zarr threads.

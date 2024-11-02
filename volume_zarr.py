@@ -9,6 +9,7 @@ import queue
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
+import fsspec
 import cv2
 from scipy import ndimage
 from utils import Utils
@@ -83,8 +84,25 @@ def load_tif(path):
     stack_array = zarr.open(store, mode="r")
     return stack_array
 
-def load_zarr(dirname):
-    stack_array = zarr.open(dirname, mode="r")
+def zarr_is_file(path):
+    fs, _, _ = fsspec.get_fs_token_paths(path)
+    proto = fs.protocol
+    return proto == "file"
+
+def load_zarr(dirname, load_zarr_options=None):
+    options = None
+    # print("load_zarr options", load_zarr_options)
+    if not zarr_is_file(dirname) and load_zarr_options is not None and "stream_cache_directory" in load_zarr_options:
+        print("load_zarr options", load_zarr_options)
+        cache_dir = load_zarr_options["stream_cache_directory"]
+        # print("load_zarr stream_cache_directory", cache_dir)
+        dp = pathlib.Path(cache_dir)
+        if dp.is_dir():
+            dirname = "simplecache::"+dirname
+            options = {"simplecache": {"cache_storage": cache_dir}}
+        else:
+            print("WARNING: stream cache directory", cache_dir, "not found!")
+    stack_array = zarr.open(dirname, mode="r", storage_options=options)
     return stack_array
 
 def load_writable_volume(path):
@@ -126,12 +144,11 @@ def hashable_to_slice(item):
 
 
 class TransposedDataView():
-    def __init__(self, data, direction=0, from_vc_render=False):
+    def __init__(self, data, direction=0, from_vc_render=False, original_dtype=None):
         self.data = data
         self.from_vc_render = from_vc_render
-        assert direction in [0, 1]
         self.direction = direction
-        # self.mutex = threading.Lock()
+        self.original_dtype = original_dtype
 
     @property
     def shape(self):
@@ -192,6 +209,15 @@ class TransposedDataView():
                 alls.append(s)
 
         result = self.data[alls[0],alls[1],alls[2]]
+        if self.original_dtype == np.uint8 and result.dtype == np.uint8:
+            result = result.astype(np.uint16)
+            # result = result * 256 + 128  # Scale up to full 16-bit range
+
+            # Important: if input is 0, output must be
+            # be 0.  Otherwise, paintLevel can't tell whether
+            # a level is incomplete.
+            result = result * 256  # Scale up to full 16-bit range
+        
         if len(result.shape) == 1:
             # Fancy-indexing collapses the shape, so we don't need to transpose
             return result
@@ -245,10 +271,34 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         # but over a slow connection, the user probably wants to
         # see the most-recently-requested data first.
         self.executor._work_queue = queue.LifoQueue()
+        self.compressor = None
+        self.dtype = None
 
     def __getitem__old(self, key):
         print("get item", key)
         return super().__getitem__(key)
+
+    '''
+    def setCompressor(self, compressor):
+        self.compressor = compressor
+    '''
+
+    # By default, the LRU cache holds chunks that it copies
+    # directly from the original data store.  This means that
+    # if the data store contains compressed chunks, the cache
+    # will hold compressed chunks.
+    # Each such chunk has to be decompressed every time it is
+    # accessed, which is as often as once per redraw.
+    # This causes noticeable slowing.
+    # The routine below modifies the internals of the array
+    # that uses the LRU cache as the data store, so that compressed
+    # chunks are decompressed when they go into the cache, and
+    # so that they are not decompressed an additional time when
+    # they are accessed.
+    def transferCompressor(self, array):
+        self.compressor = array._compressor
+        array._compressor = None
+        self.dtype = array.dtype
 
     def setImmediateDataMode(self, flag):
         with self._mutex:
@@ -374,9 +424,26 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
                 future.add_done_callback(lambda x: self.processValue(key, x))
                 raise KeyError(key)
 
+    # This function gets a chunk from the underlying data
+    # store.  The access may cause an exception to be thrown.
+    # This function does not try to catch exceptions, because
+    # the caller of this function will handle them.
+    # If decompression has been transfered to the LRU cache
+    # (see the transferCompressor function), do the decompression
+    # here.
     def getValue(self, key):
         # print("getValue", key)
         value = self._store[key]
+        # print("nv", type(value), len(value))
+        if len(value) > 0 and self.compressor is not None:
+            for i in range(3):
+                try:
+                    dc = self.compressor.decode(value)
+                    break
+                except Exception as e:
+                    print("decompression failure try %d: %s"%(i+1, e))
+            # print("dc", type(dc), len(dc))
+            return dc
         # print("  found", key)
         return value
 
@@ -421,8 +488,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
 
 
 class ZarrLevel():
-    def __init__(self, array, path, scale, ilevel, max_mem_gb, from_vc_render=False):
-        # print("zl array", array, scale, max_mem_gb)
+    def __init__(self, array, path, scale, ilevel, max_mem_gb, from_vc_render=False, original_dtype=None):
         klru = KhartesThreadedLRUCache(
                 array.store, max_size=int(max_mem_gb*2**30))
         self.klru = klru
@@ -430,13 +496,18 @@ class ZarrLevel():
         self.data = zarr.open(klru, mode="r")
         if path != "":
             self.data = self.data[path]
-        # print("zl array", array, scale, max_mem_gb, self.data)
+        # klru.setCompressor(self.data._compressor)
+        # self.data._compressor = None
+        klru.transferCompressor(self.data)
+        # print("self data compressor", self.data._compressor)
         self.scale = scale
         # don't know if self.from_vc_render will ever be used
         self.from_vc_render = from_vc_render
+        self.original_dtype = original_dtype
         self.trdatas = []
-        self.trdatas.append(TransposedDataView(self.data, 0, from_vc_render))
-        self.trdatas.append(TransposedDataView(self.data, 1, from_vc_render))
+        self.trdatas.append(TransposedDataView(self.data, 0, from_vc_render, original_dtype))
+        self.trdatas.append(TransposedDataView(self.data, 1, from_vc_render, original_dtype))
+
 
     # The callback takes 2 arguments: key (a string) and
     # has_data (a bool).  key is the key of the chunk that
@@ -476,8 +547,10 @@ class CachedZarrVolume():
         self.trdatas = None
         self.is_zarr = True
         self.data_header = None
-
+        self.uses_overlay_colormap = False
+        self.original_dtype = None
         self.valid = False
+        self.is_streaming = False
         self.error = "no error message set"
         self.active_project_views = set()
         self.from_vc_render = False
@@ -492,7 +565,7 @@ class CachedZarrVolume():
         if self.from_vc_render:
             shape = (shape[1],shape[0],shape[2])
         return shape
-    
+
     def trshape(self, direction):
         shape = self.shape
         if self.from_vc_render:
@@ -549,16 +622,19 @@ class CachedZarrVolume():
             ds_directory,
             ds_directory_name,
             name,
-            from_vc_render=False
+            from_vc_render=False,
+            load_zarr_options=None
         ):
         """
         Generates a new volume object from a zarr directory
         """
+        '''
         tdir = pathlib.Path(ds_directory)
         if not tdir.is_dir():
             err = f"{tdir} is not a directory"
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
+        '''
 
         output_filename = name
         if not output_filename.endswith(".volzarr"):
@@ -588,7 +664,11 @@ class CachedZarrVolume():
             #     outfile.write(f"{key}\t{value}\n")
             json.dump(header, outfile, indent=4)
 
-        volume = CachedZarrVolume.loadFile(filepath)
+        volume = CachedZarrVolume.loadFile(filepath, load_zarr_options)
+        if not volume.valid:
+            err = volume.error
+            print(err)
+            return CachedZarrVolume.createErrorVolume(err)
         # print("about to set callback")
         project.addVolume(volume)
         return volume
@@ -598,14 +678,16 @@ class CachedZarrVolume():
             project,
             zarr_directory,
             name,
-            from_vc_render=False
+            from_vc_render=False,
+            load_zarr_options=None
         ):
         return CachedZarrVolume.createFromDataStore(
                 project,
                 zarr_directory,
                 "zarr_dir",
                 name,
-                from_vc_render
+                from_vc_render,
+                load_zarr_options
                 )
 
     @staticmethod
@@ -624,7 +706,7 @@ class CachedZarrVolume():
                 )
 
     @staticmethod
-    def loadFile(filename):
+    def loadFile(filename, load_zarr_options=None):
         try:
             try:
                 with open(filename, "r") as infile:
@@ -681,7 +763,7 @@ class CachedZarrVolume():
                 array = load_tif(ddir)
             elif zarr_directory is not None:
                 print(f"Loading zarr directory {ddir}")
-                array = load_zarr(ddir)
+                array = load_zarr(ddir, load_zarr_options)
         except Exception as e:
             err = f"Failed to read input directory {ddir}\n  specified in {filename} (error {e})"
             print(err)
@@ -692,6 +774,7 @@ class CachedZarrVolume():
         else:
             volume.setLevelFromArray(array, CachedZarrVolume.max_mem_gb)
 
+        volume.is_streaming = not zarr_is_file(ddir)
         if len(volume.levels) < 1:
             err = f"Problem parsing zdata from input directory {ddir}"
             print(err)
@@ -703,8 +786,8 @@ class CachedZarrVolume():
 
         volume.valid = True
         volume.trdatas = []
-        volume.trdatas.append(TransposedDataView(volume.data, 0, from_vc_render))
-        volume.trdatas.append(TransposedDataView(volume.data, 1, from_vc_render))
+        volume.trdatas.append(TransposedDataView(volume.data, 0, from_vc_render, volume.data.dtype))
+        volume.trdatas.append(TransposedDataView(volume.data, 1, from_vc_render, volume.data.dtype))
         volume.sizes = [int(size) for size in volume.data.shape]
         # volume.sizes is in ijk order, volume.data.shape is in kji order 
         volume.sizes.reverse()
@@ -714,7 +797,8 @@ class CachedZarrVolume():
         return volume
 
     def setLevelFromArray(self, array, max_mem_gb):
-        level = ZarrLevel(array, "", 1., 0, max_mem_gb, self.from_vc_render)
+        self.original_dtype = array.dtype
+        level = ZarrLevel(array, "", 1., 0, max_mem_gb, self.from_vc_render, self.original_dtype)
         self.levels.append(level)
 
     def parseMetadata(self, hier):
@@ -783,12 +867,6 @@ class CachedZarrVolume():
 
     def setLevelsFromHierarchy(self, hier, max_mem_gb):
         # divide metadata into parts, one per level
-        # special case if only one level in hierarchy
-
-        # for each array in hierarchy, parse level metadata
-        # make sure scale is correct
-        # calculate local max_mem_gb
-        # create and add level
         metadata = self.parseMetadata(hier)
         if metadata is None:
             print("Problem parsing metadata")
@@ -796,21 +874,21 @@ class CachedZarrVolume():
         expected_scale = 1.
         expected_path_int = 0
         max_gb = .5*max_mem_gb
-        # create this solely for the purpose of
-        # getting the chunk size
+        # create this solely for the purpose of getting the chunk size
         level0 = ZarrLevel(hier, '0', 1., 0, 0, self.from_vc_render)
         chunk = level0.data.chunks
-        # print(chunk)
         min_max_gb = 3*16*2*chunk[0]*chunk[1]*chunk[2]/(2**30)
-        # print("mmg", max_mem_gb, " ", end=' ')
+
         for i, lmd in enumerate(metadata):
+            # for each array in hierarchy, parse level metadata
             info = self.parseLevelMetadata(lmd)
             if info is None:
                 print(f"Problem parsing level {i} metadata")
                 return
             path, scale = info
+            # make sure scale and path are as expected
             try:
-               path_int = int(path)
+                path_int = int(path)
             except:
                 print(f"Level {i}: path {path} is not an integer")
                 return
@@ -820,15 +898,18 @@ class CachedZarrVolume():
             if scale != expected_scale:
                 print(f"Level {i} expected scale {expected_scale}, got {scale}")
                 return
+            # calculate local max_mem_gb
             max_gb = max(max_gb, min_max_gb)
-            # print("mmg", i, max_gb)
-            # print(max(min_max_gb, max_gb), end=' ')
-            level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb), self.from_vc_render)
+
+            # Get the dtype of the zarr array without loading it into memory
+            self.original_dtype = hier[path].dtype
+
+            # Create a custom ZarrLevel that handles the dtype conversion
+            level = ZarrLevel(hier, path, scale, i, max(min_max_gb, max_gb), self.from_vc_render, self.original_dtype)
             self.levels.append(level)
             expected_scale *= 2.
             expected_path_int += 1
             max_gb *= .5
-        # print()
 
     def setImmediateDataMode(self, flag):
         for level in self.levels:
@@ -985,6 +1066,7 @@ class CachedZarrVolume():
         mask = (out == 0)
         msum = mask.sum()
         if msum == 0: # no zeros
+            # print(axis,level.scale,out.min(),out.max(),"no zeros")
             return True
         if msum != out.shape[0]*out.shape[1]: # some but not all zeros
             # dilate the mask by one pixel
@@ -1092,7 +1174,7 @@ class CachedZarrVolume():
             
         # if misses0 = misses1, this means that there were no
         # klru cache misses during the call to getSliceInRange
-        # print("  ms",misses0,misses1)
+        # print("  ms",axis,level.scale,misses0,misses1)
         return misses0 == misses1
 
     def paintSlice(self, out, axis, ijkt, zoom, zarr_max_width, direction):
@@ -1117,7 +1199,7 @@ class CachedZarrVolume():
         start = i
         for i in range(start,len(self.levels)):
             level = self.levels[i]
-            # print("level", i, draw)
+            # print("level", axis, i, draw)
             # zarr_max_width is set to 0 for the multi-resolution case
             result = self.paintLevel(
                     out, axis, ijkt, zoom, direction, 

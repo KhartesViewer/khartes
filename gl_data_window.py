@@ -18,6 +18,7 @@ from PyQt5.QtGui import (
         QOpenGLDebugMessage,
         QOpenGLFramebufferObject,
         QOpenGLFramebufferObjectFormat,
+        QOpenGLPixelTransferOptions,
         QOpenGLShader,
         QOpenGLShaderProgram,
         QOpenGLTexture,
@@ -85,6 +86,12 @@ class GLDataWindow(DataWindow):
                 self.main_active_fragment_view = mfv
                 self.volume_view.setStxyTf(None)
             if self.volume_view.stxytf is None:
+                # Force window to actually repaint,
+                # so that stxy info in window is up to
+                # date when referred to by setStxyTfFromIjkTf
+                self.glw.repaint()
+                self.glw.repaint()
+                # print("draw slice setting stxy")
                 self.setStxyTfFromIjkTf()
 
     # Overrides DataWindow.fvsInBounds
@@ -148,22 +155,37 @@ class GLDataWindow(DataWindow):
         # print("offset", self.window.getNormalOffsetOnCurrentFragment())
 
     def setCursorPosition(self, tijk):
-        ij = self.tijkToIj(tijk)
-        xy = self.ijToXy(ij)
-        d = 10
-        xyl = (xy[0]-d, xy[1]-d)
-        xyg = (xy[0]+d, xy[1]+d)
+        d = 40
+        # ij = self.tijkToIj(tijk)
+        # xy = self.ijToXy(ij)
+        # xyl = (xy[0]-d, xy[1]-d)
+        # xyg = (xy[0]+d, xy[1]+d)
 
         # stxyz = self.stxyzInBounds(xyl, xyg, tijk)
         stxyz = self.stxyzInRange(tijk, d)
         # print("tf, xy, stxy", tf, xy, stxy)
         self.window.setCursorPosition(self, tijk, stxyz)
 
+    '''
+    This is called from data_window.py mousePressEvent().
+    tijk is the ijk location in the transposed data cube.
+    addPoint() calls stxyzInRange, which looks in the
+    current data slice for the closest pixel (closest
+    to the ijk point) that contains a valid triangle id. 
+    stxyzInRange() then computes the corresponding stxy
+    by performing a barycentric interpolation of the
+    stxy values of the triangle vertices.
+    '''
     def addPoint(self, tijk):
         # print("gldw add point", tijk)
-        d = 100
-        stxyz = self.stxyzInRange(tijk, d)
-        print("stxyz", stxyz)
+        vv = self.volume_view
+        if vv is None:
+            return
+        stxytf = vv.stxytf
+        d = 300
+        stxyz = self.stxyzInRange(tijk, d, True, stxytf)
+        # print("stxyz", stxyz)
+        '''
         maxz = 10
         if stxyz is None:
             stxy = None
@@ -171,6 +193,21 @@ class GLDataWindow(DataWindow):
             stxy = stxyz[:2]
             if abs(stxyz[2]) > maxz:
                 stxy = None
+        '''
+        if stxyz is None:
+            stxy = None
+        else:
+            stxy = stxyz[:2]
+            ''' No longer needed; taken care of by stxyzInRange
+            if stxytf is not None:
+                dx = abs(stxy[0]-stxytf[0])
+                dy = abs(stxy[1]-stxytf[1])
+                # print(dx, dy)
+                maxd = 500
+                if dx > maxd or dy > maxd:
+                    print("nearest xyz point is too far in uv")
+                    stxy = None
+            '''
         self.window.addPointToCurrentFragment(tijk, stxy)
 
     def setStxyTfFromIjkTf(self):
@@ -178,16 +215,17 @@ class GLDataWindow(DataWindow):
         vv = self.volume_view
         if vv is None:
             return
+        d = 40
         tf = vv.ijktf
-        ij = self.tijkToIj(tf)
-        xy = self.ijToXy(ij)
-        d = 10
-        xyl = (xy[0]-d, xy[1]-d)
-        xyg = (xy[0]+d, xy[1]+d)
+        # ij = self.tijkToIj(tf)
+        # xy = self.ijToXy(ij)
+        # xyl = (xy[0]-d, xy[1]-d)
+        # xyg = (xy[0]+d, xy[1]+d)
 
         # stxy = self.stxyInBounds(xyl, xyg, tf)
         stxy = self.stxyInRange(tf, d)
         # print("tf, xy, stxy", tf, xy, stxy)
+        # print("tf, stxy", tf, stxy)
         # if stxy is not None:
         #     self.volume_view.setStxyTf(stxy)
         self.volume_view.setStxyTf(stxy)
@@ -234,14 +272,95 @@ class GLDataWindow(DataWindow):
         h = np.inner(cr, v3-v0)
         return h
 
-    # Note that this only looks for trgls on the
-    # main active fragment view
-    def stxyzInRange(self, ijk, maxd):
+    def showsSingleDetachedPoint(self, ijk, maxd):
         dw = self.glw
         ij = self.tijkToIj(ijk)
-        xy0 = self.ijToXy(ij)
-        xymin = (xy0[0]-maxd, xy0[1]-maxd)
-        xymax = (xy0[0]+maxd, xy0[1]+maxd)
+        # xyp means "picked xy", in screen coordinates
+        xyp = self.ijToXy(ij)
+        xymin = (xyp[0]-maxd, xyp[1]-maxd)
+        xymax = (xyp[0]+maxd, xyp[1]+maxd)
+        xymin = (max(0, xymin[0]), max(0, xymin[1]))
+        xymax = (min(self.width(), xymax[0]), min(self.height(), xymax[1]))
+        # x y fragment_view_id trgl_id
+        xyfvs = dw.xyfvs
+        # list of fragment views (to go from fragment_view_id
+        # to fragment_view)
+        indexed_fvs = dw.indexed_fvs
+        pv = self.window.project_view
+        mfvi = -1
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            return False
+        if mfv is not None and dw.indexed_fvs is not None and mfv in indexed_fvs:
+            mfvi = indexed_fvs.index(mfv)
+        if mfvi < 0:
+            return False
+        # indexes of rows where fragment_view matches mfvi
+        # matches = (xyfvs[:,2] == mfvi).nonzero()[0]
+
+        # Look for points making up the fragment cross section lines
+        # and that are within the xymin/xymax window
+        # need a lot of parentheses because the & operator
+        # has higher precedence than comparison operators
+        matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
+        # print("line len(matches)", len(matches))
+        if len(matches) > 0:
+            return False
+        if len(mfv.stpoints) == 0:
+            return False
+        fvs = np.array(self.cur_frag_pts_fv)
+        # print("fvs", fvs)
+        xys = self.cur_frag_pts_xyijk[:,:2]
+        inds = self.cur_frag_pts_xyijk[:,5].astype(np.int64)
+        # ftrg = mfv.trgls().flatten()
+        has_trgl = np.isin(inds, mfv.trgls().flatten(), kind="table")
+        # matches = ((fvs == mfv) & (xys >= xymin).all(axis=1) & (xys <= xymax).all(axis=1) & has_trgl).nonzero()[0]
+        # Look for fragment vertex points
+        # that are within the xymin/xymax window
+        matches = ((fvs == mfv) & (xys >= xymin).all(axis=1) & (xys <= xymax).all(axis=1)).nonzero()[0]
+        # print("point len(matches)", len(matches))
+        if len(matches) == 0:
+            return False
+        # print("matches", matches)
+        # array of visible points that are in xymin/xymax window
+        mxy = xys[matches]
+        dels = mxy - xyp
+        # d2s = np.inner(dels, dels)
+        d2s = (dels*dels).sum(axis=1)
+        sortargs = np.argsort(d2s)
+        # minindex = np.argmin(d2s)
+        # index (in matches array) of closest point
+        ind0 = sortargs[0]
+        # print("d2s", mxyft.shape, xyp, dels.shape, d2s.shape, d2s[ind0])
+        mind = np.sqrt(d2s[ind0])
+        # picked point is too far away from nearest point,
+        # or picked point is exactly on nearest point
+        if mind > maxd or mind == 0.:
+            return False
+        # index (in list of visible points) of closest point
+        matchind0 = matches[ind0]
+        # index (in fragment's points array) of closest point
+        ptind0 = inds[matchind0]
+        # print(inds)
+        # print(has_trgl, ind0, ptindex)
+
+        # if closest existing point (closest to the
+        # picked point) has no trgl attached:
+        if not has_trgl[matchind0]:
+            return True
+        return False
+
+    # Note that this only looks for trgls on the
+    # main active fragment view
+    def stxyzInRange(self, ijk, maxd, try_hard=False, stxy_center = None, check_for_single_detached_point=False):
+        dw = self.glw
+        ij = self.tijkToIj(ijk)
+        # xyp means "picked xy", in screen coordinates
+        xyp = self.ijToXy(ij)
+        xymin = (xyp[0]-maxd, xyp[1]-maxd)
+        xymax = (xyp[0]+maxd, xyp[1]+maxd)
+        xymin = (max(0, xymin[0]), max(0, xymin[1]))
+        xymax = (min(self.width(), xymax[0]), min(self.height(), xymax[1]))
         # x y fragment_view_id trgl_id
         xyfvs = dw.xyfvs
         # list of fragment views (to go from fragment_view_id
@@ -258,30 +377,224 @@ class GLDataWindow(DataWindow):
             return None
         # indexes of rows where fragment_view matches mfvi
         # matches = (xyfvs[:,2] == mfvi).nonzero()[0]
+
+        # Look for points making up the fragment cross section lines
+        # and that are within the xymin/xymax window
         # need a lot of parentheses because the & operator
         # has higher precedence than comparison operators
         matches = ((xyfvs[:,2] == mfvi) & (xyfvs[:,:2] >= xymin).all(axis=1) & (xyfvs[:,:2] <= xymax).all(axis=1)).nonzero()[0]
+        # print("line len(matches)", len(matches))
+        if stxy_center is not None:
+            # for each pixel, find the pixel's triangle
+            # print(stxy_center)
+            trgl_indexes = xyfvs[matches, 3]
+            # print(trgl_indexes)
+            trgls = mfv.trgls()[trgl_indexes]
+            sts = np.abs(mfv.stpoints[trgls]-stxy_center)
+            zoom = self.getZoom()
+            mwh = max(self.width(), self.height())/zoom
+            # only keep the pixel if it is true that at least one
+            # vertex of the pixel's triangle is within range
+            inrange = np.nonzero((sts<.5*mwh).all(axis=2).any(axis=1))[0]
+            # print("mwh", mwh, xyfvs.shape, sts.shape, trgl_indexes.shape, inrange.shape)
+            # print(matches)
+            # print(inrange)
+            # print("before", matches.shape)
+            matches = matches[inrange]
+            # print("after", matches.shape)
         if len(matches) == 0:
-            # print("no matches")
+            if not try_hard:
+                return None
+            if mfv.stpoints is None or len(mfv.stpoints) == 0:
+                # if there are no current points at all,
+                # create one
+                return np.zeros(3, dtype=np.float64)
+            fvs = np.array(self.cur_frag_pts_fv)
+            # print("fvs", fvs)
+            xys = self.cur_frag_pts_xyijk[:,:2]
+            inds = self.cur_frag_pts_xyijk[:,5].astype(np.int64)
+            # ftrg = mfv.trgls().flatten()
+            has_trgl = np.isin(inds, mfv.trgls().flatten(), kind="table")
+            # matches = ((fvs == mfv) & (xys >= xymin).all(axis=1) & (xys <= xymax).all(axis=1) & has_trgl).nonzero()[0]
+            # Look for fragment vertex points
+            # that are within the xymin/xymax window
+            matches = ((fvs == mfv) & (xys >= xymin).all(axis=1) & (xys <= xymax).all(axis=1)).nonzero()[0]
+            # print("point len(matches)", len(matches))
+            if len(matches) == 0:
+                return None
+            # print("matches", matches)
+            # array of visible points that are in xymin/xymax window
+            mxy = xys[matches]
+            dels = mxy - xyp
+            # d2s = np.inner(dels, dels)
+            d2s = (dels*dels).sum(axis=1)
+            sortargs = np.argsort(d2s)
+            # minindex = np.argmin(d2s)
+            # index (in matches array) of closest point
+            ind0 = sortargs[0]
+            # print("d2s", mxyft.shape, xyp, dels.shape, d2s.shape, d2s[ind0])
+            mind = np.sqrt(d2s[ind0])
+            # picked point is too far away from nearest point,
+            # or picked point is exactly on nearest point
+            if mind > maxd or mind == 0.:
+                return None
+            # index (in list of visible points) of closest point
+            matchind0 = matches[ind0]
+            # index (in fragment's points array) of closest point
+            ptind0 = inds[matchind0]
+            # print(inds)
+            # print(has_trgl, ind0, ptindex)
+
+            # if closest existing point (closest to the
+            # picked point) has no trgl attached:
+            if not has_trgl[matchind0]:
+                if check_for_single_detached_point:
+                    return True
+                # print("no trgl", ind0, matchind0, ptind0)
+
+                # stxy and window xy of closest existing point
+                stxy0 = mfv.stpoints[ptind0]
+                xy0 = xys[matchind0]
+
+                ind1 = ind0
+                # if more than one existing point is visible:
+                if len(matches) > 1:
+                    ind1 = sortargs[1]
+
+                matchind1 = matches[ind1]
+                ptind1 = inds[matchind1]
+                # stxy and window xy of second-closest existing point
+                stxy1 = mfv.stpoints[ptind1]
+                xy1 = xys[matchind1]
+
+                xy01 = xy1 - xy0
+                stxy01 = stxy1 - stxy0
+                # can be zero if only one existing point is visible
+                dxy01 = np.sqrt((xy01*xy01).sum())
+
+                # vector, and distance, from nearest existing point
+                # to location where user clicked
+                # we know this is not zero because of test above
+                # on whether mind == 0
+                xy0p = xyp - xy0
+                dxy0p = np.sqrt((xy0p*xy0p).sum())
+
+                nstxy = stxy0.copy()
+                # if only one existing point is visible,
+                # or two points are on top of each other (though
+                # this second case couldn't actually happen):
+                if dxy01 == 0.:
+                    mdel = xy0p[0]
+                    if abs(xy0p[1]) > abs(xy0p[0]):
+                        mdel = xy0p[1]
+    
+                    sgn = 0
+                    if mdel > 0:
+                        sgn = 1
+                    elif mdel < 0:
+                        sgn = -1
+                    else:
+                        print("try_hard: Shouldn't reach here!")
+                        # print(xy0, xy1)
+                        sgn = 1
+
+                    # print("axis", self.axis)
+                    if self.axis == 1:  # z slice
+                        # nstxy[1] += sgn*dxy0p
+                        # for z slice, ignore sgn; assume
+                        # that user is picking in clockwise
+                        # direction, which corresponds to
+                        # an increase in stxy[0]
+                        nstxy[0] += dxy0p
+                    else:
+                        nstxy[1] += sgn*dxy0p
+                    return nstxy
+
+                # normalized vector from nearest to second-nearest point
+                xy01n = xy01 / dxy01
+                # dot product of normalized vector from nearest point to
+                # second-nearest point, and non-normalized vector 
+                # from nearest point to picked point
+                xy01p = (xy01n * xy0p).sum()
+                stxy01 = stxy1 - stxy0
+                # print("try_h", xy01p, stxy0, stxy1, stxy01)
+                # print(xy01n, xy01p)
+                nstxy = stxy0 + xy01p * stxy01 / dxy01
+                return nstxy
+
+
+                '''
+                d2s2 = d2s.copy()
+                d2s2[minindex] = 1.e+30
+                minindex2 = np.argmin(d2s2)
+                xygrad = dels[minindex2]-dels[minindex]
+                ptindex2 = inds[matches[minindex2]]
+                stgrad = mfv.stpoints[ptindex2]-mfv.stpoints[ptindex]
+                print("ptindex2, ptindex", ptindex2, ptindex)
+                print("dels",dels[minindex2], dels[minindex])
+                print("stpts",mfv.stpoints[ptindex2], mfv.stpoints[ptindex])
+
+                ostxy = mfv.stpoints[ptindex]
+                nstxy = ostxy.copy()
+                dxy = dels[minindex]
+                sxy = np.sign(dxy)
+                slope = stgrad * xygrad
+                sxy[slope != 0] *= np.sign(slope[slope != 0])
+                distxy = np.sqrt(d2s[minindex])
+                if self.axis == 0:  # z slice
+                    nstxy[1] += sxy[1]*distxy
+                else:
+                    nstxy[0] += sxy[0]*distxy
+                print("stxy", distxy, ostxy, nstxy)
+                return nstxy
+                '''
+            tindexes = (mfv.trgls()==ptind0).nonzero()[0]
+            if len(tindexes) == 0:
+                print("tindexes is empty!  This should not happen")
+                return None
+            # print("a tindexes", tindexes)
+            trgl_index = tindexes[0]
+
+        else:
+            mxyft = xyfvs[matches]
+
+            # dels = mxyft[:,:2] - np.array(xy0)[:,np.newaxis]
+            dels = mxyft[:,:2] - xyp
+            # d2s = np.inner(dels, dels)
+            d2s = (dels*dels).sum(axis=1)
+            minindex = np.argmin(d2s)
+            # print("d2s", mxyft.shape, xy0, dels.shape, d2s.shape, d2s[minindex])
+            mind = np.sqrt(d2s[minindex])
+            if mind > maxd:
+                return None
+
+            '''
+            if True or self.axis == 0:
+                print("b minindex", minindex, mxyft[minindex])
+                # print(mxyft)
+            '''
+            trgl_index = mxyft[minindex, 3]
+
+        if check_for_single_detached_point:
             return None
-
-        mxyft = xyfvs[matches]
-
-        # dels = mxyft[:,:2] - np.array(xy0)[:,np.newaxis]
-        dels = mxyft[:,:2] - xy0
-        # d2s = np.inner(dels, dels)
-        d2s = (dels*dels).sum(axis=1)
-        minindex = np.argmin(d2s)
-        # print("d2s", mxyft.shape, xy0, dels.shape, d2s.shape, d2s[minindex])
-        mind = np.sqrt(d2s[minindex])
-        if mind > maxd:
+        if trgl_index >= len(mfv.trgls()):
+            print("Error: stxyzInRange trgl index",trgl_index,">=",len(mfv.trgls()))
+            '''
+            print("uniques", np.unique(xyfvs[:,3]))
+            if self.axis == 2:
+                mx = xyfvs.max(axis=0)
+                print("mx", mx)
+                oar = np.zeros((mx[0]+1, mx[1]+1), dtype=np.uint8)
+                oar[xyfvs[:,0], xyfvs[:,1]] = 20*xyfvs[:,3]
+                cv2.imwrite("problem.png", oar.T)
+            '''
             return None
-
-        trgl_index = mxyft[minindex, 3]
         trgl = mfv.trgls()[trgl_index]
         vpts = mfv.vpoints[trgl][:,:3]
 
         bs = self.ptToBary(ijk, vpts)
+        if mfv.stpoints is None or (len(mfv.stpoints) < trgl).any():
+            print("*** stpoint problem", trgl, mfv.stpoints)
         sts = mfv.stpoints[trgl]
         # print(sts)
         # print(bs)
@@ -296,6 +609,7 @@ class GLDataWindow(DataWindow):
             return None
         return stxyz[:2]
 
+    '''
     # Note that this only looks for trgls on the
     # main active fragment view
     def stxyzInBounds(self, xymin, xymax, ijk):
@@ -373,6 +687,7 @@ class GLDataWindow(DataWindow):
         if stxyz is None:
             return None
         return stxyz[:2]
+    '''
 
 
 slice_code = {
@@ -398,6 +713,7 @@ slice_code = {
       uniform sampler2D overlay_sampler;
       uniform sampler2D fragments_sampler;
       // uniform float frag_opacity = 1.;
+      uniform int uses_overlay_colormap = 0;
       in vec2 ftxt;
       out vec4 fColor;
 
@@ -405,6 +721,29 @@ slice_code = {
       {
         float alpha;
         fColor = texture(base_sampler, ftxt);
+        if (uses_overlay_colormap > 0) {
+            float fr = fColor[0];
+            uint ir = uint(fr*65535.);
+            if ((ir & uint(32768)) == 0) {
+                // fColor *= 2.;
+                float gray = fColor[0]*2.;
+                fColor = vec4(gray, gray, gray, 1.);
+            } else {
+                uint ob = ir & uint(31);
+                // ob = ir & uint(31);
+                ir >>= 5;
+                uint og = ir & uint(31);
+                ir >>= 5;
+                uint or = ir & uint(31);
+                fColor[0] = float(or) / 31.;
+                fColor[1] = float(og) / 31.;
+                fColor[2] = float(ob) / 31.;
+                fColor[3] = 1.;
+            }
+        } else {
+            float fr = fColor[0];
+            fColor = vec4(fr, fr, fr, 1.);
+        }
 
         vec4 uColor = texture(underlay_sampler, ftxt);
         alpha = uColor.a;
@@ -693,6 +1032,10 @@ fragment_trgls_code = {
       // max_vertices = 10+4 (10 for thick line, 4 for pick line)
       layout(triangle_strip, max_vertices = 14) out;
       flat out int trgl_type;
+      // On MacOS, gl_PrimitiveID doesn't seem
+      // to behave as specified, so need to use trgl_id
+      // instead
+      flat out int trgl_id;
       in vec4 stxyt[];
   
       %s
@@ -846,7 +1189,12 @@ fragment_trgls_code = {
             ivec2 iv = v4[i];
             gl_Position = pcs[iv.x] + 1.*offsets[iv.y];
             trgl_type = 1;
-            gl_PrimitiveID = gl_PrimitiveIDIn;
+            // On MacOS, the fragment shader below
+            // does not receive the value of gl_PrimitiveID
+            // set in this shader
+            // gl_PrimitiveID = gl_PrimitiveIDIn;
+            // So put the value in trgl_id instead
+            trgl_id = gl_PrimitiveIDIn;
             EmitVertex();
           }
         }
@@ -869,6 +1217,7 @@ fragment_trgls_code = {
       // empty_color is effectively not drawn
       const vec4 empty_color = vec4(0.,0.,0.,0.);
       flat in int trgl_type;
+      flat in int trgl_id;
 
       void main()
       {
@@ -880,8 +1229,13 @@ fragment_trgls_code = {
           pick_color = empty_color;
         } else {
           frag_color = empty_color;
-          uint lsid = gl_PrimitiveID & 0xffff;
-          uint msid = (gl_PrimitiveID>>16) & 0xffff;
+          // On MacOS, the value of gl_PrimitiveID set in
+          // the geometry shader above is ignored, so its
+          // value cannot be trusted here
+          // uint uid = uint(gl_PrimitiveID);
+          uint uid = uint(trgl_id);
+          uint lsid = uid & uint(0xffff);
+          uint msid = (uid>>16) & uint(0xffff);
           // remember alpha must = 1!
           // vec4 ocolor = vec4(icolor.r, float(msid)/65536., float(lsid)/65536., 1.);
           vec4 ocolor = vec4(icolor.r, float(msid)/65535., float(lsid)/65535., 1.);
@@ -1175,7 +1529,8 @@ class GLDataWindowChild(QOpenGLWidget):
                              pygl.GL_UNSIGNED_INT, VoidPtr(0))
             vao.release()
 
-        if mfv is not None:
+        # mfv won't be in self.fragment_vaos if mfv is not visible:
+        if mfv is not None and mfv in self.fragment_vaos:
             fvao = self.fragment_vaos[mfv]
             normal_offset = fvao.fragment_view.normal_offset
             if not fvao.is_line and normal_offset != 0.:
@@ -1290,7 +1645,7 @@ class GLDataWindowChild(QOpenGLWidget):
 
             ijs = dw.tijksToIjs(pts)
             xys = dw.ijsToXys(ijs)
-            # print(pts.shape, xys.shape)
+            # print(pts.shape, ijs.shape, xys.shape)
             xypts = np.concatenate((xys, pts), axis=1)
             xyptslist.append(xypts)
             dw.cur_frag_pts_fv.extend([fv]*len(pts))
@@ -1304,7 +1659,7 @@ class GLDataWindowChild(QOpenGLWidget):
             vao.bind()
 
             # print("drawing", node_thickness, fvao.pts_size)
-            f.glDrawArrays(pygl.GL_POINTS, 0, fvao.pts_size)
+            f.glDrawArrays(pygl.GL_POINTS, 0, fvao.pts_count)
             vao.release()
 
         self.fragment_pts_program.release()
@@ -1316,7 +1671,7 @@ class GLDataWindowChild(QOpenGLWidget):
         if len(xyptslist) > 0:
             dw.cur_frag_pts_xyijk = np.concatenate(xyptslist, axis=0)
         else:
-            dw.cur_frag_pts_xyijk = np.zeros((0,5), dtype=np.float32)
+            dw.cur_frag_pts_xyijk = np.zeros((0,6), dtype=np.float32)
         # print("pts", len(dw.cur_frag_pts_xyijk))
 
         timera.time(axstr+"draw points")
@@ -1396,14 +1751,39 @@ class GLDataWindowChild(QOpenGLWidget):
         bytesperline = (data.size*data.itemsize)//data.shape[0]
         img = QImage(data, data.shape[1], data.shape[0],
                      bytesperline, qiformat)
-        # mirror image vertically because of different y direction conventions
-        tex = QOpenGLTexture(img.mirrored(), 
+        # Special case for uint16 image: QOpenGLTexture
+        # by default (on Qt5) converts the QImage to
+        # a uint8 RGBA texture.  We want to preserve
+        # the full 16 bits, so need to go through a
+        # series of explicit steps
+        if qiformat == QImage.Format_Grayscale16:
+            imm = img.mirrored()
+            tex = QOpenGLTexture(QOpenGLTexture.Target2D)
+            tex.setFormat(QOpenGLTexture.R16_UNorm)
+            tex.setSize(imm.width(), imm.height())
+            tex.setMipLevels(1)
+            tex.allocateStorage(QOpenGLTexture.Red, QOpenGLTexture.UInt16)
+            uploadOptions = QOpenGLPixelTransferOptions()
+            uploadOptions.setAlignment(2)
+            # print("g", bytesperline)
+            tex.setData(0, QOpenGLTexture.Red, QOpenGLTexture.UInt16, imm.constBits(), uploadOptions)
+            # print("h")
+            # tex.setData(0, QOpenGLTexture.R16_UNorm, QOpenGLTexture.UInt16, img.constBits())
+        else:
+            # mirror image vertically because of different y direction conventions
+            tex = QOpenGLTexture(img.mirrored(), 
                              QOpenGLTexture.DontGenerateMipMaps)
+        '''
+        tex = QOpenGLTexture(img.mirrored(), 
+                         QOpenGLTexture.DontGenerateMipMaps)
+        '''
+        # print("formats %d %x"%(qiformat, tex.format()))
         tex.setWrapMode(QOpenGLTexture.DirectionS, 
                         QOpenGLTexture.ClampToBorder)
         tex.setWrapMode(QOpenGLTexture.DirectionT, 
                         QOpenGLTexture.ClampToBorder)
         tex.setMagnificationFilter(QOpenGLTexture.Nearest)
+        tex.setMinificationFilter(QOpenGLTexture.Nearest)
         return tex
 
     def drawUnderlays(self, data):
@@ -1528,6 +1908,11 @@ class GLDataWindowChild(QOpenGLWidget):
         f.glActiveTexture(pygl.GL_TEXTURE0+bunit)
         base_tex.bind()
         self.slice_program.setUniformValue(bloc, bunit)
+
+        uoc = 0
+        if volume_view.volume.uses_overlay_colormap:
+            uoc = 1
+        self.slice_program.setUniformValue("uses_overlay_colormap", uoc)
 
         underlay_data = np.zeros((wh,ww,4), dtype=np.uint16)
         self.drawUnderlays(underlay_data)
@@ -1758,6 +2143,7 @@ class FragmentVao:
         pts3d = np.ascontiguousarray(fv.vpoints[:,:3], dtype=np.float32)
         # print("pts3d", pts3d.shape, pts3d.dtype)
         self.pts_size = pts3d.size
+        self.pts_count = pts3d.shape[0]
 
         nbytes = pts3d.size*pts3d.itemsize
         self.vbo.allocate(pts3d, nbytes)

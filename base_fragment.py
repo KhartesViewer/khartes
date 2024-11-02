@@ -158,8 +158,10 @@ class BaseFragment:
         return np.array((stxaxis, styaxis, normal)).T
 
 
-    # class function
+    @staticmethod
     def calculateSqCm(pts, trgls, voxel_size_um):
+        if trgls is None or len(trgls) == 0:
+            return 0.
         v0 = trgls[:,0]
         v1 = trgls[:,1]
         v2 = trgls[:,2]
@@ -222,6 +224,8 @@ class BaseFragmentView:
         self.visible = True
         self.active = False
         self.mesh_visible = True
+        self.map_image = None
+        self.map_corners = None
         self.modified = Utils.timestamp()
         self.local_points_modified = Utils.timestamp()
         self.normal_offset = 0.
@@ -299,6 +303,12 @@ class BaseFragmentView:
         if not self.active:
             return False
         return self.aligned()
+
+    def rebuildStPoints(self):
+        return
+
+    def reparameterize(self):
+        return
 
     # direction is not used here, but this notifies fragment view
     # to recompute things
