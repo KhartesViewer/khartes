@@ -52,6 +52,8 @@ from base_fragment import BaseFragment, BaseFragmentView
 from volume import (
         Volume, VolumesModel, 
         DirectionSelectorDelegate,
+        ColormapSelectorDelegate,
+        OpacitySelectorDelegate,
         ColorSelectorDelegate)
 from volume_zarr import CachedZarrVolume
 from ppm import Ppm
@@ -1484,15 +1486,23 @@ class MainWindow(QMainWindow):
         # hh.setMinimumSectionSize(40)
         volumes_dsd = DirectionSelectorDelegate(self.volumes_table)
         volumes_csd = ColorSelectorDelegate(self.volumes_table)
+        volumes_cmsd = ColormapSelectorDelegate(self.volumes_table)
+        volumes_osd = OpacitySelectorDelegate(self.volumes_table)
         # self.direction_selector_delegate = dsd
         # need to attach these to "self" so they don't
         # get deleted on going out of scope
         self.volumes_csd = volumes_csd
+        self.volumes_cmsd = volumes_cmsd
         self.volumes_dsd = volumes_dsd
+        self.volumes_osd = volumes_osd
         cind = VolumesModel.columnIndex("Color")
+        cmind = VolumesModel.columnIndex("Colormap")
         dind = VolumesModel.columnIndex("Dir")
+        oind = VolumesModel.columnIndex("Opacity")
         self.volumes_table.setItemDelegateForColumn(cind, volumes_csd)
+        self.volumes_table.setItemDelegateForColumn(cmind, volumes_cmsd)
         self.volumes_table.setItemDelegateForColumn(dind, volumes_dsd)
+        self.volumes_table.setItemDelegateForColumn(oind, volumes_osd)
         # print("edit triggers", int(self.volumes_table.editTriggers()))
         # self.volumes_table.setEditTriggers(QAbstractItemView.AllEditTriggers)
         # print("mss", hh.minimumSectionSize())
@@ -2847,9 +2857,9 @@ class MainWindow(QMainWindow):
         if self.project_view is None:
             print("Warning: setting direction but no project set")
             return
-        self.volumes_table.model().beginResetModel()
+        # self.volumes_table.model().beginResetModel()
         self.project_view.setDirection(volume, direction)
-        self.volumes_table.model().endResetModel()
+        # self.volumes_table.model().endResetModel()
         if volume == self.project_view.cur_volume:
             self.drawSlices()
         # don't need to check if volume is cur_volume because 
@@ -3027,9 +3037,24 @@ class MainWindow(QMainWindow):
         self.drawSlices()
 
     def setVolumeViewColor(self, volume_view, color):
-        self.volumes_table.model().beginResetModel()
+        # self.volumes_table.model().beginResetModel()
         volume_view.setColor(color)
-        self.volumes_table.model().endResetModel()
+        # self.volumes_table.model().endResetModel()
+        self.drawSlices()
+
+    def setVolumeViewColormap(self, volume_view, colormap_name):
+        # self.volumes_table.model().beginResetModel()
+        # volume_view.colormap_name = colormap_name
+        volume_view.setColormap(colormap_name)
+        # self.volumes_table.model().endResetModel()
+        self.drawSlices()
+
+    def setVolumeViewOpacity(self, volume_view, opacity):
+        # self.volumes_table.model().beginResetModel()
+        # volume_view.colormap_name = colormap_name
+        # print("svvo", volume_view.opacity, opacity)
+        volume_view.setOpacity(opacity)
+        # self.volumes_table.model().endResetModel()
         self.drawSlices()
 
     def setFragments(self):

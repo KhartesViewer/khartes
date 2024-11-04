@@ -189,14 +189,16 @@ class ProjectView:
                 if 'color' in vinfo:
                     vv.setColor(QColor(vinfo['color']), no_notify=True)
                 if 'opacity' in vinfo:
-                    vv.opacity = vinfo['opacity']
+                    # vv.opacity = vinfo['opacity']
+                    # vv.setOpacity(float(vinfo['opacity']), no_notify=True)
+                    vv.setOpacity(vinfo['opacity'], no_notify=True)
                 if 'colormap_range' in vinfo:
                     vv.colormap_range = vinfo['colormap_range']
                 if 'colormap_is_indicator' in vinfo:
                     vv.colormap_is_indicator = vinfo['colormap_is_indicator']
                 if 'colormap_name' in vinfo:
-                    vv.colormap_name = vinfo['colormap_name']
-                vv.setColormap()
+                    # vv.colormap_name = vinfo['colormap_name']
+                    vv.setColormap(vinfo['colormap_name'])
                 # else:
                 # this else clause is not needed because VolumeView
                 # creator sets a random color

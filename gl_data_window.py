@@ -1324,13 +1324,16 @@ class ColormapTexture:
         self.timestamp = 0
         self.tex = None
         self.update()
-        # print("created ColormapTexture")
+        name = "(None)"
+        if volume_view is not None:
+            name = volume_view.volume.name
+        # print("created ColormapTexture for", name)
 
     # update texture (do nothing if texture is already up to date)
     def update(self):
         vv = self.volume_view
         if self.timestamp != vv.colormap_lut_timestamp:
-            print(self.timestamp, vv.colormap_lut_timestamp)
+            # print("ColormapTexture.update", vv.volume.name, self.timestamp, vv.colormap_lut_timestamp)
             self.tex = self.textureFromLut(self.volume_view.colormap_lut)
             # print("update self.tex", self.tex)
             self.timestamp = vv.colormap_lut_timestamp

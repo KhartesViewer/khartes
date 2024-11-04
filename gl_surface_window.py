@@ -874,10 +874,18 @@ class GLSurfaceWindowChild(GLDataWindowChild):
             if atlas.valid:
                 break
             aw = (aw*3)//4
+        print(" atlas created")
         return atlas
 
-    # Rebuild atlas if volume_view or volume_view.direction
-    # changes
+    '''
+    Rebuild atlas if volume_view or volume_view.direction
+    changes.  But there is a complication:
+    In the case of overlays, if the volume_view is set to
+    none, don't deallocate the data and the atlas texture memory right
+    away, in case the user will want to redisplay the same volume
+    as before (they may just be toggling the overlay on and off).
+    '''
+
     def checkAtlases(self):
         dw = self.gldw
         if dw.volume_view is None:
@@ -896,11 +904,16 @@ class GLSurfaceWindowChild(GLDataWindowChild):
 
         for i in range(self.overlay_count):
             if dw.overlay_volume_views[i] is None:
+                '''
                 self.overlay_volume_views[i] = None
                 self.overlay_volume_view_directions[i] = -1
                 if self.overlay_atlases[i] is not None:
                     self.overlay_atlases[i].setVolumeView(None)
                     self.overlay_atlases[i] = None
+                '''
+                if Atlas.isInUse(self.overlay_atlases[i]):
+                    # self.overlay_atlases[i].setVolumeView(None)
+                    self.overlay_atlases[i].in_use = False
 
         if dw.volume_view is None:
             return
@@ -1045,7 +1058,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
                     larr = larr[:self.atlas.max_nchunks-1]
                 self.atlas.addBlocks(larr, dw.window.zarrFutureDoneCallback)
                 for atlas in self.overlay_atlases:
-                    if atlas is None:
+                    if not Atlas.isInUse(atlas):
                         continue
                     atlas.addBlocks(larr, dw.window.zarrFutureDoneCallback)
                 overlay_label_text += "  Zoom Level: %d  Chunks: %d"%(zoom_level, len(larr))
@@ -1062,7 +1075,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         # for more details
         self.atlas.loadTexturesFromPbos(dw.window.zarrFutureDoneCallback)
         for atlas in self.overlay_atlases:
-            if atlas is None:
+            if not Atlas.isInUse(atlas):
                 continue
             atlas.loadTexturesFromPbos(dw.window.zarrFutureDoneCallback)
         timera.time("load textures")
@@ -1303,7 +1316,7 @@ class GLSurfaceWindowChild(GLDataWindowChild):
         self.atlas.displayBlocks(self.base_data_fbo, self.active_vao, stxy_xform)
         for i in range(self.overlay_count):
             atlas = self.overlay_atlases[i]
-            if atlas is None:
+            if not Atlas.isInUse(atlas):
                 continue
             fbo = self.overlay_data_fbos[i]
             atlas.displayBlocks(fbo, self.active_vao, stxy_xform)
@@ -2320,9 +2333,12 @@ class Atlas:
 
     def setVolumeView(self, volume_view):
         print("Atlas.setVolumeView", volume_view.volume.name if volume_view else "(None)")
-        self.clearData()
+        not_none = volume_view is not None
+        self.in_use = not_none
+        self.clearData(rebuild=not_none)
 
         self.volume_view = volume_view
+
 
         if volume_view is None:
             # Need to clear out self.datas as soon as possible
@@ -2376,20 +2392,29 @@ class Atlas:
         self.program.setUniformValue("xyz_xform", xyz_xform)
         # self.program.release()
 
-    def clearData(self):
+    @staticmethod
+    def isInUse(atlas):
+        if atlas is None:
+            return False
+        if not atlas.in_use:
+            return False
+        return True
+
+    def clearData(self, rebuild=True):
         # print("clearing atlas data")
         aksz = self.aksz
         self.chunks.clear()
-        for k in range(aksz[2]):
-            for j in range(aksz[1]):
-                for i in range(aksz[0]):
-                    ak = (i,j,k)
-                    dk = (i,j,k)
-                    dl = -1
-                    chunk = Chunk(self, ak, dk, dl)
-                    key = self.key(dk, dl)
-                    self.chunks[key] = chunk
         self.pbo_queue = Queue()
+        if rebuild:
+            for k in range(aksz[2]):
+                for j in range(aksz[1]):
+                    for i in range(aksz[0]):
+                        ak = (i,j,k)
+                        dk = (i,j,k)
+                        dl = -1
+                        chunk = Chunk(self, ak, dk, dl)
+                        key = self.key(dk, dl)
+                        self.chunks[key] = chunk
 
     def xyzXform(self, data_size):
         mat = np.zeros((4,4), dtype=np.float32)

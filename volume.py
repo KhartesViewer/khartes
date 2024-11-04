@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt
 import cv2
 import nrrd
 import nrrd.writer
+import time
 
 # The nrrd writer provided by the pynrrd package duplicates
 # the data in memory before writing.  This is undesirable
@@ -41,7 +42,7 @@ class ColorSelectorDelegate(QtWidgets.QStyledItemDelegate):
         # self.color = QColor()
 
     def createEditor(self, parent, option, index):
-        # print("ce", index.row())
+        # print("ce csd", index.row())
         cb = QtWidgets.QPushButton(parent)
         cb.setContentsMargins(5,5,5,5)
         cb.clicked.connect(lambda d: self.onClicked(d, cb, index))
@@ -84,7 +85,7 @@ class DirectionSelectorDelegate(QtWidgets.QStyledItemDelegate):
         self.table = table
 
     def createEditor(self, parent, option, index):
-        # print("ce", index.row())
+        # print("ce dsd", index.row())
         cb = QtWidgets.QComboBox(parent)
         # row = index.row()
         cb.addItem("X")
@@ -115,6 +116,106 @@ class DirectionSelectorDelegate(QtWidgets.QStyledItemDelegate):
         # print("smd", editor.currentText())
         # do nothing, since onActivated handled it
         # model.setData(index, editor.currentText(), Qt.EditRole)
+
+class OpacitySelectorDelegate(QtWidgets.QStyledItemDelegate):
+
+    def __init__(self, table, parent=None):
+        super(OpacitySelectorDelegate, self).__init__(parent)
+        self.table = table
+
+    def createEditor(self, parent, option, index):
+        # print("ce osd", index.row())
+        sb = QtWidgets.QDoubleSpinBox(parent)
+        sb.setMinimum(0.0)
+        sb.setMaximum(1.0)
+        sb.setDecimals(1)
+        sb.setSingleStep(0.1)
+        # Hide selection color
+        # https://stackoverflow.com/questions/22356673/how-to-completely-disable-value-highlighting-of-qspinboxes
+        # sb.lineEdit().setStyleSheet("""QLineEdit { 
+        #                                selection-background-color: white;
+        #                                selection-color: black 
+        #                            }""")
+        sb.valueChanged.connect(lambda d: self.onValueChanged(d, sb, index), Qt.QueuedConnection)
+        sb.kh_value = 0.
+        # sb.valueChanged.connect(lambda d: self.onValueChanged(d, sb, index))
+        return sb
+
+    def onValueChanged(self, value, spin_box, model_index):
+        # print("ovc", spin_box.value(), value)
+        if spin_box.kh_value == value:
+            spin_box.lineEdit().deselect()
+            return
+        # if spin_box.value() == value:
+        #     print("exiting ovc")
+        #     return
+        self.table.model().setData(model_index, spin_box.value(), Qt.EditRole)
+        # print("leaving ovc", spin_box.value())
+        spin_box.lineEdit().deselect()
+
+    def setEditorData(self, editor, index):
+        # print("sed")
+        opacity = index.data(Qt.DisplayRole)
+        if opacity is not None:
+            if editor.value() != opacity:
+                oev = editor.value()
+                octxt = editor.cleanText()
+                editor.kh_value = opacity
+                editor.setValue(opacity)
+                # print(oev, octxt, opacity, editor.value())
+                # time.sleep(1)
+
+    def setModelData(self, editor, model, index):
+        # opacity = index.data(Qt.DisplayRole)
+        # print("smd", opacity, editor.value())
+        pass
+
+class ColormapSelectorDelegate(QtWidgets.QStyledItemDelegate):
+    colormaps = {
+            "gray": "matlab:gray",
+            "viridis": "bids:viridis",
+            "bwr": "matplotlib:bwr",
+            "cool": "matlab:cool",
+            "bmr_3c": "chrisluts:bmr_3c",
+            "rainbow": "gnuplot:rainbow",
+            }
+
+    def __init__(self, table, parent=None):
+        super(ColormapSelectorDelegate, self).__init__(parent)
+        self.table = table
+
+    def createEditor(self, parent, option, index):
+        # print("ce cmsd", index.row())
+        cb = QtWidgets.QComboBox(parent)
+        # row = index.row()
+        for key in self.colormaps.keys():
+            cb.addItem(key)
+        cb.activated.connect(lambda d: self.onActivated(d, cb, index))
+        return cb
+
+    def onActivated(self, value, combo_box, model_index):
+        self.table.model().setData(model_index, combo_box.itemText(value), Qt.EditRole)
+
+    def setEditorData(self, editor, index):
+        colormap = index.data(Qt.DisplayRole)
+        if colormap:
+            # editor.setCurrentIndex(cb_index)
+            self.setColormap(editor, colormap)
+
+    # this could be a class function
+    def setColormap(self, cb, colormap):
+        # colormap is a string like "matplotlib:bwr"
+        # we want to display the corresponding short name
+        # print("setColormap", colormap)
+        for key, value in self.colormaps.items():
+            if value == colormap:
+                # print("   ", key)
+                cb.setCurrentText(key)
+                break
+
+    def setModelData(self, editor, model, index):
+        # do nothing, since onActivated handled it
+        pass
 
 class VolumesModel(QtCore.QAbstractTableModel):
     def __init__(self, project_view, main_window):
@@ -152,6 +253,11 @@ class VolumesModel(QtCore.QAbstractTableModel):
             "O2",
             "Name",
             "Color",
+            "Opacity",
+            "Colormap",
+            "Min",
+            "Max",
+            "Ind",
             "Ld",
             "Dir",
             "Info"
@@ -184,8 +290,15 @@ tiff files is aligned with the slice vertical axes""",
     '''
     ctips = [
             "Select which volume is visible;\nclick box to select",
+            "O1",
+            "O2",
             "Name of the volume",
             "Color of the volume outline drawn on slices;\nclick to edit",
+            "Opacity",
+            "Colormap",
+            "Min",
+            "Max",
+            "Ind",
             "Is volume currently loaded in memory\n(volumes that are not currently displayed\nare unloaded by default)",
             """Direction (orientation) of the volume;
 X means that the X axis in the original tiff 
@@ -218,7 +331,7 @@ tiff files is aligned with the slice vertical axes""",
             nflags |= Qt.ItemIsEnabled
             # nflags |= Qt.ItemIsEditable
             return nflags
-        elif col in self.columnIndices(["Color", "Dir"]):
+        elif col in self.columnIndices(["Color", "Dir", "Opacity", "Colormap"]):
             nflags = Qt.ItemNeverHasChildren
             # nflags |= Qt.ItemIsUserCheckable
             nflags |= Qt.ItemIsEnabled
@@ -241,6 +354,10 @@ tiff files is aligned with the slice vertical axes""",
                     index = self.createIndex(i, self.columnIndex("Color"))
                     table.openPersistentEditor(index)
                     index = self.createIndex(i, self.columnIndex("Dir"))
+                    table.openPersistentEditor(index)
+                    index = self.createIndex(i, self.columnIndex("Colormap"))
+                    table.openPersistentEditor(index)
+                    index = self.createIndex(i, self.columnIndex("Opacity"))
                     table.openPersistentEditor(index)
 
             return VolumesModel.columns[section]
@@ -313,8 +430,10 @@ tiff files is aligned with the slice vertical axes""",
         if column == self.columnIndex("Name"):
             return volume.name
         elif column == self.columnIndex("Color"):
-            # print("ddr", row, volume_view.color.name())
             return volume_view.color.name()
+        elif column == self.columnIndex("Colormap"):
+            # print("ddr cmn", volume_view.colormap_name)
+            return volume_view.colormap_name
         elif column == self.columnIndex("Ld"):
             if volume.data is None:
                 return 'No'
@@ -324,6 +443,9 @@ tiff files is aligned with the slice vertical axes""",
             # return "%s"%(('X','Y')[volume_view.direction])
             # print("data display role", row, volume_view.direction)
             return (0,1)[volume_view.direction]
+        elif column == self.columnIndex("Opacity"):
+            # print("ddr", volume_view.opacity)
+            return volume_view.opacity
 
             '''
         elif column >= 5 and column < 14:
@@ -409,6 +531,9 @@ tiff files is aligned with the slice vertical axes""",
         # print("setdata", row, column, value, role)
         # if role != Qt.EditRole:
         #     return False
+        volumes = self.project_view.volumes
+        volume = list(volumes.keys())[row]
+        volume_view = volumes[volume]
         if role == Qt.CheckStateRole and column in self.columnIndices(["Base", "O1", "O2"]):
             # print(row, value)
             cv = Qt.CheckState(value)
@@ -416,17 +541,17 @@ tiff files is aligned with the slice vertical axes""",
                 # self.main_window.setVolume(None)
                 self.setVolumeOrOverlay(column, None)
                 return False
-            volumes = self.project_view.volumes
-            volume = list(volumes.keys())[row]
+            # volumes = self.project_view.volumes
+            # volume = list(volumes.keys())[row]
             # volume_view = volumes[volume]
             # self.main_window.setVolume(volume)
             self.setVolumeOrOverlay(column, volume)
             # return True
         if role == Qt.EditRole and column == self.columnIndex("Color"):
             color = value
-            volumes = self.project_view.volumes
-            volume = list(volumes.keys())[row]
-            volume_view = volumes[volume]
+            # volumes = self.project_view.volumes
+            # volume = list(volumes.keys())[row]
+            # volume_view = volumes[volume]
             # print("setdata", row, color.name())
             # volume_view.setColor(color)
             self.main_window.setVolumeViewColor(volume_view, color)
@@ -435,9 +560,20 @@ tiff files is aligned with the slice vertical axes""",
             direction = 0
             if value == 'Y':
                 direction = 1
-            volumes = self.project_view.volumes
-            volume = list(volumes.keys())[row]
+            # volumes = self.project_view.volumes
+            # volume = list(volumes.keys())[row]
             self.main_window.setDirection(volume, direction)
+        if role == Qt.EditRole and column == self.columnIndex("Opacity"):
+            # volumes = self.project_view.volumes
+            # volume_view = list(volumes.values())[row]
+            self.main_window.setVolumeViewOpacity(volume_view, value)
+        if role == Qt.EditRole and column == self.columnIndex("Colormap"):
+            # print("setdata", row, value)
+            short_name = value
+            full_name = ColormapSelectorDelegate.colormaps[short_name]
+            # volumes = self.project_view.volumes
+            # volume_view = list(volumes.values())[row]
+            self.main_window.setVolumeViewColormap(volume_view, full_name)
 
         return False
 
@@ -467,6 +603,7 @@ class VolumeView():
         # don't want to have to re-write the entire NRRD file.
         # So associate color with VolumeView instead, which
         # means it is stored in the project-view file
+        self.color = None
         color = Utils.getNextColor()
         self.setColor(color, no_notify=True)
         # self.color = QColor()
@@ -490,12 +627,15 @@ class VolumeView():
         self.project_view.notifyModified(tstamp)
 
     def setColor(self, qcolor, no_notify=False):
+        if self.color == qcolor:
+            return
         self.color = qcolor
         rgba = qcolor.getRgbF()
         self.cvcolor = [int(65535*c) for c in rgba] 
         if not no_notify:
             self.notifyModified()
 
+    '''
     def setColormap(self, force_set=False):
         v = self.volume
         if not v.can_modify_colormap and not force_set:
@@ -504,6 +644,30 @@ class VolumeView():
         cmap = Utils.ColorMap(self.colormap_name, v.dtype, 1., self.colormap_range)
         self.colormap_lut = cmap.lut
         self.colormap_lut_timestamp = Utils.timestamp()
+    '''
+
+    def setColormap(self, colormap_name, no_notify=False):
+        if self.colormap_name == colormap_name:
+            return
+        v = self.volume
+        # False if "uses_overlay_colormap" is set
+        if not v.can_modify_colormap:
+            return
+        self.colormap_name = colormap_name
+        # print("setColormap", self.colormap_name)
+        cmap = Utils.ColorMap(colormap_name, v.dtype, 1., self.colormap_range)
+        self.colormap_lut = cmap.lut
+        self.colormap_lut_timestamp = Utils.timestamp()
+        if not no_notify:
+            self.notifyModified()
+
+    def setOpacity(self, opacity, no_notify=False):
+        # print("so", self.opacity, opacity)
+        if self.opacity == opacity:
+            return
+        self.opacity = opacity
+        if not no_notify:
+            self.notifyModified()
 
     def setZoom(self, zoom):
         self.zoom = min(self.maxZoom, max(zoom, self.minZoom))
