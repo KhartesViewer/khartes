@@ -4,11 +4,19 @@ import os
 def convert_obj_to_zyx(obj_path):
     output_path = obj_path.rsplit('.', 1)[0] + '_zyx.txt'
     
-    with open(obj_path, 'r') as obj_file, open(output_path, 'w') as out_file:
+    # Collect all vertices first
+    vertices = []
+    with open(obj_path, 'r') as obj_file:
         for line in obj_file:
             if line.startswith('v '):  # vertex lines only
                 _, x, y, z, _, _, _ = line.split()
-                out_file.write(f"{round(float(z))}, {round(float(y))}, {round(float(x))}\n")
+                vertices.append((float(z), float(y), float(x)))
+    
+    # Sort by z-value and write to file
+    vertices.sort(key=lambda v: v[0])
+    with open(output_path, 'w') as out_file:
+        for z, y, x in vertices:
+            out_file.write(f"{round(z)}, {round(y)}, {round(x)}\n")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
