@@ -1,15 +1,19 @@
-name: vch
+
+name: khartes
+
 channels:
   - defaults
   - conda-forge
 dependencies:
-  - python=3.11
+  - python=3.12
+  - opencv
   - pyqt
   - tifffile
   - zarr
   - scipy
-  - glib=2.69.1
-  - opencv
-  - conda-forge::pynrrd
-  - conda-forge::rectpack
-prefix: ./vhc
+  - pynrrd
+  - rectpack
+  - pyopengl
+  - requests
+  - aiohttp
+  - fsspec
