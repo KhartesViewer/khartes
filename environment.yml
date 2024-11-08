@@ -1,0 +1,17 @@
+name: khartes
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.12
+  - opencv
+  - pyqt
+  - tifffile
+  - zarr
+  - scipy
+  - pynrrd
+  - rectpack
+  - pyopengl
+  - requests
+  - aiohttp
+  - fsspec
