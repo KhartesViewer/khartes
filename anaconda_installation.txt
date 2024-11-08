@@ -15,31 +15,14 @@ used for packing 2D rectangles in a minimum-size box.
 It is called when exporting textures in the export-mesh
 function.
 
-I tested khartes in Python 3.11, but it probably works 
-on slightly older versions of Python 3 as well.
-
 User hari_seldon has informed me that the pip equivalent 
 of opencv is opencv-python-headless (Thanks hari!).
 
 The list below shows how to install modules from the
 default conda repository.  
 
-IMPORTANT (for Windows users):
-
-If you are working in Windows: Due to problems with the current 
-(4.6.0) version of OpenCV in the default conda repository, you 
-need to install python 3.11 (not 3.12), and install a specific
-version of glib *before* installing OpenCV.  It is a good
-idea, after you install OpenCV, to check that you can
-import it.  To perform this check, type:
-python -c "import cv2"
-If no errors are printed, then OpenCV is installed correctly.
-
-Installation list:
-
-conda create -n vch python=3.11
-conda activate vch
-conda install glib=2.69.1  # Only needed in Windows?  See note above
+conda create -n khartes
+conda activate khartes
 conda install opencv
 conda install pyqt
 conda install tifffile
@@ -50,11 +33,6 @@ conda install -c conda-forge rectpack
 
 If you want to live on the bleeding edge, you can
 install the conda-forge versions of all these packages.
-If you do this, then you are able to use python 3.12, and you 
-don't need to install the glib package; the correct version 
-of glib will be installed automatically.
-As of mid-April 2024, these conda-forge versions seem
-to work correctly.
 
 Alternatively, you can create a new environment and install all dependencies:
 
@@ -62,7 +40,7 @@ conda env create -f environment.yml
 
 Once finished, you can activate the environment and run Khartes:
 
-conda activate vch
+conda activate khartes
 python khartes.py
 
 And to exit the environment run:
