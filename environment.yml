@@ -1,0 +1,15 @@
+name: vch
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pyqt
+  - tifffile
+  - zarr
+  - scipy
+  - glib=2.69.1
+  - opencv
+  - conda-forge::pynrrd
+  - conda-forge::rectpack
+prefix: ./vhc

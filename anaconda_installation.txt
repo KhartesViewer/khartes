@@ -56,5 +56,15 @@ of glib will be installed automatically.
 As of mid-April 2024, these conda-forge versions seem
 to work correctly.
 
-# TODO: add a proper conda requirements file 
+Alternatively, you can create a new environment and install all dependencies:
 
+conda env create -f environment.yml
+
+Once finished, you can activate the environment and run Khartes:
+
+conda activate vch
+python khartes.py
+
+And to exit the environment run:
+
+conda deactivate
