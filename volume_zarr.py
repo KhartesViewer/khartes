@@ -102,7 +102,7 @@ def load_zarr(dirname, load_zarr_options=None):
             options = {"simplecache": {"cache_storage": cache_dir}}
         else:
             print("WARNING: stream cache directory", cache_dir, "not found!")
-    stack_array = zarr.open(dirname, mode="r", storage_options=options)
+    stack_array = zarr.open(dirname, mode="r+", storage_options=options)
     return stack_array
 
 def load_writable_volume(path):
@@ -273,6 +273,7 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
         self.executor._work_queue = queue.LifoQueue()
         self.compressor = None
         self.dtype = None
+        self.chunk_key_pattern = re.compile(r"\d/\d/\d/\d")
 
     def __getitem__old(self, key):
         print("get item", key)
@@ -307,6 +308,25 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
     def getImmediateDataMode(self):
         with self._mutex:
             return self.immediate_data_mode
+
+    def __value_is_incomplete(self, key):
+        """
+        Todo(kbostelmann): There are other kinds of data such as:
+          * .zarray, and .zgroup
+        but they're ignored at this time since the data size is small (< 1KB) and more frequently complete when compared to chunk data (> 1MB).
+        """
+        key_is_chunk = re.match(self.chunk_key_pattern, key)
+        if key_is_chunk:
+            return len(self.getValue(key)) != self.__expected_value_size_bytes(key)
+        return False
+
+    def __expected_value_size_bytes(self, key):
+        key_is_chunk = re.match(self.chunk_key_pattern, key)
+        if key_is_chunk:
+            chunk_data_type_bytes = 1
+            chunk_size_bytes = chunk_data_type_bytes * 128 * 128 * 128
+            return chunk_size_bytes
+        return -1 # size is not known.
 
     def __contains__(self, key):
         try:
@@ -360,6 +380,15 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             # first try to obtain the value from the cache
             with self._mutex:
                 value = self._values_cache[key]
+
+                # Check that the cached value is not missing data.
+                if self.__value_is_incomplete(key):
+                    expected_size_bytes = self.__expected_value_size_bytes(key)
+                    message = "%s value is incomplete, expected %i bytes but got %i bytes" % (key, expected_size_bytes, len(value))
+                    print("ERROR! " + message)
+                    del self[key] # Purge corrupt data. # Note(kbostelmann): This doesn't work ???
+                    raise KeyError(message)
+
                 # cache hit if no KeyError is raised
                 self.hits += 1
                 # treat the end as most recently used
@@ -415,6 +444,25 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
             # itself whether to raise an error.
             if wait_for_data:  # read the value immediately
                 value = self.getValue(key)
+
+                # Check that the cached value is not missing data.
+                if self.__value_is_incomplete(key):
+                    expected_size_bytes = self.__expected_value_size_bytes(key)
+
+                    # Busy wait until data has arrived.
+                    elapsed_time = 0
+                    sleep_seconds = 1
+                    max_wait_time_seconds = 60
+                    while len(value) < expected_size_bytes and elapsed_time < max_wait_time_seconds:
+                        time.sleep(sleep_seconds)
+                        elapsed_time += sleep_seconds
+                        value = self.getValue(key) # Update view.
+
+                    if len(value) != expected_size_bytes:
+                        message = "%s value is incomplete, expected %i bytes but got %i bytes" % (key, expected_size_bytes, len(value))
+                        print("ERROR! " + message)
+                        raise KeyError(message)
+
                 self.cacheValue(key, value)
                 return value
             elif raise_error:
@@ -493,7 +541,7 @@ class ZarrLevel():
                 array.store, max_size=int(max_mem_gb*2**30))
         self.klru = klru
         self.ilevel = ilevel
-        self.data = zarr.open(klru, mode="r")
+        self.data = zarr.open(klru, mode="r+")
         if path != "":
             self.data = self.data[path]
         # klru.setCompressor(self.data._compressor)
