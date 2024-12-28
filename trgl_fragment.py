@@ -25,6 +25,7 @@ class TrglFragment(BaseFragment):
         self.direction = 0
         self.params = {}
         self.type = BaseFragment.Type.TRGL_FRAGMENT
+        self.obj_path = None
 
     # class function
     # expected to return a list of fragments, but always
@@ -124,6 +125,7 @@ class TrglFragment(BaseFragment):
         trgl_frag.setColor(color, no_notify=True)
         trgl_frag.valid = True
         trgl_frag.neighbors = BaseFragment.findNeighbors(trgl_frag.trgls)
+        trgl_frag.obj_path = obj_file
         print(trgl_frag.name, trgl_frag.color.name(), trgl_frag.gpoints.shape, trgl_frag.gtpoints.shape, trgl_frag.trgls.shape)
         # print("tindexes", BaseFragment.trglsAroundPoint(100, trgl_frag.trgls))
         if len(trgl_frag.gtpoints) > 0:
@@ -176,7 +178,11 @@ class TrglFragment(BaseFragment):
         return ""
 
     def save(self, fpath, ppm=None, fv=None):
+        """Save both OBJ file and update obj_path"""
+        # First save the OBJ file
         obj_path = fpath.with_suffix(".obj")
+        self.obj_path = obj_path  # Update the path for JSON saving
+        
         name = fpath.name
         stem = fpath.stem
         print("TF save", obj_path)
@@ -451,6 +457,169 @@ class TrglFragment(BaseFragment):
         trglist = trglist[esor]
 
         return i01, trglist
+    
+    def toDict(self):
+        info = {}
+        info['name'] = self.name
+        info['created'] = self.created
+        info['modified'] = self.modified
+        info['color'] = self.color.name()
+        info['type'] = self.type.value if self.type else Fragment.Type.TRGL_FRAGMENT.value
+        
+        # Convert any NumPy arrays in params to lists
+        params = {}
+        for key, value in self.params.items():
+            if isinstance(value, np.ndarray):
+                params[key] = value.tolist()
+            else:
+                params[key] = value
+        info['params'] = params
+        info['obj_path'] = str(self.obj_path) if self.obj_path else None
+        # Don't save gpoints/trgls in JSON as they're in the OBJ file
+        return info
+
+    @staticmethod
+    def fragFromDict(info):
+        """Reconstruct a TrglFragment from a dictionary, loading geometry from OBJ file"""
+        if not info.get('obj_path'):
+            print("No OBJ path found in fragment info")
+            return None
+            
+        # Load the geometry from OBJ file
+        obj_path = Path(info['obj_path'])
+        if not obj_path.exists():
+            print(f"OBJ file not found: {obj_path}")
+            return None
+            
+        # Use existing load method to get geometry
+        fragments = TrglFragment.load(obj_path)
+        if not fragments or not fragments[0]:
+            print(f"Failed to load OBJ file: {obj_path}")
+            return None
+            
+        # Get the fragment and update its metadata from JSON
+        frag = fragments[0]
+        frag.name = info.get('name', frag.name)
+        frag.created = info.get('created', frag.created)
+        frag.modified = info.get('modified', frag.modified)
+        if 'color' in info:
+            frag.setColor(QColor(info['color']), no_notify=True)
+        frag.params = info.get('params', {})
+        frag.type = BaseFragment.Type.TRGL_FRAGMENT
+        frag.obj_path = obj_path
+        frag.valid = True
+        
+        return frag
+
+    @staticmethod
+    def load(obj_file):
+        """Load a TrglFragment from an OBJ file"""
+        print("loading obj file", obj_file)
+        pname = Path(obj_file)
+        try:
+            fd = pname.open("r")
+        except:
+            return None
+
+        name = pname.stem
+        
+        vrtl = []
+        tvrtl = []
+        trgl = []
+        
+        created = ""
+        frag_name = ""
+        for line in fd:
+            line = line.strip()
+            words = line.split()
+            if words == []: # prevent crash on empty line
+                continue
+            if words[0][0] == '#':
+                if len(words) > 2: 
+                    if words[1] == "Created:":
+                        created = words[2]
+                    if words[1] == "Name:":
+                        frag_name = words[2]
+            elif words[0] == 'v':
+                # len is 7 if the vrt has color attached
+                # (color is ignored)
+                if len(words) == 4 or len(words) == 7:
+                    vrtl.append([float(w) for w in words[1:4]])
+            elif words[0] == 'vt':
+                if len(words) == 3:
+                    tvrtl.append([float(w) for w in words[1:]])
+            elif words[0] == 'f':
+                if len(words) == 4:
+                    # implicit assumption that v == vt
+                    trgl.append([int(w.split('/')[0])-1 for w in words[1:]])
+        print("tf obj reader", len(vrtl), len(tvrtl), len(trgl))
+        
+        if frag_name == "":
+        #     frag_name = name.replace("_",":").replace("p",".")
+            frag_name = name
+        trgl_frag = TrglFragment(frag_name)
+        if len(vrtl) > 0:
+            trgl_frag.gpoints = np.array(vrtl, dtype=np.float32)
+        else:
+            trgl_frag.gpoints = np.zeros((0,3), dtype=np.float32)
+        if len(tvrtl) > 0:
+            trgl_frag.gtpoints = np.array(tvrtl, dtype=np.float32)
+        else:
+            trgl_frag.gtpoints = np.zeros((0,2), dtype=np.float32)
+        if len(trgl) > 0:
+            trgl_frag.trgls = np.array(trgl, dtype=np.int32)
+        else:
+            trgl_frag.trgls = np.zeros((0,3), dtype=np.int32)
+        if created == "":
+            ts = Utils.vcToTimestamp(name)
+            if ts is not None:
+                created = ts
+        if created != "":
+            trgl_frag.created = created
+        trgl_frag.params = {}
+        
+        mname = pname.with_suffix(".mtl")
+        fd = None
+        color = None
+        try:
+            fd = mname.open("r")
+        except:
+            print("failed to open mtl file",mname.name)
+            pass
+
+        if fd is not None:
+            for line in fd:
+                words = line.split()
+                # print("words[0]", words[0])
+                if len(words) == 4 and words[0] == "Kd":
+                    try:
+                        # print("words", words)
+                        r = float(words[1])
+                        g = float(words[2])
+                        b = float(words[3])
+                    except:
+                        continue
+                    # print("rgb", r,g,b)
+                    color = QColor.fromRgbF(r,g,b)
+                    break
+
+        if color is None:
+            color = Utils.getNextColor()
+        trgl_frag.setColor(color, no_notify=True)
+        trgl_frag.valid = True
+        trgl_frag.neighbors = BaseFragment.findNeighbors(trgl_frag.trgls)
+        trgl_frag.obj_path = obj_file
+        print(trgl_frag.name, trgl_frag.color.name(), trgl_frag.gpoints.shape, trgl_frag.gtpoints.shape, trgl_frag.trgls.shape)
+        # print("tindexes", BaseFragment.trglsAroundPoint(100, trgl_frag.trgls))
+        if len(trgl_frag.gtpoints) > 0:
+            tmp_fv = trgl_frag.createView(None)
+            tmp_fv.setScaledTexturePoints(similar=False)
+            trgl_frag.gtpoints = tmp_fv.stpoints
+
+        # Store the obj path for future saves
+        trgl_frag.obj_path = pname
+        
+        return [trgl_frag]
 
 
 class TrglFragmentView(BaseFragmentView):

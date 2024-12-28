@@ -338,6 +338,9 @@ class BaseFragmentView:
 
     def reparameterize(self):
         return
+    
+    def fragFromDict(self):
+        return
 
     # direction is not used here, but this notifies fragment view
     # to recompute things

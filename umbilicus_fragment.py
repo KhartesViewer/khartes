@@ -2,6 +2,7 @@ from fragment import Fragment, FragmentView
 import numpy as np
 import os
 from utils import Utils
+import json
 
 from PyQt5.QtWidgets import (
         QDialog, QDialogButtonBox,
@@ -68,6 +69,12 @@ class UmbilicusFragment(Fragment):
                 if len(coords) >= 3:  # ensure we have x,y,z
                     points.append([float(x) for x in coords[:3]])
         return np.array(points)
+
+    def toDict(self):
+        info = super(UmbilicusFragment, self).toDict()
+        info['type'] = self.type.value if self.type else Fragment.Type.UMBILICUS.value
+        info['gpoints'] = self.gpoints.tolist()
+        return info
 
 class UmbilicusFragmentView(FragmentView):
     def __init__(self, project_view, fragment):

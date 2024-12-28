@@ -281,25 +281,59 @@ class Fragment(BaseFragment):
 
 
     def save(self, path):
+        # Only save regular fragments, not umbilicus or other types
+        if self.type != Fragment.Type.FRAGMENT:
+            return
+        
+        file = path / "all_fragments.json"
         info = self.toDict()
-        # print(info)
-        info_txt = json.dumps(info, indent=4)
-        file = path / (self.name + ".json")
-        print("writing to",file)
+        
+        if file.exists():
+            try:
+                # Load existing fragments
+                existing_data = json.loads(file.read_text(encoding="utf8"))
+                if not isinstance(existing_data, list):
+                    existing_data = [existing_data]
+                    
+                # Check if fragment already exists and update it
+                updated = False
+                for i, fragment in enumerate(existing_data):
+                    if fragment.get('name') == self.name:
+                        existing_data[i] = info
+                        updated = True
+                        break
+                        
+                if not updated:
+                    existing_data.append(info)
+                    
+                info_txt = json.dumps(existing_data, indent=4)
+            except json.JSONDecodeError:
+                info_txt = json.dumps([info], indent=4)
+        else:
+            info_txt = json.dumps([info], indent=4)
+            
+        print("writing to", file)
         file.write_text(info_txt, encoding="utf8")
 
     # class function
+    @staticmethod
     def saveList(frags, path, stem):
+        # Separate fragments by type
+        regular_frags = [f for f in frags if f.type == Fragment.Type.FRAGMENT]
+        
+        # Save regular fragments
         infos = []
-        for frag in frags:
+        for frag in regular_frags:
             if not hasattr(frag, "toDict"):
                 continue
             info = frag.toDict()
             infos.append(info)
-        info_txt = json.dumps(infos, indent=4)
-        file = path / (stem + ".json")
-        print("writing to",file)
-        file.write_text(info_txt, encoding="utf8")
+        
+        if infos:
+            info_txt = json.dumps(infos, indent=4)
+            file = path / "all_fragments.json"
+            print("writing to", file)
+            file.write_text(info_txt, encoding="utf8")
 
     def createErrorFragment(err):
         frag = Fragment("", -1)

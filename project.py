@@ -9,6 +9,7 @@ from ppm import Ppm
 from fragment import Fragment, FragmentView
 from trgl_fragment import TrglFragment, TrglFragmentView
 from base_fragment import BaseFragment, BaseFragmentView
+from umbilicus_fragment import UmbilicusFragment, UmbilicusFragmentView
 from PyQt5.QtGui import QColor 
 
 
@@ -141,6 +142,7 @@ class ProjectView:
         info_txt = json.dumps(info, indent=4)
         (self.project.path / 'views.json').write_text(info_txt, encoding="utf8")
         self.project.save()
+        print("saved project view")
 
     def createErrorProjectView(project, err):
         pv = ProjectView(project)
@@ -593,10 +595,11 @@ class Project:
         except Exception as e:
             print(e)
             print("failed to preserve previous version")
-        BaseFragment.saveList(self.fragments, self.fragments_path, "all")
+        
+        # Replace BaseFragment.saveList with our new method
+        self.saveAllFragments(self.fragments, self.fragments_path)
 
         info = {}
-        # TODO: set modified-date in info
         for param in Project.info_parameters:
             info[param] = getattr(self, param)
         info_txt = json.dumps(info, sort_keys=True, indent=4)
@@ -691,19 +694,10 @@ class Project:
             if ppm is not None and ppm.valid:
                 prj.addPpm(ppm)
 
-        for ffile in fdir.glob("*.json"):
-            frags = Fragment.load(ffile)
-            if frags is not None:
-                for frag in frags:
-                    if frag.valid:
-                        prj.addFragment(frag)
-
-        for ffile in fdir.glob("*.obj"):
-            frags = TrglFragment.load(ffile)
-            if frags is not None:
-                for frag in frags:
-                    if frag.valid:
-                        prj.addFragment(frag)
+        # Load all fragments using the new method
+        fragments = prj.loadAllFragments(fdir)
+        for frag in fragments:
+            prj.addFragment(frag)
 
         return prj
 
@@ -796,3 +790,79 @@ class Project:
                 if volume in pv.volumes:
                     del pv.volumes[volume]
             self.notifyModified()
+
+    def loadAllFragments(self, path):
+        """Load all fragments from all fragment type files"""
+        fragments = []
+        
+        # Map of file names to fragment types/constructors
+        fragment_types = {
+            "all_fragments.json": Fragment,
+            "all_umbilicus.json": UmbilicusFragment,
+            "all_trgl_fragments.json": TrglFragment
+        }
+        
+        # Load each fragment type
+        for filename, fragment_class in fragment_types.items():
+            file = path / filename
+            if file.exists():
+                try:
+                    data = json.loads(file.read_text(encoding="utf8"))
+                    if not isinstance(data, list):
+                        data = [data]
+                        
+                    for info in data:
+                        # Use the appropriate class's fragFromDict method
+                        frag = fragment_class.fragFromDict(info)
+                        if frag and frag.valid:
+                            fragments.append(frag)
+                            
+                except Exception as e:
+                    print(f"Error loading {filename}: {e}")
+        
+        return fragments
+
+    def saveAllFragments(self, frags, path, stem=None):
+        """Save all fragments to their respective type files"""
+        # Group fragments by type
+        print("saving all fragments")
+        fragment_groups = {}
+        for frag in frags:
+            if not hasattr(frag, "toDict"):
+                continue
+            
+            # Get the fragment type
+            frag_type = frag.type
+            if frag_type == Fragment.Type.TRGL_FRAGMENT:
+                # Create a proper path for the OBJ file using the fragment's timestamp
+                cfixed = Utils.timestampToVc(frag.created)
+                if cfixed is None:
+                    print("Could not convert created timestamp", frag.created, "to vc")
+                    cfixed = frag.created.replace(':',"_").replace('.',"p")
+                obj_path = path / cfixed
+                # Save the OBJ file
+                frag.save(obj_path)
+                # Store the path for JSON reference
+                frag.obj_path = obj_path.with_suffix(".obj")
+                
+            if frag_type not in fragment_groups:
+                fragment_groups[frag_type] = []
+            fragment_groups[frag_type].append(frag.toDict())
+            
+        
+        # Save each group to its respective file
+        type_to_file = {
+            BaseFragment.Type.FRAGMENT: "all_fragments.json",
+            BaseFragment.Type.UMBILICUS: "all_umbilicus.json",
+            BaseFragment.Type.TRGL_FRAGMENT: "all_trgl_fragments.json"
+        }
+        
+        for frag_type, infos in fragment_groups.items():
+            print(f"Saving {len(infos)} {frag_type} fragments")
+            if frag_type in type_to_file and infos:
+                filename = type_to_file[frag_type]
+                file = path / filename
+                info_txt = json.dumps(infos, indent=4)
+                print(f"writing {len(infos)} fragments to {file}")
+                file.write_text(info_txt, encoding="utf8")
+        print("saved all fragments")
