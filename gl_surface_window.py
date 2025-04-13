@@ -350,7 +350,7 @@ class GLSurfaceWindow(DataWindow):
     # Used to set image on fragment; this is called
     # when exporting fragment to obj file with texture.
     def setMapImage(self, fv):
-        print("GLSW setMapImage")
+        #print("GLSW setMapImage")
         if fv is None:
             return
         fv.map_image = None
