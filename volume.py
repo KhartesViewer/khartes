@@ -292,6 +292,7 @@ class ColormapSelectorDelegate(QtWidgets.QStyledItemDelegate):
             "cool": "matlab:cool",
             "bmr_3c": "chrisluts:bmr_3c",
             "rainbow": "gnuplot:rainbow",
+            "glasbey": "glasbey:glasbey",
             }
 
     def __init__(self, table, parent=None):
