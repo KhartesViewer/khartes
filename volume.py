@@ -745,6 +745,7 @@ class VolumeView():
         # so focus pixel = datatr[ktf, jtf, itf]
         self.ijktf = (0,0,0)
         self.last_jump_ijktf = None
+        self.last_jump_stxytf = None
         # self.stxytf = (0.,0.)
         self.stxytf = None
         self.zoom = 0.
@@ -964,15 +965,23 @@ class VolumeView():
         if not no_notify:
             self.notifyModified()
 
+    # This is obsolete; it only sets the ijktf, not the stxytf, value
     def setLastJumpIjkTf(self, tf):
         self.last_jump_ijktf = tf
 
+    def recordLastJumpIjkTf(self):
+        self.last_jump_ijktf = self.ijktf
+        self.last_jump_stxytf = self.stxytf
+
     def returnToLastJumpIjkTf(self):
         lj = self.last_jump_ijktf
+        lst = self.last_jump_stxytf
         if lj is None:
             return
-        self.ijktf = lj
-        self.notifyModified()
+        # self.ijktf = lj
+        # self.notifyModified()
+        self.setStxyTf(lst)
+        self.setIjkTf(lj)
 
     def clearLastJumpIjkTf(self):
         self.last_jump_ijktf = None

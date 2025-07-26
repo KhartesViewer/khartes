@@ -759,8 +759,12 @@ class DataWindow(QLabel):
 
         self.window.setStatusText(stxt)
 
+    # overridden in GLDataWindow and GLSurfaceWindow
     def setIjkTf(self, tf):
         self.volume_view.setIjkTf(tf)
+
+    def recordLastJumpIjkTf(self):
+        self.volume_view.recordLastJumpIjkTf()
 
     def setLastJumpIjkTf(self, tf):
         self.volume_view.setLastJumpIjkTf(tf)
@@ -1129,7 +1133,8 @@ class DataWindow(QLabel):
                     tijk = self.ijkToTijk(ijk)
                 # print("tijk", tijk)
                 self.setIjkTf(tijk)
-                self.setLastJumpIjkTf(tijk)
+                # self.setLastJumpIjkTf(tijk)
+                self.recordLastJumpIjkTf()
             self.window.drawSlices()
             # move cursor to cross hairs
             ij = self.tijkToIj(tijk)
