@@ -13,6 +13,7 @@ import fsspec
 import cv2
 from scipy import ndimage
 from utils import Utils
+from zarr3cache import ArrayBackedCachingStore
 
 CHUNK_SIZE = 500
 
@@ -326,7 +327,8 @@ setImmediateDataMode(True), before making requesting any data,
 and after the data has been retrieved, call setImmediateDataMode(False)
 (to restore request queueing).
 '''
-class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
+# class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
+class KhartesThreadedLRUCache(object):
     def __init__(self, store, max_size):
         super().__init__(store, max_size)
         self.future_done_callback = None
@@ -602,10 +604,10 @@ class KhartesThreadedLRUCache(zarr.storage.LRUStoreCache):
 class ZarrLevel():
     # def __init__(self, array, path, scale, ilevel, max_mem_gb, from_vc_render=False, original_dtype=None):
     def __init__(self, array, path, scale, ilevel, max_mem_gb, from_vc_render=False):
+        '''
         klru = KhartesThreadedLRUCache(
                 array.store, max_size=int(max_mem_gb*2**30))
         self.klru = klru
-        self.ilevel = ilevel
         self.data = zarr.open(klru, mode="r")
         if path != "":
             self.data = self.data[path]
@@ -613,6 +615,13 @@ class ZarrLevel():
         # self.data._compressor = None
         klru.transferCompressor(self.data)
         # print("self data compressor", self.data._compressor)
+        '''
+        if path != "":
+            array = array[path]
+
+        self.data = ArrayBackedCachingStore.create_caching_array(array, blocking=False)
+        self.klru = self.data.store
+        self.ilevel = ilevel
         self.scale = scale
         # don't know if self.from_vc_render will ever be used
         self.from_vc_render = from_vc_render
@@ -635,7 +644,8 @@ class ZarrLevel():
         self.klru.future_done_callback = cb
 
     def setImmediateDataMode(self, flag):
-        self.klru.setImmediateDataMode(flag)
+        # self.klru.setImmediateDataMode(flag)
+        self.klru.blocking = flag
 
 
 class CachedZarrVolume():
@@ -900,7 +910,8 @@ class CachedZarrVolume():
             print(err)
             return CachedZarrVolume.createErrorVolume(err)
 
-        if isinstance(array, zarr.hierarchy.Group):
+        # if isinstance(array, zarr.hierarchy.Group):
+        if isinstance(array, zarr.Group):
             volume.setLevelsFromHierarchy(array, CachedZarrVolume.max_mem_gb)
         else:
             volume.setLevelFromArray(array, CachedZarrVolume.max_mem_gb)
@@ -1275,7 +1286,7 @@ class CachedZarrVolume():
         ri = Utils.rectIntersection(
                 ((cx1,cy1),(cx2,cy2)), ((bx1,by1),(bx2,by2)))
         # print("ri", ri)
-        misses0 = level.klru.nz_misses
+        misses0 = level.klru.empties_count
         if ri is not None:
             # upper left and lower right corners of intersected rectangle
             (x1,y1),(x2,y2) = ri
@@ -1313,7 +1324,7 @@ class CachedZarrVolume():
                 # if level.ilevel != 2:
                 #     buf[buf != 0] = 48000 - level.ilevel*5000
                 out[mask] = buf[mask]
-        misses1 = level.klru.nz_misses
+        misses1 = level.klru.empties_count
             
         # if misses0 = misses1, this means that there were no
         # klru cache misses during the call to getSliceInRange

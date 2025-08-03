@@ -1906,6 +1906,7 @@ class Chunk:
         timera = Utils.Timer()
         timera.active = False
 
+        '''
         thread = threading.current_thread()
         # print("thread ident", thread.ident)
         # See the extensive comment in volume_zarr.py, just beforek
@@ -1922,7 +1923,13 @@ class Chunk:
         # occurs with adata but not buf.
         # The reshape restores the lost dimension.
         # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]].reshape([int_dr[1][i]-int_dr[0][i] for i in reversed(range(3))])
+        '''
+
+        e0 = adata.data.store.empties_count
+
         buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0], :].reshape([int_dr4[1][i]-int_dr4[0][i] for i in reversed(range(4))])
+        e1 = adata.data.store.empties_count
+
         '''
         # Trying to figure out the dropped-dimension problem...
         try:
@@ -1944,7 +1951,9 @@ class Chunk:
             print("y1, y2", y1.shape, y2.shape)
         '''
         # print("from disk", self.dk, self.dl, "*")
-        misses = 0
+
+        # misses = 0
+        misses = e1-e0
 
         self.misses = misses
 
