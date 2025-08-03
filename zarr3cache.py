@@ -201,7 +201,7 @@ class ArrayBackedCachingStore(zarr.storage.WrapperStore):
         return ob
         print("d")
         '''
-        out_buffer = zarr.core.buffer.cpu.Buffer.from_array_like(np.frombuffer(g.tobytes(), dtype=np.byte))
+        out_buffer = zarr.core.buffer.cpu.Buffer.from_array_like(np.frombuffer(g.tobytes(), dtype=np.dtype("B")))
         return out_buffer
 
 
