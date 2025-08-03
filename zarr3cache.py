@@ -191,7 +191,17 @@ class ArrayBackedCachingStore(zarr.storage.WrapperStore):
             if not all_fill:
                 newg[:g.shape[0], :g.shape[1], :g.shape[2]] = g
             g = newg
-        out_buffer = zarr.core.buffer.cpu.Buffer.from_array_like(np.frombuffer(g.tobytes(), dtype=np.uint8))
+        '''
+        print("a")
+        gtb = g.tobytes()
+        print("b")
+        fb = np.frombuffer(gtb, dtype=np.byte)
+        print("c", fb.dtype)
+        ob = zarr.core.buffer.cpu.Buffer.from_array_like(fb)
+        return ob
+        print("d")
+        '''
+        out_buffer = zarr.core.buffer.cpu.Buffer.from_array_like(np.frombuffer(g.tobytes(), dtype=np.byte))
         return out_buffer
 
 
