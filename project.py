@@ -194,7 +194,8 @@ class ProjectView:
                     vv.setOpacity(vinfo['opacity'], no_notify=True)
                 if 'colormap_range' in vinfo:
                     cr  = vinfo['colormap_range']
-                    vv.setColormapRange(cr[0], cr[1], no_notify=True)
+                    if cr is not None:
+                        vv.setColormapRange(cr[0], cr[1], no_notify=True)
                 if 'colormap_is_indicator' in vinfo:
                     vv.setColormapIsIndicator(vinfo['colormap_is_indicator'], no_notify=True)
                 if 'colormap_name' in vinfo:
