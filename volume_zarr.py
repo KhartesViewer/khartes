@@ -212,6 +212,9 @@ class TransposedDataView():
         # return self.data.dtype
         return np.uint16
 
+    def empties_count(self):
+        return self.data.store.empties_count
+
     # def getDataAndMisses(self, slice0, slice1, slice2, immediate=False):
     # Is this used any more?
     """

@@ -49,8 +49,8 @@ import time
 from collections import OrderedDict
 import enum
 from enum import Enum
-from concurrent.futures import ThreadPoolExecutor
-import threading
+# from concurrent.futures import ThreadPoolExecutor
+# import threading
 from queue import Queue
 import numpy as np
 import cv2
@@ -1925,10 +1925,10 @@ class Chunk:
         # buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0]].reshape([int_dr[1][i]-int_dr[0][i] for i in reversed(range(3))])
         '''
 
-        e0 = adata.data.store.empties_count
+        e0 = adata.empties_count()
 
         buf[c0[2]:c1[2], c0[1]:c1[1], c0[0]:c1[0]] = adata[int_dr[0][2]:int_dr[1][2], int_dr[0][1]:int_dr[1][1], int_dr[0][0]:int_dr[1][0], :].reshape([int_dr4[1][i]-int_dr4[0][i] for i in reversed(range(4))])
-        e1 = adata.data.store.empties_count
+        e1 = adata.empties_count()
 
         '''
         # Trying to figure out the dropped-dimension problem...
@@ -2239,7 +2239,7 @@ class Atlas:
         dcsz = (chunk_size, chunk_size, chunk_size)
         self.valid = False
         self.gl = gl
-        self.executor = ThreadPoolExecutor(max_workers=4)
+        # self.executor = ThreadPoolExecutor(max_workers=4)
         self.pbo_queue = Queue()
         self.pbo_pool = Queue()
         pad = 1
@@ -2521,13 +2521,15 @@ class Atlas:
             if chunks_loading >= 2*self.max_textures_set:
                 break
             if chunk.status == Chunk.Status.INITIALIZED or chunk.status == Chunk.Status.PARTIALLY_LOADED_FROM_DISK:
+                chunk.getDataFromDisk()
                 # print("request", chunk.dk, chunk.dl)
-                future = self.executor.submit(chunk.getDataFromDisk)
+                # future = self.executor.submit(chunk.getDataFromDisk)
                 # TODO: need a callback?
-                if in_progress_cb is not None:
-                    future.add_done_callback(lambda x: self.futureCallback(in_progress_cb, x))
+                # if in_progress_cb is not None:
+                #     future.add_done_callback(lambda x: self.futureCallback(in_progress_cb, x))
                 chunks_loading += 1
 
+    '''
     def futureCallback(self, in_progress_cb, future):
         # We don't care about the result, but this will throw
         # an exception if the thread had an exception; without
@@ -2535,6 +2537,7 @@ class Atlas:
         result = future.result()
         if in_progress_cb is not None:
             in_progress_cb()
+    '''
 
     def loadPbos(self):
         # To get all the active chunks, search backwards from
@@ -2602,8 +2605,10 @@ class Atlas:
         timer.time(" init")
 
         # Load data from disk to RAM
+        '''
         # NOTE that each chunk will be loaded in a
         # separate thread
+        '''
         self.loadChunks(in_progress_cb)
         timer.time(" from disk")
 

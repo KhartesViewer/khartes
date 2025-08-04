@@ -1062,6 +1062,9 @@ class TransposedDataView():
     def dtype(self):
         return self.data.dtype
 
+    def empties_count(self):
+        return 0
+
     def __getitem__(self, selection):
         result = self.data[selection]
         return result
