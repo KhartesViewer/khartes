@@ -622,7 +622,7 @@ class ZarrLevel():
         if path != "":
             array = array[path]
 
-        self.data = ArrayBackedCachingStore.create_caching_array(array, blocking=False)
+        self.data = ArrayBackedCachingStore.create_caching_array(array, blocking=False, max_size_gb=max_mem_gb)
         self.klru = self.data.store
         self.ilevel = ilevel
         self.scale = scale

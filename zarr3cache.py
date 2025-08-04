@@ -11,14 +11,18 @@ import random
 # https://llego.dev/posts/implement-lru-cache-python/
 
 class ArrayBackedCachingStore(zarr.storage.WrapperStore):
-    def __init__(self, array, blocking=True):
+    def __init__(self, array, blocking=True, max_size_gb=8):
         # zarr.config.set({'async.concurrency': 2})
         store = zarr.storage.MemoryStore()
         super().__init__(store)
         # print("abcs read only", self.read_only)
         self._array = array
         self.cache = OrderedDict()
-        self.capacity = 1000
+        chunks = array.chunks
+        chunk_size = chunks[0]*chunks[1]*chunks[2]*array.dtype.itemsize
+        capacity = (max_size_gb*2**30)//chunk_size
+        # print("max_size_gb", max_size_gb, "capacity", capacity)
+        self.capacity = capacity
         self.concurrent_reads = 0
         self.max_concurrent_reads = 32
         # self.max_concurrent_reads = 100
@@ -42,8 +46,8 @@ class ArrayBackedCachingStore(zarr.storage.WrapperStore):
         loop.call_soon_threadsafe(self.loop.stop)
 
     @classmethod
-    def create_caching_array(cls, array, blocking=True):
-        abcs = cls(array, blocking)
+    def create_caching_array(cls, array, blocking=True, max_size_gb=8):
+        abcs = cls(array, blocking=blocking, max_size_gb=max_size_gb)
         return abcs.create_caching_array_internal()
 
     def create_caching_array_internal(self):

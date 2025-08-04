@@ -955,7 +955,7 @@ class MainWindow(QMainWindow):
             "count": 1,
         },
         "zarr": {
-            "max_cache_size_gb": 8,
+            "max_cache_size_gb": 24,
             "max_window_width": 480,
         },
         "stream": {
