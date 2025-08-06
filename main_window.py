@@ -312,7 +312,7 @@ class PositionSetter(QWidget):
     def parseText(self, txt):
         m = self.regex.findall(txt)[:3]
         # print("m", m)
-        im = [int(i) for i in m]
+        im = [int(float(i)) for i in m]
         return im
 
     def onTextEdited(self, txt):
