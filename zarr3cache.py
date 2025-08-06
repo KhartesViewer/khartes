@@ -14,7 +14,7 @@ class ArrayBackedCachingStore(zarr.storage.WrapperStore):
     def __init__(self, array, blocking=True, max_size_gb=8):
         # see https://earthmover.io/blog/xarray-open-zarr-improvements
         # for suggestions on setting concurrency
-        zarr.config.set({'async.concurrency': 100})
+        # zarr.config.set({'async.concurrency': 100})
         store = zarr.storage.MemoryStore()
         super().__init__(store)
         # print("abcs read only", self.read_only)
@@ -26,7 +26,8 @@ class ArrayBackedCachingStore(zarr.storage.WrapperStore):
         # print("max_size_gb", max_size_gb, "capacity", capacity)
         self.capacity = capacity
         self.concurrent_reads = 0
-        self.max_concurrent_reads = 32
+        # self.max_concurrent_reads = 32
+        self.max_concurrent_reads = 16
         # self.max_concurrent_reads = 100
         # self.capacity = 10
         # all_zeros = np.zeros(array.chunks, array.dtype)

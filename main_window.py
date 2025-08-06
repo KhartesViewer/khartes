@@ -4,6 +4,7 @@ import copy
 import os
 import json
 import time
+import re
 import numpy as np
 import platform
 import traceback
@@ -269,6 +270,74 @@ class InfillDialog(QDialog):
             self.edit.setStyleSheet("QLineEdit { color: red }")
 
 class PositionSetter(QWidget):
+    def __init__(self, main_window, parent=None):
+        super(PositionSetter, self).__init__(parent)
+
+        self.regex = re.compile(r'-?\d+\.?\d*')
+
+        self.main_window = main_window
+        vlayout = QVBoxLayout()
+        self.setLayout(vlayout)
+
+        hlayout = QHBoxLayout()
+        label = QLabel("Enter x y z (free format):")
+        hlayout.addWidget(label)
+        self.edit = QLineEdit()
+        # fm = self.edit.fontMetrics()
+        # w = 20*fm.horizontalAdvance('0')
+        # self.edit.setFixedWidth(w)
+        self.edit.editingFinished.connect(self.onEditingFinished)
+        self.edit.textEdited.connect(self.onTextEdited)
+        hlayout.addWidget(self.edit)
+        vlayout.addLayout(hlayout)
+
+        hlayout = QHBoxLayout()
+        self.button = QPushButton()
+        self.button.clicked.connect(self.onClicked)
+        self.setButtonText()
+        hlayout.addWidget(self.button)
+        hlayout.addStretch()
+        vlayout.addLayout(hlayout)
+
+    def setButtonText(self, ints=None):
+        ostr = "Move to position"
+        if ints is not None and len(ints) >= 3:
+            ostr = ostr+" x: %d  y: %d  z: %d"%(ints[0], ints[1], ints[2])
+            self.button.setEnabled(True)
+        else:
+            self.button.setEnabled(False)
+        self.button.setText(ostr)
+        # print("ostr", ostr, ints)
+
+    def parseText(self, txt):
+        m = self.regex.findall(txt)[:3]
+        # print("m", m)
+        im = [int(i) for i in m]
+        return im
+
+    def onTextEdited(self, txt):
+        # print("ote", txt)
+        ints = self.parseText(txt)
+        self.setButtonText(ints)
+
+    def onEditingFinished(self):
+        return
+        # Don't do the following because
+        # onEditingFinished is called when the cursor
+        # leaves the text entry box
+        txt = self.edit.text()
+        # print("oef", txt)
+        self.onClicked()
+
+    def onClicked(self):
+        txt = self.edit.text()
+        ints = self.parseText(txt)
+        if len(ints) == 3:
+            # TODO: doesn't move map view!
+            self.main_window.recenterCurrentVolume(np.array(ints))
+        pass
+
+class PositionSetterOld(QWidget):
     def __init__(self, main_window, parent=None):
         super(PositionSetter, self).__init__(parent)
         self.main_window = main_window
@@ -1482,7 +1551,7 @@ class MainWindow(QMainWindow):
         # - Button for splitting selected labels and rebuilding the table
         # - Button for annotating selected labels
 
-        self.tab_panel.addTab(panel, "Volume Segmentation")
+        self.tab_panel.addTab(panel, "Volume Navigation")
 
     def setLiveZsurfUpdate(self, lzu):
         if lzu == self.live_zsurf_update:
@@ -1765,11 +1834,18 @@ class MainWindow(QMainWindow):
         vv = self.project_view.cur_volume_view
         if vv is None:
             return
+        '''
         gijks = gijk.reshape((1,-1))
         # print("rcv g", gijk, gijks)
         tijk = vv.globalPositionsToTransposedIjks(gijks)
         # print("rcv t", tijk)
         vv.setIjkTf(tijk[0].tolist())
+        '''
+        tijk = vv.globalPositionToTransposedIjk(gijk.tolist())
+        # vv.setIjkTf(tijk)
+        # Need to set ijk in one of the GLDataWindows in order
+        # to ensure that both ijk and uv are set correctly
+        self.depth.setIjkTf(tijk)
         self.drawSlices()
 
     def volumeView(self):
@@ -3507,7 +3583,7 @@ class MainWindow(QMainWindow):
             if w != self and method is not None:
                 w.dwKeyPressEvent(e)
             self.drawSlices()
-        elif e.key() == Qt.Key_V:
+        elif e.key() == Qt.Key_V and e.modifiers() != Qt.ControlModifier:
             self.toggleFragmentVisibility()
             w = QApplication.widgetAt(QCursor.pos())
             method = getattr(w, "dwKeyPressEvent", None)
