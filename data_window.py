@@ -657,10 +657,12 @@ class DataWindow(QLabel):
         vol = self.volume_view.volume
 
         labels = ["X", "Y", "Img"]
-        axes = (2,0,1)
+        # axes = (2,0,1)
+        axes = (0,1,2)
         if vol.from_vc_render:
             labels = ["X", "Img", "Y"]
-            axes = (1,0,2)
+            # axes = (1,0,2)
+            axes = (0,2,1)
         ranges = vol.getGlobalRanges()
         stxt = ""
         for i in axes:
@@ -971,12 +973,24 @@ class DataWindow(QLabel):
         # print("wheel", e.angleDelta().y(), e.pixelDelta())
         self.setStatusTextFromMousePosition()
         d = e.angleDelta().y()
-        z = self.volume_view.zoom
-        z *= 1.001**d
-        # print(d, z)
-        self.volume_view.setZoom(z)
-        mxy = (e.position().x(), e.position().y())
-        self.setNearbyTiffAndNode(mxy)
+        ctrl_pressed = (int(QGuiApplication.queryKeyboardModifiers()) & Qt.ControlModifier) != 0
+        if ctrl_pressed:
+            self.window.zarrResetActiveTimer()
+            tfst = self.computeTfStartPoint()
+            if tfst is None:
+                return
+            tfijk = list(tfst)
+            z = self.volume_view.zoom
+            tfijk[self.axis] += int(.5*(d+1)/z)
+            # print(d)
+            self.setTf(tfijk)
+        else:
+            z = self.volume_view.zoom
+            z *= 1.001**d
+            # print(d, z)
+            self.volume_view.setZoom(z)
+            mxy = (e.position().x(), e.position().y())
+            self.setNearbyTiffAndNode(mxy)
         '''
         nearbyTiffCorner = self.findNearbyTiffCorner(mxy)
         self.setNearbyTiff(nearbyTiffCorner)
@@ -1030,7 +1044,7 @@ class DataWindow(QLabel):
             Qt.Key_PageUp: (0,0,1*sgn),
             Qt.Key_E:      (0,0,1*sgn),
             Qt.Key_PageDown: (0,0,-1*sgn),
-            Qt.Key_C:        (0,0,-1*sgn),
+            Qt.Key_Q:        (0,0,-1*sgn),
         }
         if key in opts:
             d = opts[key]
@@ -1087,7 +1101,7 @@ class DataWindow(QLabel):
                     self.setWaitCursor()
                     self.setNearbyNodeIjk(nij, True, not alt_pressed)
         # elif not self.isMovingNode and (key == Qt.Key_5 or key == Qt.Key_Delete):
-        elif not self.isMovingNode and key in [Qt.Key_5, Qt.Key_Delete, Qt.Key_Backspace]:
+        elif not self.isMovingNode and key in [Qt.Key_5, Qt.Key_Delete, Qt.Key_Backspace, Qt.Key_T]:
             # print("backspace/delete")
             # ijk = self.getNearbyNodeIjk()
             # if ijk is None:
@@ -1113,9 +1127,11 @@ class DataWindow(QLabel):
             # print("del localNearbyNodeIndex", self.localNearbyNodeIndex)
             self.window.drawSlices()
 
-        elif not self.isMovingNode and key == Qt.Key_X:
+        # x, r: jump to highlighted node
+        # alt-x, alt-r, f: return to previous jump point
+        elif not self.isMovingNode and key in [Qt.Key_X, Qt.Key_R, Qt.Key_F]:
             # print("key X")
-            if alt_pressed:
+            if key == Qt.Key_F or (key in [Qt.Key_X, Qt.Key_R] and alt_pressed):
                 self.returnToLastJumpIjkTf()
                 tijk = self.volume_view.ijktf
             else:
@@ -1158,7 +1174,7 @@ class DataWindow(QLabel):
         elif not self.isMovingNode and self.axis in (0,1) and key == Qt.Key_I:
             self.setWaitCursor()
             self.autoInterpolate()
-        elif key == Qt.Key_T:
+        elif key == Qt.Key_C:
             pt = self.mapFromGlobal(QCursor.pos())
             mxy = (pt.x(), pt.y())
             # ij = self.xyToIj(mxy)

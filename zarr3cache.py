@@ -12,7 +12,9 @@ import random
 
 class ArrayBackedCachingStore(zarr.storage.WrapperStore):
     def __init__(self, array, blocking=True, max_size_gb=8):
-        # zarr.config.set({'async.concurrency': 2})
+        # see https://earthmover.io/blog/xarray-open-zarr-improvements
+        # for suggestions on setting concurrency
+        zarr.config.set({'async.concurrency': 100})
         store = zarr.storage.MemoryStore()
         super().__init__(store)
         # print("abcs read only", self.read_only)

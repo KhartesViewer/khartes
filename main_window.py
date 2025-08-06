@@ -35,6 +35,7 @@ from PyQt5.QtCore import (
         )
 from PyQt5.QtGui import (
         # QAction, 
+        QGuiApplication,
         QPainter, QPalette, QColor, QCursor, QIcon, QPixmap, QImage)
 
 from PyQt5.QtSvg import QSvgRenderer
@@ -161,7 +162,7 @@ class RoundnessSetter(QGroupBox):
 
 class InfillDialog(QDialog):
     def __init__(self, main_window, needs_infill, parent=None):
-        instructions = "In order to fit the curved fragment surface,\ninfill points are added to the exported mesh.\nThe distance between points is given in voxels.\n16 is a good default.\n0 means do not infill."
+        instructions = "In order to fit the curved segment surface,\ninfill points are added to the exported mesh.\nThe distance between points is given in voxels.\n16 is a good default.\n0 means do not infill."
         super(InfillDialog, self).__init__(parent)
         project = main_window.project_view.project
         self.ppms = project.ppms
@@ -329,9 +330,9 @@ class ZInterpolationSetter(QWidget):
 
 class CreateFragmentButton(QPushButton):
     def __init__(self, main_window, parent=None):
-        super(CreateFragmentButton, self).__init__("New 3D Fragment", parent)
+        super(CreateFragmentButton, self).__init__("New 3D Segment", parent)
         self.main_window = main_window
-        self.setToolTip("Once the new fragment is created use\nshift plus left mouse button to create new nodes")
+        self.setToolTip("Once the new segment is created use\nshift plus left mouse button to create new nodes")
         self.clicked.connect(self.onButtonClicked)
 
     def onButtonClicked(self, s):
@@ -345,7 +346,7 @@ class CopyActiveFragmentButton(QPushButton):
         self.main_window = main_window
         self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
         self.setEnabled(False)
-        self.setToolTip("Create a new fragment that is a copy\nof the currently active fragment")
+        self.setToolTip("Create a new segment that is a copy\nof the currently active segment")
         self.clicked.connect(self.onButtonClicked)
 
     def onButtonClicked(self, s):
@@ -357,7 +358,7 @@ class ReparameterizeActiveFragmentButton(QPushButton):
         self.main_window = main_window
         self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
         self.setEnabled(False)
-        self.setToolTip("Recalculate uv of the currently active fragment")
+        self.setToolTip("Recalculate uv of the currently active segment")
         self.clicked.connect(self.onButtonClicked)
 
     def onButtonClicked(self, s):
@@ -369,7 +370,7 @@ class RetriangulateActiveFragmentButton(QPushButton):
         self.main_window = main_window
         self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
         self.setEnabled(False)
-        self.setToolTip("Retriangulate the currently active fragment")
+        self.setToolTip("Retriangulate the currently active segment")
         self.clicked.connect(self.onButtonClicked)
 
     def onButtonClicked(self, s):
@@ -384,9 +385,9 @@ class MoveActiveFragmentAlongZButton(QPushButton):
         self.setEnabled(False)
         # up and down are opposite signs to what you might expect
         if step > 0:
-            self.setToolTip("Move active fragment %d pixel(s) down"%step)
+            self.setToolTip("Move active segment %d pixel(s) down"%step)
         else:
-            self.setToolTip("Move active fragment %d pixel(s) up"%(-step))
+            self.setToolTip("Move active segment %d pixel(s) up"%(-step))
         self.clicked.connect(self.onButtonClicked)
 
     def onButtonClicked(self, s):
@@ -401,9 +402,9 @@ class MoveActiveFragmentAlongNormalsButton(QPushButton):
         self.setEnabled(False)
         # up and down are opposite signs to what you might expect
         if step > 0:
-            self.setToolTip("Move active fragment %d pixel(s) downwards along normals"%step)
+            self.setToolTip("Move active segment %d pixel(s) downwards along normals"%step)
         else:
-            self.setToolTip("Move active fragment %d pixel(s) upwards along normals"%(-step))
+            self.setToolTip("Move active segment %d pixel(s) upwards along normals"%(-step))
         self.clicked.connect(self.onButtonClicked)
 
     def onButtonClicked(self, s):
@@ -840,11 +841,11 @@ class ApplyOpacityCheckBox(QCheckBox):
 
 class DeleteActiveFragmentButton(QPushButton):
     def __init__(self, main_window, parent=None):
-        super(DeleteActiveFragmentButton, self).__init__("Delete Fragment", parent)
+        super(DeleteActiveFragmentButton, self).__init__("Delete Segment", parent)
         self.main_window = main_window
         self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
         self.clicked.connect(self.onButtonClicked)
-        self.setToolTip("Delete the currently active fragment")
+        self.setToolTip("Delete the currently active segment")
         self.setEnabled(True)
 
     def onButtonClicked(self):
@@ -864,10 +865,10 @@ class DeleteActiveVolumeButton(QPushButton):
 
 class Create25DFragmentButton(QPushButton):
     def __init__(self, main_window, parent=None):
-        super(Create25DFragmentButton, self).__init__("New 2.5D Fragment", parent)
+        super(Create25DFragmentButton, self).__init__("New 2.5D Segment", parent)
         self.main_window = main_window
         self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
-        self.setToolTip("Create a new 2.5D fragment for working with flat surfaces")
+        self.setToolTip("Create a new 2.5D segment for working with flat surfaces")
         self.clicked.connect(self.onButtonClicked)
         self.setEnabled(True)
 
@@ -879,7 +880,7 @@ class CreateUmbilicusFragmentButton(QPushButton):
         super(CreateUmbilicusFragmentButton, self).__init__("New Umbilicus", parent)
         self.main_window = main_window
         self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
-        self.setToolTip("Create a new umbilicus fragment for tracing scroll centers")
+        self.setToolTip("Create a new umbilicus segment for tracing scroll centers")
         self.clicked.connect(self.onButtonClicked)
         self.setEnabled(True)
 
@@ -1150,7 +1151,7 @@ class MainWindow(QMainWindow):
         self.attach_stream_action.triggered.connect(self.onAttachStreamButtonClick)
         self.attach_stream_action.setEnabled(False)
 
-        self.export_mesh_action = QAction("Export fragment as mesh...", self)
+        self.export_mesh_action = QAction("Export segment as mesh...", self)
         self.export_mesh_action.triggered.connect(self.onExportAsMeshButtonClick)
         self.export_mesh_action.setEnabled(False)
 
@@ -1372,7 +1373,7 @@ class MainWindow(QMainWindow):
         create_umbilicus_frag.setStyleSheet("QPushButton { %s; padding: 5; }"%self.highlightedBackgroundStyle())
         hlayout.addWidget(create_umbilicus_frag)
 
-        label = QLabel("Active fragment:")
+        label = QLabel("Active segment:")
         # label.setStyleSheet("QLabel { background-color : beige; padding-left: 5}")
         label.setStyleSheet("QLabel { padding-left: 5}")
         hlayout.addWidget(label)
@@ -1426,7 +1427,7 @@ class MainWindow(QMainWindow):
         self.fragments_table.setModel(FragmentsModel(None, self))
         self.fragments_table.resizeColumnsToContents()
         vlayout.addWidget(self.fragments_table)
-        self.tab_panel.addTab(panel, "Fragments")
+        self.tab_panel.addTab(panel, "Segments")
 
     def addDevToolsPanel(self):
         panel = QWidget()
@@ -1872,13 +1873,13 @@ class MainWindow(QMainWindow):
     def uniqueFragmentName(self, start):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot find unique fragment names without a project")
+            print("Warning, cannot find unique segment names without a project")
             return None
         names = set()
         for frag in pv.fragments.keys():
             name = frag.name
             names.add(name)
-        stem = "frag"
+        stem = "seg"
         # mfv = pv.mainActiveVisibleFragmentView(unaligned_ok=True)
         # if mfv is not None:
         #     stem = mfv.fragment.name
@@ -1914,13 +1915,13 @@ class MainWindow(QMainWindow):
     def moveActiveFragmentAlongZ(self, step):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot create new fragment without project")
+            print("Warning, cannot create new segment without project")
             return
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
             # this should never be reached; button should be
             # inactive in this case
-            print("No currently active fragment")
+            print("No currently active segment")
             return
         # mf = mfv.fragment
         mfv.moveInK(step)
@@ -1929,13 +1930,13 @@ class MainWindow(QMainWindow):
     def moveActiveFragmentAlongNormals(self, step):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot create new fragment without project")
+            print("Warning, cannot create new segment without project")
             return
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
             # this should never be reached; button should be
             # inactive in this case
-            print("No currently active fragment")
+            print("No currently active segment")
             return
         # mf = mfv.fragment
         mfv.moveAlongNormals(step)
@@ -1978,24 +1979,24 @@ class MainWindow(QMainWindow):
     def create25DFragment(self):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot create new fragment without project")
+            print("Warning, cannot create new segment without project")
             return
         vv = self.volumeView()
         if vv is None:
-            print("Warning, cannot create new fragment without volume view set")
+            print("Warning, cannot create new segment without volume view set")
             return
 
-        stem = "frag25d"
+        stem = "seg25d"
         name = self.uniqueFragmentName(stem)
         if name is None:
-            print("Can't create unique fragment name from stem", stem)
+            print("Can't create unique segment name from stem", stem)
             return
 
         frag = Fragment(name, vv.direction)  # Using regular Fragment class but with 2.5D flag
         frag.setColor(Utils.getNextColor(), no_notify=True)
         frag.valid = True
         frag.is_25d = True  # Special flag to identify 2.5D fragments
-        print("created 2.5D fragment %s"%frag.name)
+        print("created 2.5D segment %s"%frag.name)
         
         self.fragments_table.model().beginResetModel()
         pv.project.addFragment(frag)
@@ -2013,23 +2014,23 @@ class MainWindow(QMainWindow):
     def createUmbilicusFragment(self):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot create new fragment without project")
+            print("Warning, cannot create new segment without project")
             return
         vv = self.volumeView()
         if vv is None:
-            print("Warning, cannot create new fragment without volume view set")
+            print("Warning, cannot create new segment without volume view set")
             return
 
         stem = "umbilicus"
         name = self.uniqueFragmentName(stem)
         if name is None:
-            print("Can't create unique fragment name from stem", stem)
+            print("Can't create unique segment name from stem", stem)
             return
 
         frag = UmbilicusFragment(name, vv.direction)
         frag.setColor(Utils.getNextColor(), no_notify=True)
         frag.valid = True
-        print("created umbilicus fragment %s"%frag.name)
+        print("created umbilicus segment %s"%frag.name)
         
         self.fragments_table.model().beginResetModel()
         pv.project.addFragment(frag)
@@ -2047,19 +2048,19 @@ class MainWindow(QMainWindow):
     def deleteActiveFragment(self):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot delete fragment without project")
+            print("Warning, cannot delete segment without project")
             return
         
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
-            print("No currently active fragment")
+            print("No currently active segment")
             return
         
         mf = mfv.fragment
         
         # Show confirmation dialog
-        reply = QMessageBox.question(self, 'Delete Fragment',
-                                   f'Are you sure you want to delete fragment "{mf.name}"?',
+        reply = QMessageBox.question(self, 'Delete Segment',
+                                   f'Are you sure you want to delete segment "{mf.name}"?',
                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if reply == QMessageBox.Yes:
@@ -2076,7 +2077,7 @@ class MainWindow(QMainWindow):
     def copyActiveFragment(self):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot create new fragment without project")
+            print("Warning, cannot create new segment without project")
             return
         # vv = self.volumeView()
         # if vv is None:
@@ -2086,19 +2087,19 @@ class MainWindow(QMainWindow):
         if mfv is None:
             # this should never be reached; Copy button should be
             # inactive in this case
-            print("No currently active fragment")
+            print("No currently active segment")
             return
         mf = mfv.fragment
         stem = mf.name+"-copy"
         name = self.uniqueFragmentName(stem)
         if name is None:
-            print("Can't create unique fragment name from", stem)
+            print("Can't create unique segment name from", stem)
             return
         # frag = Fragment(name, mf.direction)
         # frag.setColor(mf.qcolor, no_notify=True)
         # frag.gpoints = np.copy(mf.gpoints)
         frag = mf.createCopy(name)
-        print("created fragment %s from %s"%(frag.name, mf.name))
+        print("created segment %s from %s"%(frag.name, mf.name))
         self.fragments_table.model().beginResetModel()
         pv.project.addFragment(frag)
         self.setFragments()
@@ -2115,11 +2116,11 @@ class MainWindow(QMainWindow):
     def createFragment(self):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot create new fragment without project")
+            print("Warning, cannot create new segment without project")
             return
         vv = self.volumeView()
         if vv is None:
-            print("Warning, cannot create new fragment without volume view set")
+            print("Warning, cannot create new segment without volume view set")
             return
         '''
         names = set()
@@ -2136,7 +2137,7 @@ class MainWindow(QMainWindow):
             if name not in names:
                 break
         '''
-        stem = "frag"
+        stem = "seg"
         mfv = pv.mainActiveVisibleFragmentView(unaligned_ok=True)
         if mfv is not None:
             stem = mfv.fragment.name
@@ -2145,14 +2146,14 @@ class MainWindow(QMainWindow):
             stem = stem[:-5]
         name = self.uniqueFragmentName(stem)
         if name is None:
-            print("Can't create unique fragment name from stem", stem)
+            print("Can't create unique segment name from stem", stem)
             return
 
         # Using TrglFragment for 3D fragments
         frag = TrglFragment(name)
         frag.setColor(Utils.getNextColor(), no_notify=True)
         frag.valid = True
-        print("created 3D fragment %s"%frag.name)
+        print("created 3D segment %s"%frag.name)
         
         self.fragments_table.model().beginResetModel()
         pv.project.addFragment(frag)
@@ -2170,13 +2171,13 @@ class MainWindow(QMainWindow):
     def reparameterizeActiveFragment(self):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot reparameterize fragment without project")
+            print("Warning, cannot reparameterize segment without project")
             return
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
             # this should never be reached; button should be
             # inactive in this case
-            print("No currently active fragment")
+            print("No currently active segment")
             return
         # mf = mfv.fragment
         # print("call reparam")
@@ -2193,13 +2194,13 @@ class MainWindow(QMainWindow):
     def retriangulateActiveFragment(self):
         pv = self.project_view
         if pv is None:
-            print("Warning, cannot retriangulate fragment without project")
+            print("Warning, cannot retriangulate segment without project")
             return
         mfv = pv.mainActiveFragmentView(unaligned_ok=True)
         if mfv is None:
             # this should never be reached; button should be
             # inactive in this case
-            print("No currently active fragment")
+            print("No currently active segment")
             return
         # mf = mfv.fragment
         mfv.rebuildStPoints()
@@ -2225,14 +2226,14 @@ class MainWindow(QMainWindow):
     def getNormalOffsetOnCurrentFragment(self):
         cur_frag_view = self.project_view.mainActiveVisibleFragmentView()
         if cur_frag_view is None:
-            print("no current fragment view set")
+            print("no current segment view set")
             return None
         return cur_frag_view.normal_offset
 
     def setNormalOffsetOnCurrentFragment(self, offset):
         cur_frag_view = self.project_view.mainActiveVisibleFragmentView()
         if cur_frag_view is None:
-            print("no current fragment view set")
+            print("no current segment view set")
             return
         cur_frag_view.normal_offset = offset
         self.drawSlices()
@@ -2246,7 +2247,7 @@ class MainWindow(QMainWindow):
     def addPointToCurrentFragment(self, tijk, stxy=None):
         cur_frag_view = self.project_view.mainActiveVisibleFragmentView()
         if cur_frag_view is None:
-            print("no current fragment view set")
+            print("no current segment view set")
             return
         self.fragments_table.model().beginResetModel()
         cur_frag_view.addPoint(tijk, stxy)
@@ -2268,7 +2269,7 @@ class MainWindow(QMainWindow):
         cfv = self.project_view.cur_fragment_view
         cvv = self.project_view.cur_volume_view
         if cvv is None:
-            print("Warning, cannot select cur fragment without volume view set")
+            print("Warning, cannot select cur segment without volume view set")
             return
         vdir = cvv.direction
         valid_fvs = []
@@ -2277,7 +2278,7 @@ class MainWindow(QMainWindow):
                 valid_fvs.append(fv)
         lv = len(valid_fvs)
         if lv == 0:
-            print("Warning, no fragments are eligible to be cur fragment in this direction")
+            print("Warning, no segments are eligible to be cur segment in this direction")
             return
         if cfv is None:
             next_fv = valid_fvs[0]
@@ -2733,7 +2734,7 @@ class MainWindow(QMainWindow):
         self.settingsSaveDirectory(str(parent), "ppm_")
 
     def onImportUmbilicusButtonClick(self, s):
-        """Import an umbilicus file (.obj or .txt) and create a new umbilicus fragment"""
+        """Import an umbilicus file (.obj or .txt) and create a new umbilicus segment"""
         if not self.project_view:
             return
             
@@ -2853,7 +2854,7 @@ class MainWindow(QMainWindow):
                 # self.surface.setMapImage(fv)
                 fvs.append(fv)
         if len(frags) == 0:
-            print("No active fragment")
+            print("No active segment")
             return
             
         # Handle umbilicus fragments differently
@@ -2868,7 +2869,7 @@ class MainWindow(QMainWindow):
         if sdir is None:
             sdir = ""
 
-        filename_tuple = QFileDialog.getSaveFileName(self, "Save Fragment as Mesh", sdir, "Mesh *.obj")
+        filename_tuple = QFileDialog.getSaveFileName(self, "Save Segment as Mesh", sdir, "Mesh *.obj")
         print("user selected", filename_tuple)
         # [0] is filename, [1] is the selector used
         filename = filename_tuple[0]
@@ -2911,7 +2912,7 @@ class MainWindow(QMainWindow):
 
         if err != "":
             msg = QMessageBox()
-            msg.setWindowTitle("Save fragment as mesh")
+            msg.setWindowTitle("Save segment as mesh")
             msg.setIcon(QMessageBox.Critical)
             msg.setText("Error: %s"%err)
             msg.exec()
@@ -2919,7 +2920,7 @@ class MainWindow(QMainWindow):
         self.settingsSaveDirectory(str(pname.parent), "mesh_")
         
     def exportUmbilicusFragment(self, fragment, fragment_view):
-        """Export umbilicus fragment using the UmbilicusExporter"""
+        """Export umbilicus segment using the UmbilicusExporter"""
         exporter = UmbilicusExporter(self)
         exporter.export_fragment(fragment, fragment_view)
 
@@ -3494,8 +3495,13 @@ class MainWindow(QMainWindow):
             self.live_zsurf_update_button.setChecked(self.live_zsurf_update)
         elif e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_S:
             self.onSaveProjectButtonClick(True)
-        elif e.key() == Qt.Key_T:
-            self.toggleTrackingCursorsVisible()
+        elif e.key() == Qt.Key_C:
+            if e.modifiers() == Qt.ControlModifier:
+                clipboard = QGuiApplication.clipboard()
+                clipboard.setText(self.status_bar.currentMessage())
+            else:
+                # print("ttcv")
+                self.toggleTrackingCursorsVisible()
             w = QApplication.widgetAt(QCursor.pos())
             method = getattr(w, "dwKeyPressEvent", None)
             if w != self and method is not None:
