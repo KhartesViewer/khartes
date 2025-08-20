@@ -21,6 +21,7 @@ class DataWindow(QLabel):
     def __init__(self, window, axis):
         super(DataWindow, self).__init__()
         self.window = window
+        # self.setFocusPolicy(Qt.NoFocus)
 
         self.setAutoFillBackground(True)
         palette = self.palette()
@@ -599,6 +600,10 @@ class DataWindow(QLabel):
         self.window.setStatusText("")
         self.window.setCursorPosition(None, None)
         self.checkCursor()
+        self.clearFocus()
+
+    def enterEvent(self, e):
+        self.setFocus()
 
     def checkCursor(self):
         # if leaving:

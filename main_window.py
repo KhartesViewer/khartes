@@ -445,6 +445,27 @@ class RetriangulateActiveFragmentButton(QPushButton):
     def onButtonClicked(self, s):
         self.main_window.retriangulateActiveFragment()
 
+class RecenterActiveFragmentButton(QPushButton):
+    def __init__(self, main_window, parent=None):
+        super(RecenterActiveFragmentButton, self).__init__("Recenter", parent)
+        self.main_window = main_window
+        self.setStyleSheet("QPushButton { %s; padding: 5; }"%self.main_window.highlightedBackgroundStyle())
+        self.setEnabled(False)
+        self.setToolTip("Re-center the currently active segment")
+        self.clicked.connect(self.onButtonClicked)
+
+    def onButtonClicked(self, s):
+        # print("calling recenter")
+        self.main_window.recenterActiveFragment()
+
+    '''
+    def focusInEvent(self, event):
+        print("recenter focus in", event.reason())
+
+    def focusOutEvent(self, event):
+        print("recenter focus out", event.reason())
+    '''
+
 class MoveActiveFragmentAlongZButton(QPushButton):
     def __init__(self, main_window, text, step, parent=None):
         super(MoveActiveFragmentAlongZButton, self).__init__(text, parent)
@@ -1450,10 +1471,12 @@ class MainWindow(QMainWindow):
         # af_layout = QHBoxLayout()
         # active_frame.setLayout(af_layout)
 
-        self.retriang_frag = RetriangulateActiveFragmentButton(self)
-        hlayout.addWidget(self.retriang_frag)
+        # self.retriang_frag = RetriangulateActiveFragmentButton(self)
+        # hlayout.addWidget(self.retriang_frag)
         self.reparam_frag = ReparameterizeActiveFragmentButton(self)
         hlayout.addWidget(self.reparam_frag)
+        self.recenter_frag = RecenterActiveFragmentButton(self)
+        hlayout.addWidget(self.recenter_frag)
         self.copy_frag = CopyActiveFragmentButton(self)
         hlayout.addWidget(self.copy_frag)
         self.delete_frag = DeleteActiveFragmentButton(self)
@@ -1979,7 +2002,8 @@ class MainWindow(QMainWindow):
         self.export_mesh_action.setEnabled(active)
         self.copy_frag.setEnabled(active)
         self.reparam_frag.setEnabled(active)
-        self.retriang_frag.setEnabled(active)
+        # self.retriang_frag.setEnabled(active)
+        self.recenter_frag.setEnabled(active)
         self.delete_frag.setEnabled(active)
         '''
         self.move_frag_up.setEnabled(active)
@@ -2283,6 +2307,30 @@ class MainWindow(QMainWindow):
         cvv = self.project_view.cur_volume_view
         # Force recalculation of stxytf in GLDataWindow
         cvv.stxytf = None
+        self.drawSlices()
+
+    def recenterActiveFragment(self):
+        pv = self.project_view
+        if pv is None:
+            print("Warning, cannot recenter segment without project")
+            return
+        mfv = pv.mainActiveFragmentView(unaligned_ok=True)
+        if mfv is None:
+            # this should never be reached; button should be
+            # inactive in this case
+            print("No currently active segment")
+            return
+        cvv = self.project_view.cur_volume_view
+        if cvv is None:
+            print("raf cvv is none")
+            return
+        if len(mfv.vpoints) == 0:
+            print("raf no mfv points")
+            return
+        ijk0 = mfv.vpoints[0][:3]
+        st0 = mfv.stpoints[0][:3]
+        cvv.setIjkTf(ijk0)
+        cvv.setStxyTf(st0)
         self.drawSlices()
 
     def renameFragment(self, frag, name):

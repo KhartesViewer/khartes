@@ -41,6 +41,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import (
         QFileInfo,
         QPointF,
+        Qt,
         QSize,
         QTimer,
         )
@@ -77,7 +78,7 @@ class GLDataWindow(DataWindow):
         self.main_active_fragment_view = None
 
     def drawSlice(self):
-        self.window.setFocus()
+        # self.window.setFocus()
         self.glw.update()
         if self.volume_view is not None:
             pv = self.window.project_view
@@ -1405,6 +1406,7 @@ class GLDataWindowChild(QOpenGLWidget):
         self.colormap_textures = {}
         self.prev_pv = None
         self.painting_slice = False
+        self.setFocusPolicy(Qt.NoFocus)
 
         # synchronous mode is said to be much slower
         # self.logging_mode = QOpenGLDebugLogger.SynchronousLogging

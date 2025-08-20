@@ -269,7 +269,7 @@ class MinMaxSelectorDelegate(QtWidgets.QStyledItemDelegate):
             spin_box.setValue(changed_value)
         spin_box.kh_value = value
         spin_box.lineEdit().deselect()
-        spin_box.lineEdit().setFocus()
+        # spin_box.lineEdit().setFocus()
 
     def setEditorData(self, editor, index):
         minmax = index.data(Qt.DisplayRole)

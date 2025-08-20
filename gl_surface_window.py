@@ -378,7 +378,7 @@ class GLSurfaceWindow(DataWindow):
         # user documentation when khartes would first 
         # start up.  We don't want it to block the gl window.
         self.window.edit.hide()
-        self.window.setFocus()
+        # self.window.setFocus()
         self.glw.update()
 
 slice_code = {
