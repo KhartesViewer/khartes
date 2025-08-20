@@ -37,6 +37,7 @@ from PyQt5.QtCore import (
 from PyQt5.QtGui import (
         # QAction, 
         QGuiApplication,
+        QKeySequence,
         QPainter, QPalette, QColor, QCursor, QIcon, QPixmap, QImage)
 
 from PyQt5.QtSvg import QSvgRenderer
@@ -1850,6 +1851,19 @@ class MainWindow(QMainWindow):
 
         self.tab_panel.addTab(panel, "Settings")
 
+    def getGijkfAsText(self):
+        otxt = ""
+        if self.project_view is None:
+            return otxt
+        vv = self.project_view.cur_volume_view
+        if vv is None:
+            return otxt
+        ijktf = vv.ijktf
+        # print("ijktf", ijktf)
+        gijkf = vv.transposedIjkToGlobalPosition(ijktf)
+        otxt = "%g, %g, %g"%(gijkf[0], gijkf[1], gijkf[2])
+        return otxt
+
     # gijk is a numpy array
     def recenterCurrentVolume(self, gijk):
         if self.project_view is None:
@@ -3623,12 +3637,30 @@ class MainWindow(QMainWindow):
             self.live_zsurf_update_button.setChecked(self.live_zsurf_update)
         elif e.modifiers() == Qt.ControlModifier and e.key() == Qt.Key_S:
             self.onSaveProjectButtonClick(True)
+            '''
+        elif e.matches(QKeySequence.Copy):
+            print("copy sequence")
+            txt = self.getGijkfAsText()
+            print("qks txt", txt)
+            clipboard = QGuiApplication.clipboard()
+            clipboard.setText(txt)
+            '''
+        # Note that on Windows, when starting khartes from
+        # a console, ctrl-c is not always passed to the key
+        # event handler.
         elif e.key() == Qt.Key_C:
+            # ctrl-c is sometimes passed
             if e.modifiers() == Qt.ControlModifier:
+                # set clipboard based on status line
                 clipboard = QGuiApplication.clipboard()
                 clipboard.setText(self.status_bar.currentMessage())
+            # alt-c always is passed
+            elif e.modifiers() == Qt.AltModifier:
+                # set clipboard based on slice axes
+                txt = self.getGijkfAsText()
+                clipboard = QGuiApplication.clipboard()
+                clipboard.setText(txt)
             else:
-                # print("ttcv")
                 self.toggleTrackingCursorsVisible()
             w = QApplication.widgetAt(QCursor.pos())
             method = getattr(w, "dwKeyPressEvent", None)
