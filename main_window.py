@@ -3667,6 +3667,11 @@ class MainWindow(QMainWindow):
             if w != self and method is not None:
                 w.dwKeyPressEvent(e)
             self.drawSlices()
+        # alternative if ctrl-c is unreliable
+        elif e.key() == Qt.Key_X and e.modifiers() == Qt.ControlModifier:
+            # set clipboard based on status line
+            clipboard = QGuiApplication.clipboard()
+            clipboard.setText(self.status_bar.currentMessage())
         elif e.key() == Qt.Key_V and e.modifiers() != Qt.ControlModifier:
             self.toggleFragmentVisibility()
             w = QApplication.widgetAt(QCursor.pos())
