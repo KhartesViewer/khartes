@@ -2327,8 +2327,12 @@ class MainWindow(QMainWindow):
         if len(mfv.vpoints) == 0:
             print("raf no mfv points")
             return
-        ijk0 = mfv.vpoints[0][:3]
-        st0 = mfv.stpoints[0][:3]
+        idx = mfv.indexOfNodeNearCenter()
+        if idx < 0:
+            print("raf no node found")
+            return
+        ijk0 = mfv.vpoints[idx][:3]
+        st0 = mfv.stpoints[idx][:3]
         cvv.setIjkTf(ijk0)
         cvv.setStxyTf(st0)
         self.drawSlices()

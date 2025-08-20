@@ -436,3 +436,13 @@ class BaseFragmentView:
         # return np.array((stxaxis, styaxis, normal)).T
         return axes
 
+    def indexOfNodeNearCenter(self):
+        if len(self.vpoints) == 0:
+            return -1
+        if len(self.stpoints) == 0:
+            return -1
+        avgst = self.stpoints.sum(axis=0)/len(self.stpoints)
+        delc = self.stpoints - avgst
+        dst = (delc*delc).sum(axis=1)
+        idx = np.argmin(dst)
+        return idx
