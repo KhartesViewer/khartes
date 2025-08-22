@@ -986,7 +986,9 @@ class DataWindow(QLabel):
                 return
             tfijk = list(tfst)
             z = self.volume_view.zoom
-            tfijk[self.axis] += int(.5*(d+1)/z)
+            scroll_step = self.window.getScrollStepSize()
+            tfijk[self.axis] += int(d*scroll_step)
+            # tfijk[self.axis] += int(.5*(d+1)/z)
             # print(d)
             self.setTf(tfijk)
         else:

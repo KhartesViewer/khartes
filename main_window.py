@@ -787,6 +787,63 @@ class ZarrMaxWindowWidthEditor(QWidget):
         else:
             self.edit.setStyleSheet("QLineEdit { color: red }")
 
+class ScrollStepSize(QWidget):
+    def __init__(self, main_window, parent=None):
+        super(ScrollStepSize, self).__init__(parent)
+        self.main_window = main_window
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0,0,0,0)
+        self.setLayout(layout)
+        self.edit = QLineEdit()
+        fm = self.edit.fontMetrics()
+        w = 7*fm.horizontalAdvance('0')
+        self.edit.setFixedWidth(w)
+        self.edit.editingFinished.connect(self.onEditingFinished)
+        self.edit.textEdited.connect(self.onTextEdited)
+        layout.addWidget(self.edit)
+        # label = QLabel("Zarr cache size (Gb)")
+        label = QLabel("Scroll-wheel step size")
+        layout.addWidget(label)
+        layout.addStretch()
+        self.setting = "scroll_step"
+        self.param = "step_size"
+        self.setToScrollStepSize()
+        main_window.draw_settings_widgets[self.setting][self.param] = self
+
+    def setToScrollStepSize(self):
+        scroll_step_size = self.main_window.draw_settings[self.setting][self.param]
+        txt = self.floatToText(scroll_step_size)
+        self.edit.setText(txt)
+        self.onTextEdited(txt)
+
+    def floatToText(self, value):
+        return "%.2f"%value
+
+    def onEditingFinished(self):
+        txt = self.edit.text()
+        valid, step_size = self.parseText(txt)
+        # print("oef", valid, step_size)
+        if valid:
+            self.main_window.setScrollStepSize(step_size)
+
+    def parseText(self, txt):
+        valid = True
+        f = 0
+        try:
+            f = float(txt)
+        except:
+            valid = False
+        if f < .001:
+            valid = False
+        return valid, f
+
+    def onTextEdited(self, txt):
+        valid, f = self.parseText(txt)
+        # print("ote", valid)
+        if valid:
+            self.edit.setStyleSheet("")
+        else:
+            self.edit.setStyleSheet("QLineEdit { color: red }")
 
 class ZarrMaxCacheGb(QWidget):
     def __init__(self, main_window, parent=None):
@@ -823,7 +880,7 @@ class ZarrMaxCacheGb(QWidget):
     def onEditingFinished(self):
         txt = self.edit.text()
         valid, mem_gb = self.parseText(txt)
-        print("oef", valid, mem_gb, self.warned)
+        # print("oef", valid, mem_gb, self.warned)
         if valid:
             warned = self.warned
             if not warned:
@@ -1045,6 +1102,9 @@ class MainWindow(QMainWindow):
         },
         "shift_clicks": {
             "count": 1,
+        },
+        "scroll_step": {
+            "step_size": 1.0,
         },
         "zarr": {
             "max_cache_size_gb": 24,
@@ -1844,6 +1904,8 @@ class MainWindow(QMainWindow):
         more_layout.addWidget(zmww)
         zmcs = ZarrMaxCacheGb(self)
         more_layout.addWidget(zmcs)
+        sss = ScrollStepSize(self)
+        more_layout.addWidget(sss)
 
         hlayout.addStretch()
         # fragment_layout = QVBoxLayout()
@@ -3745,6 +3807,13 @@ class MainWindow(QMainWindow):
             return
         self.project_view.project.setVoxelSizeUm(size)
         self.drawSlices()
+
+    def getScrollStepSize(self):
+        return self.draw_settings["scroll_step"]["step_size"]
+
+    def setScrollStepSize(self, scroll_step_size):
+        print("scroll step size", scroll_step_size)
+        self.setDrawSettingsValue("scroll_step", "step_size", scroll_step_size)
 
     def setZarrMaxCacheSize(self, size_gb, show_warning):
         print("cache size", size_gb, show_warning)
