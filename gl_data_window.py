@@ -1939,6 +1939,24 @@ OSError: exception: stack overflow
         msid = nonzeros[:,3]
         lsid = nonzeros[:,4]
         trglid = msid*65536 + lsid
+        maxid = 100000000
+        sh = np.sum(trglid > maxid)
+        sm = np.sum(trglid < 0)
+        if sh > 0 or sm > 0:
+            xx = self.xyfvs
+            print("trglid out of range", xx.shape, xx.dtype, sh, sm)
+            print("axis", self.gldw.axis)
+            if len(lsid) > 0:
+                print("lsid", lsid.min(), lsid.max())
+            if len(msid) > 0:
+                print("msid", msid.min(), msid.max())
+
+        # This line is to prevent a crash that some users
+        # have encountered.  I haven't been able to reproduce
+        # the crash, so I don't know how to fix whatever 
+        # the root cause is.
+        trglid[trglid > maxid] = 0
+
         self.xyfvs[:,3] = trglid
         # print("nz", nonzeros.shape, self.xyfvs.shape)
 
